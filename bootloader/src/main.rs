@@ -29,5 +29,8 @@ fn efi_main(_handle: Handle, system_table: SystemTable<Boot>) -> Status {
     // 4. Run the kernel passing in the framebuffer.
     sys::init(system_table);
     log::info!("Hello, UEFI!");
+    let kernel = sys::fs::read("kernel").expect("Can't read kernel file.");
+    log::info!("Got kernel.");
+
     loop {}
 }
