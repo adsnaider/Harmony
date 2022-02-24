@@ -4,6 +4,9 @@
 #![warn(missing_debug_implementations)]
 #![warn(missing_copy_implementations)]
 
+/// Memory type used by the UEFI bootloader. The kernel may free this memory once loaded.
+pub const UEFI_MEMORY_TYPE: u32 = 0x80000000;
+
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 /// The `Bootinfo` struct gets passed from the bootloader to the kernel.
