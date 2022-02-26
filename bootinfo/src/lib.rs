@@ -18,8 +18,8 @@ pub struct Bootinfo {
 }
 
 #[repr(u32)]
-#[derive(Debug, Copy, Clone)]
-/// TODO
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+/// Determines the format (i.e. byte ordering) of each pixel such as RGB, BGR, etc.
 pub enum PixelFormat {
     /// Red, green blue,
     Rgb,
@@ -32,7 +32,7 @@ pub enum PixelFormat {
 }
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 /// Framebuffer bitmask.
 pub struct PixelBitmask {
     /// Red mask.
