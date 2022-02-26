@@ -4,9 +4,28 @@
 
 use core::panic::PanicInfo;
 
+extern crate alloc as alloc_api;
+
+use core::arch::asm;
+
+use alloc_api::format;
+use bootinfo::Bootinfo;
 use bootloader::sys;
-use log;
+use bootloader::sys::alloc::Arena;
+use goblin::elf;
+use goblin::elf::program_header::PT_LOAD;
+use goblin::elf32::program_header::pt_to_str;
 use uefi::prelude::*;
+use uefi::table::boot::MemoryType;
+use {bootinfo, log};
+
+static KERNEL_STATIC_MEMORY: MemoryType = MemoryType::custom(bootinfo::KERNEL_STATIC);
+static KERNEL_STACK_MEMORY: MemoryType = MemoryType::custom(bootinfo::KERNEL_STACK);
+
+fn aligned_to_low(address: usize, alignment: usize) -> usize {
+    let offset = address % alignment;
+    address - offset
+}
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -16,7 +35,19 @@ fn panic(info: &PanicInfo) -> ! {
     loop {}
 }
 
-pub unsafe fn kernel_handoff(_entry: usize, _framebuffer: *const ()) -> ! {
+pub unsafe fn kernel_handoff(
+    entry: usize,
+    bootinfo: &'static mut Bootinfo,
+    stack: &'static mut [u8],
+) -> ! {
+    asm!(
+        "mov rsp, {}",
+        "push 0", // Return pointer. (no return).
+        "jmp {}",
+        in(reg) stack.as_ptr_range().end as usize - 1,
+        in(reg) entry,
+        in("rdi") bootinfo as *mut Bootinfo as usize,
+    );
     todo!();
 }
 
@@ -29,8 +60,61 @@ fn efi_main(_handle: Handle, system_table: SystemTable<Boot>) -> Status {
     // 4. Run the kernel passing in the framebuffer.
     sys::init(system_table);
     log::info!("Hello, UEFI!");
-    let kernel = sys::fs::read("kernel").expect("Can't read kernel file.");
-    log::info!("Got kernel.");
+    let bootinfo = Bootinfo {
+        framebuffer: sys::io::get_framebuffer(),
+    };
+    let entry = {
+        let kernel = sys::fs::read("kernel").expect("Can't read kernel file.");
+        log::info!("Got kernel.");
+        let elf =
+            elf::Elf::parse(&kernel).expect("Couldn't parse the kernel as an ELF executable.");
 
-    loop {}
+        assert!(elf.is_64);
+        assert!(elf.entry > 0);
+        for header in elf.program_headers {
+            match header.p_type {
+                PT_LOAD => unsafe {
+                    let page_start = aligned_to_low(header.vm_range().start, 4096);
+                    let page_end = aligned_to_low(header.vm_range().end, 4096);
+                    let count = page_end / 4096 - page_start / 4096 + 1;
+                    log::info!("Requesting {} pages at {:#X}", count, page_start);
+                    let memory =
+                        sys::alloc::get_pages(Some(page_start), count, KERNEL_STATIC_MEMORY)
+                            .expect(&format!(
+                                "Couldn't get memory to load the kernel at address: {:#X} - {:#X}",
+                                header.vm_range().start,
+                                header.vm_range().end
+                            ));
+                    memory.iter_mut().for_each(|x| *x = 0);
+                    // Memory range doesn't start at the beginning of page. Offset that.
+                    let memory = &mut memory[(header.vm_range().start - page_start)..];
+                    memory[..header.p_filesz as usize]
+                        .copy_from_slice(&kernel[header.file_range()]);
+                },
+                other => log::info!(
+                    "Found non-loadable program header of type: {}",
+                    pt_to_str(other)
+                ),
+            }
+        }
+        elf.entry
+    };
+    log::info!("Kernel loaded!");
+    log::info!("Jumping to kernel!");
+
+    // TODO(asnaider): Exit boot services and memory map.
+
+    unsafe {
+        let mut kernel_static: Arena<'static> = Arena::new(
+            sys::alloc::get_pages(None, 1, KERNEL_STATIC_MEMORY)
+                .expect("Couldn't allocate kernel static pages."),
+        );
+        let bootinfo = kernel_static
+            .allocate_value(bootinfo)
+            .expect("Couldn't allocate bootinfo into statics.");
+        let stack: &'static mut [u8] = sys::alloc::get_pages(None, 1024, KERNEL_STACK_MEMORY)
+            .expect("Couldn't allocate kernel stack");
+
+        kernel_handoff(entry as usize, bootinfo, stack);
+    }
 }

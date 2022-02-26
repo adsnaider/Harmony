@@ -9,3 +9,4 @@ edition = "2021"
 uefi = "0.14.0"
 log = "0.4"
 bootinfo = { path = "../bootinfo" }
+goblin = { version = "0.5", default-features = false, features = ["elf32", "elf64", "endian_fd"] }

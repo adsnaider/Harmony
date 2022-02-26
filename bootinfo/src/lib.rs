@@ -4,8 +4,10 @@
 #![warn(missing_debug_implementations)]
 #![warn(missing_copy_implementations)]
 
-/// Memory type used by the UEFI bootloader. The kernel may free this memory once loaded.
-pub const UEFI_MEMORY_TYPE: u32 = 0x80000000;
+/// Memory type used to load all the statics to the kernel.
+pub const KERNEL_STATIC: u32 = 0x80000000;
+/// Memory type used to identify the kernel stack.
+pub const KERNEL_STACK: u32 = 0x80000001;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
