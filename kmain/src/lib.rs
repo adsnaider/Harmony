@@ -1,3 +1,5 @@
+//! Kernel entry and executable. Ideally, this is just a thin wrapper over all of the kernel's
+//! components.
 #![no_std]
 #![warn(missing_docs)]
 #![warn(missing_debug_implementations)]
@@ -5,7 +7,7 @@
 
 use core::panic::PanicInfo;
 
-use bootinfo::{Bootinfo, PixelFormat};
+use bootinfo::Bootinfo;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {

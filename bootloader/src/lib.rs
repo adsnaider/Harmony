@@ -1,5 +1,6 @@
 //! UEFI System functionalities.
 #![no_std]
+#![feature(maybe_uninit_slice)]
 #![feature(alloc_error_handler)]
 #![feature(ptr_as_uninit)]
 #![feature(nonnull_slice_from_raw_parts)]

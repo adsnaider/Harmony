@@ -3,9 +3,7 @@
 use core::alloc::{GlobalAlloc, Layout};
 use core::marker::PhantomData;
 use core::mem::MaybeUninit;
-use core::ops::Range;
-use core::ptr::NonNull;
-use core::{ptr, u8};
+use core::ptr::{self, NonNull};
 
 use uefi::table::boot::{AllocateType, MemoryType};
 
@@ -119,6 +117,15 @@ impl<'a> Arena<'a> {
         };
         let handle: &mut MaybeUninit<T> = unsafe { pointer.as_uninit_mut() };
         Ok(handle.write(value))
+    }
+
+    /// Allocates a slice that can hold `length` elements oftype `T`. The return will be
+    /// uninitialized.
+    pub fn allocate_uninit_slice<T>(&mut self, length: usize) -> &'a mut [MaybeUninit<T>] {
+        let pointer = self
+            .allocate(Layout::array::<T>(length).unwrap())
+            .expect("Out of memory.");
+        unsafe { core::slice::from_raw_parts_mut(pointer.as_ptr() as *mut MaybeUninit<T>, length) }
     }
 }
 

@@ -12,15 +12,12 @@ use alloc_api::format;
 use bootinfo::Bootinfo;
 use bootloader::sys;
 use bootloader::sys::alloc::Arena;
+use bootloader::sys::{KERNEL_CODE_MEMORY, KERNEL_STACK_MEMORY, KERNEL_STATIC_MEMORY};
 use goblin::elf;
 use goblin::elf::program_header::PT_LOAD;
 use goblin::elf32::program_header::pt_to_str;
 use uefi::prelude::*;
-use uefi::table::boot::MemoryType;
 use {bootinfo, log};
-
-static KERNEL_STATIC_MEMORY: MemoryType = MemoryType::custom(bootinfo::KERNEL_STATIC);
-static KERNEL_STACK_MEMORY: MemoryType = MemoryType::custom(bootinfo::KERNEL_STACK);
 
 fn aligned_to_low(address: usize, alignment: usize) -> usize {
     let offset = address % alignment;
@@ -52,17 +49,15 @@ pub unsafe fn kernel_handoff(
 }
 
 #[entry]
-fn efi_main(_handle: Handle, system_table: SystemTable<Boot>) -> Status {
+fn efi_main(handle: Handle, system_table: SystemTable<Boot>) -> Status {
     // For the initial bootloader, it has to:
     // 1. Read the kernel program from disk.
     // 2. Get the framebuffer structure.
-    // 3. Load the kernel to memory.
-    // 4. Run the kernel passing in the framebuffer.
+    // 3. Get the memory map.
+    // 4. Load the kernel to memory.
+    // 5. Run the kernel passing the boot data.
     sys::init(system_table);
     log::info!("Hello, UEFI!");
-    let bootinfo = Bootinfo {
-        framebuffer: sys::io::get_framebuffer(),
-    };
     let entry = {
         let kernel = sys::fs::read("kernel").expect("Can't read kernel file.");
         log::info!("Got kernel.");
@@ -78,13 +73,12 @@ fn efi_main(_handle: Handle, system_table: SystemTable<Boot>) -> Status {
                     let page_end = aligned_to_low(header.vm_range().end, 4096);
                     let count = page_end / 4096 - page_start / 4096 + 1;
                     log::info!("Requesting {} pages at {:#X}", count, page_start);
-                    let memory =
-                        sys::alloc::get_pages(Some(page_start), count, KERNEL_STATIC_MEMORY)
-                            .expect(&format!(
-                                "Couldn't get memory to load the kernel at address: {:#X} - {:#X}",
-                                header.vm_range().start,
-                                header.vm_range().end
-                            ));
+                    let memory = sys::alloc::get_pages(Some(page_start), count, KERNEL_CODE_MEMORY)
+                        .expect(&format!(
+                            "Couldn't get memory to load the kernel at address: {:#X} - {:#X}",
+                            header.vm_range().start,
+                            header.vm_range().end
+                        ));
                     memory.iter_mut().for_each(|x| *x = 0);
                     // Memory range doesn't start at the beginning of page. Offset that.
                     let memory = &mut memory[(header.vm_range().start - page_start)..];
@@ -102,19 +96,23 @@ fn efi_main(_handle: Handle, system_table: SystemTable<Boot>) -> Status {
     log::info!("Kernel loaded!");
     log::info!("Jumping to kernel!");
 
-    // TODO(asnaider): Exit boot services and memory map.
-
     unsafe {
         let mut kernel_static: Arena<'static> = Arena::new(
             sys::alloc::get_pages(None, 1, KERNEL_STATIC_MEMORY)
                 .expect("Couldn't allocate kernel static pages."),
         );
-        let bootinfo = kernel_static
-            .allocate_value(bootinfo)
-            .expect("Couldn't allocate bootinfo into statics.");
         let stack: &'static mut [u8] = sys::alloc::get_pages(None, 1024, KERNEL_STACK_MEMORY)
             .expect("Couldn't allocate kernel stack");
 
+        let framebuffer = sys::io::get_framebuffer();
+        // No more allocation services from here on.
+        let memory_map = sys::exit_uefi_services(handle, &mut kernel_static);
+        let bootinfo = kernel_static
+            .allocate_value(Bootinfo {
+                framebuffer,
+                memory_map,
+            })
+            .expect("Couldn't allocate bootinfo into statics.");
         kernel_handoff(entry as usize, bootinfo, stack);
     }
 }
