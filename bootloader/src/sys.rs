@@ -1,8 +1,19 @@
-//! UEFI System.
+//! UEFI System operations and resources.
+//!
+//! This module defines ways to interact with the system while in the UEFI environment. In
+//! particular, this module provides the `init()` operation that, takes possesion of the system
+//! table. After the call to `init()`, the system will enable the global allocator and logging
+//! services, such that a program can use Rust's alloc API including heap-managed containers such
+//! as `Vec` and `Box`. Logging can be done using the `log` crate.
+//!
+//! Before jumping to the kernel, the system should exit the UEFI environment by calling
+//! `exit_boot_services()`. This operation will exit the UEFI environment, meaning that allocation
+//! and logging won't be available anymore afterwards. The operation returns the UEFI runtime table
+//! that can be used after exiting boot services alongside the current memory map. Both of these
+//! can be passed to the kernel.
 pub mod alloc;
 pub mod fs;
 pub mod io;
-pub mod mem;
 
 use core::cell::UnsafeCell;
 use core::mem::MaybeUninit;
@@ -10,50 +21,66 @@ use core::mem::MaybeUninit;
 use bootinfo::{MemoryMap, MemoryRegion};
 use uefi::data_types::Align;
 use uefi::table::boot::{MemoryDescriptor, MemoryMapSize, MemoryType};
-use uefi::table::{Boot, SystemTable};
+use uefi::table::{Boot, Runtime, SystemTable};
 use uefi::{Handle, ResultExt};
 
 use self::alloc::Arena;
+use crate::mem::aligned_to_high;
+use crate::{KERNEL_CODE_MEMORY, KERNEL_STACK_MEMORY, KERNEL_STATIC_MEMORY};
 
-/// UEFI memory type used to represent kernel's statics memory region.
-pub const KERNEL_STATIC_MEMORY: MemoryType = MemoryType::custom(bootinfo::KERNEL_STATIC);
-/// UEFI memory type used to represent the kernel's stack memory region.
-pub const KERNEL_STACK_MEMORY: MemoryType = MemoryType::custom(bootinfo::KERNEL_STACK);
-/// UEFI memory type used to represent the kernel's code memory region.
-pub const KERNEL_CODE_MEMORY: MemoryType = MemoryType::custom(bootinfo::KERNEL_CODE);
-
-/// GlobalTable struct.
+/// GlobalTable holds a reference to the UEFI system table.
 pub(crate) struct GlobalTable {
-    pub table: UnsafeCell<Option<SystemTable<Boot>>>,
+    /// Reference to the system table.
+    table: UnsafeCell<Option<SystemTable<Boot>>>,
 }
-// SAFETY: Not safe, but UEFI has no threading support.
+// SAFETY: Not safe, but UEFI has no multi-threading support.
 unsafe impl Sync for GlobalTable {}
 
 /// System table used by the rest of the system. In order for get/get_mut to be safe, each part of
 /// the code should only access the specific sub-system that they have access to.
 ///
 /// For instance, the logging system, can access stdout(), and the framebuffer can access gop().
+// TODO(asnaider): Is the safety explanation sound? Can both subsystems be accessed at the same
+// time?
 pub(crate) static SYSTEM_TABLE: GlobalTable = GlobalTable {
     table: UnsafeCell::new(None),
 };
 
 impl GlobalTable {
+    /// Get a reference to the system table if setup. Otherwise, panic.
+    ///
+    /// # Safety
+    /// Aliasing rules apply.
     pub unsafe fn get(&self) -> &SystemTable<Boot> {
         (&*self.table.get())
             .as_ref()
             .expect("System table hasn't been initialized. Forget to call `init()`?")
     }
 
+    /// Get a mutable reference to the system table if setup. Otherwise, panic.
+    ///
+    /// # Safety
+    /// Aliasing rules apply.
     pub unsafe fn get_mut(&self) -> &mut SystemTable<Boot> {
         (&mut *self.table.get())
             .as_mut()
             .expect("System table hasn't been initialized. Forget to call `init()`?")
     }
 
+    /// Sets the system table from the appropriate value.
+    ///
+    /// # Safety:
+    /// Aliasing rules apply. In particular, there shouldn't be living references to the previous
+    /// system table.
     unsafe fn set(&self, table: SystemTable<Boot>) {
         *self.table.get() = Some(table)
     }
 
+    /// Returns whether there's a table set.
+    ///
+    /// # Safety:
+    /// This will borrow the table immutably. There can't be mutable references to the system
+    /// table.
     unsafe fn is_set(&self) -> bool {
         (&*self.table.get()).is_some()
     }
@@ -77,17 +104,12 @@ pub fn is_init() -> bool {
     unsafe { SYSTEM_TABLE.is_set() }
 }
 
-unsafe fn aligned_to_high(pointer: *mut u8, alignment: usize) -> *mut u8 {
-    // (8 - 8 % 8) % 8 = 0;
-    // (8 - 7 % 8) % 8 = 1;
-    // (8 - 6 % 8) % 8 = 2;
-    let offset = (alignment - pointer as usize % alignment) % alignment;
-    pointer.add(offset)
-}
-
-/// After this call, UEFI system services will become unavailable. The function also returns the
-/// final memory map.
-pub fn exit_uefi_services(handle: Handle, statics: &mut Arena<'static>) -> MemoryMap<'static> {
+/// After this call, UEFI system services will become unavailable. The function also returns UEFI
+/// runtime table and the current memory map.
+pub fn exit_uefi_services(
+    handle: Handle,
+    statics: &mut Arena<'static>,
+) -> (SystemTable<Runtime>, MemoryMap<'static>) {
     // This will disable all of the system functions.
     let table = unsafe {
         (*SYSTEM_TABLE.table.get())
@@ -100,7 +122,9 @@ pub fn exit_uefi_services(handle: Handle, statics: &mut Arena<'static>) -> Memor
             map_size: total,
             entry_size: entry,
         } = table.boot_services().memory_map_size();
-        let size = total + entry * 1;
+        let size = total + entry * 3;
+        // TODO(asnaider): Maybe deallocate pool. Not a huge deal as the kernel can discard
+        // LOADER_DATA memory anyway.
         let address = table
             .boot_services()
             .allocate_pool(MemoryType::LOADER_DATA, size)
@@ -113,7 +137,7 @@ pub fn exit_uefi_services(handle: Handle, statics: &mut Arena<'static>) -> Memor
             buf
         }
     };
-    let (_runtime, descriptors) = table
+    let (runtime, descriptors) = table
         .exit_boot_services(handle, memory_map_buf)
         .expect_success("Couldn't exit boot services.");
 
@@ -151,8 +175,11 @@ pub fn exit_uefi_services(handle: Handle, statics: &mut Arena<'static>) -> Memor
         });
     }
     unsafe {
-        MemoryMap {
-            regions: MaybeUninit::slice_assume_init_mut(regions),
-        }
+        (
+            runtime,
+            MemoryMap {
+                regions: MaybeUninit::slice_assume_init_mut(regions),
+            },
+        )
     }
 }

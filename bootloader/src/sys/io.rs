@@ -9,7 +9,7 @@ use uefi::ResultExt;
 
 use crate::sys::SYSTEM_TABLE;
 
-/// Returns the framebuffer.
+/// Retrieves the framebuffer. The framebuffer can be used after exiting boot services.
 pub fn get_framebuffer() -> Framebuffer {
     let gop: &mut GraphicsOutput = unsafe {
         &mut *SYSTEM_TABLE
@@ -46,9 +46,11 @@ pub fn get_framebuffer() -> Framebuffer {
 }
 
 struct UefiLogger;
+/// UEFI logger.
 static UEFI_LOGGER: UefiLogger = UefiLogger;
 
-/// Initializes logging services.
+/// Initializes logging services. This is to be called by the system after setting up the
+/// SYSTEM_TABLE.
 pub(super) fn init() {
     log::set_logger(&UEFI_LOGGER)
         .map(|()| log::set_max_level(log::LevelFilter::Info))

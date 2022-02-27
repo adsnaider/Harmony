@@ -12,4 +12,14 @@
 
 extern crate alloc as alloc_api;
 
+pub(crate) mod mem;
 pub mod sys;
+
+use uefi::table::boot::MemoryType;
+
+/// UEFI memory type used to represent kernel's statics memory region.
+pub const KERNEL_STATIC_MEMORY: MemoryType = MemoryType::custom(bootinfo::KERNEL_STATIC);
+/// UEFI memory type used to represent the kernel's stack memory region.
+pub const KERNEL_STACK_MEMORY: MemoryType = MemoryType::custom(bootinfo::KERNEL_STACK);
+/// UEFI memory type used to represent the kernel's code memory region.
+pub const KERNEL_CODE_MEMORY: MemoryType = MemoryType::custom(bootinfo::KERNEL_CODE);

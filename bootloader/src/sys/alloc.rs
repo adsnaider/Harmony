@@ -1,4 +1,7 @@
 //! UEFI allocation services.
+//!
+//! Once the global `SYSTEM_TABLE` is set, this module enables global allocation services, meaning
+//! that operations using `Box` and `Vec` would work.
 
 use core::alloc::{GlobalAlloc, Layout};
 use core::marker::PhantomData;
@@ -7,6 +10,7 @@ use core::ptr::{self, NonNull};
 
 use uefi::table::boot::{AllocateType, MemoryType};
 
+use crate::mem::aligned_to_high;
 use crate::sys::SYSTEM_TABLE;
 
 #[alloc_error_handler]
@@ -18,7 +22,8 @@ fn alloc_error(layout: Layout) -> ! {
 /// UEFI page size in bytes.
 pub const PAGE_SIZE: usize = 4096;
 
-/// Attempts to get a specific memory range.
+/// Attempts to allocate a `count` pages and "labels" them with `memory_type`.
+/// If `address` is given, then the returned buffer will start at `address`.
 pub unsafe fn get_pages<'a>(
     address: Option<usize>,
     count: usize,
@@ -50,21 +55,14 @@ pub unsafe fn get_pages<'a>(
 
 #[derive(Debug)]
 /// Arena allocator allows for data allocation onto a buffer. There's no deallocation. Instead, all
-/// memory is freed with the lifetime of the arena.
+/// memory is freed with the lifetime of the arena. In other words, the Arena doesn't manage the
+/// memory. Instead, it's just a thin wrapper over the buffer.
 pub struct Arena<'a> {
     /// We store buffer as raw pointer since we don't want mutable aliasing.
     buffer: *mut u8,
     /// Length of the buffer.
     size: usize,
     phantom: PhantomData<&'a [u8]>,
-}
-
-unsafe fn aligned_to_high(pointer: *mut u8, alignment: usize) -> *mut u8 {
-    // (8 - 8 % 8) % 8 = 0;
-    // (8 - 7 % 8) % 8 = 1;
-    // (8 - 6 % 8) % 8 = 2;
-    let offset = (alignment - pointer as usize % alignment) % alignment;
-    pointer.add(offset)
 }
 
 /// Allocation Errors.
@@ -107,7 +105,7 @@ impl<'a> Arena<'a> {
         }
     }
 
-    /// Allocates the value `value` into the arena and returns a mutable reference to the allocated
+    /// Allocates the `value` into the arena and returns a mutable reference to the allocated
     /// memory if successful.
     pub fn allocate_value<T>(&mut self, value: T) -> Result<&'a mut T, AllocError> {
         let mut pointer: NonNull<T> = {
@@ -119,7 +117,7 @@ impl<'a> Arena<'a> {
         Ok(handle.write(value))
     }
 
-    /// Allocates a slice that can hold `length` elements oftype `T`. The return will be
+    /// Allocates a slice that can hold `length` elements of type `T`. The return will be
     /// uninitialized.
     pub fn allocate_uninit_slice<T>(&mut self, length: usize) -> &'a mut [MaybeUninit<T>] {
         let pointer = self
@@ -130,9 +128,9 @@ impl<'a> Arena<'a> {
 }
 
 struct UefiAlloc {}
+
+/// Global UEFI allocator. The allocations will have a memory type of `MemoryType::LOADER_DATA`.
 #[global_allocator]
-/// Global UEFI allocator. The allocations will have a memory type of `Bootinfo::UEFI_MEMORY_TYPE`.
-/// This is useful as then the kernel can clean up all of these pages.
 static ALLOCATOR: UefiAlloc = UefiAlloc {};
 
 unsafe impl GlobalAlloc for UefiAlloc {

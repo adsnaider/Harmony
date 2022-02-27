@@ -10,9 +10,8 @@ use core::arch::asm;
 
 use alloc_api::format;
 use bootinfo::Bootinfo;
-use bootloader::sys;
 use bootloader::sys::alloc::Arena;
-use bootloader::sys::{KERNEL_CODE_MEMORY, KERNEL_STACK_MEMORY, KERNEL_STATIC_MEMORY};
+use bootloader::{sys, KERNEL_CODE_MEMORY, KERNEL_STACK_MEMORY, KERNEL_STATIC_MEMORY};
 use goblin::elf;
 use goblin::elf::program_header::PT_LOAD;
 use goblin::elf32::program_header::pt_to_str;
@@ -106,7 +105,7 @@ fn efi_main(handle: Handle, system_table: SystemTable<Boot>) -> Status {
 
         let framebuffer = sys::io::get_framebuffer();
         // No more allocation services from here on.
-        let memory_map = sys::exit_uefi_services(handle, &mut kernel_static);
+        let (_runtime, memory_map) = sys::exit_uefi_services(handle, &mut kernel_static);
         let bootinfo = kernel_static
             .allocate_value(Bootinfo {
                 framebuffer,
