@@ -18,6 +18,7 @@ use goblin::elf32::program_header::pt_to_str;
 use uefi::prelude::*;
 use {bootinfo, log};
 
+// TODO(adsnaider): Let's move these utilities to their own crate.
 fn aligned_to_low(address: usize, alignment: usize) -> usize {
     let offset = address % alignment;
     address - offset

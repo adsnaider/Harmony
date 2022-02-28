@@ -2,6 +2,10 @@
 
 /// Returns a pointer that has been aligned to alignment by increasing it's value to appropriate
 /// alignment.
+///
+/// # Safety
+///
+/// `pointer` must not wrap after adding the offset.
 pub unsafe fn aligned_to_high(pointer: *mut u8, alignment: usize) -> *mut u8 {
     // (8 - 8 % 8) % 8 = 0;
     // (8 - 7 % 8) % 8 = 1;
