@@ -97,7 +97,7 @@ fn efi_main(handle: Handle, system_table: SystemTable<Boot>) -> Status {
 
     unsafe {
         let mut kernel_static: Arena<'static> = Arena::new(
-            sys::alloc::get_pages(None, 1, KERNEL_STATIC_MEMORY)
+            sys::alloc::get_pages(None, 8, KERNEL_STATIC_MEMORY)
                 .expect("Couldn't allocate kernel static pages."),
         );
         let stack: &'static mut [u8] = sys::alloc::get_pages(None, 1024, KERNEL_STACK_MEMORY)

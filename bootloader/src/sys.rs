@@ -110,12 +110,7 @@ pub fn exit_uefi_services(
     handle: Handle,
     statics: &mut Arena<'static>,
 ) -> (SystemTable<Runtime>, MemoryMap<'static>) {
-    // This will disable all of the system functions.
-    let table = unsafe {
-        (*SYSTEM_TABLE.table.get())
-            .take()
-            .expect("No system table found. Forget to call `init()`?")
-    };
+    let table = unsafe { SYSTEM_TABLE.get() };
     let memory_map_buf = {
         // Extra buffer since the size might change.
         let MemoryMapSize {
@@ -137,7 +132,8 @@ pub fn exit_uefi_services(
             buf
         }
     };
-    let (runtime, descriptors) = table
+    // Boot services disabled from this point on.
+    let (runtime, descriptors) = unsafe { (*SYSTEM_TABLE.table.get()).take().unwrap() }
         .exit_boot_services(handle, memory_map_buf)
         .expect_success("Couldn't exit boot services.");
 

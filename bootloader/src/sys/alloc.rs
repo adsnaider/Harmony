@@ -83,6 +83,11 @@ impl<'a> Arena<'a> {
         }
     }
 
+    /// Returns the amount of space in bytes left.
+    pub fn remaining_size(&self) -> usize {
+        self.size
+    }
+
     /// Allocates data into the arena given the `layout`.
     pub fn allocate(&mut self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
         if layout.size() > self.size {
