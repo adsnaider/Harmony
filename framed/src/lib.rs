@@ -5,6 +5,8 @@
 #![warn(missing_copy_implementations)]
 #![warn(missing_docs)]
 
+pub mod console;
+
 /// A pixel is the atomic element that `Frames` are constructed from.
 ///
 /// It has fields for red, green, and blue intensities.
@@ -36,6 +38,17 @@ pub unsafe trait Frame {
         }
         unsafe {
             self.set_pixel_unchecked(row, col, pixel);
+        }
+    }
+
+    /// Fills the entire frame with the pixel.
+    fn fill_with(&mut self, pixel: Pixel) {
+        for row in 0..self.height() {
+            for col in 0..self.width() {
+                unsafe {
+                    self.set_pixel_unchecked(row, col, pixel);
+                }
+            }
         }
     }
 
