@@ -14,6 +14,7 @@ use bootinfo::Bootinfo;
 use display::Display;
 use framed::console::{BitmapFont, Console};
 use framed::{Frame, Pixel};
+use log;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -45,5 +46,6 @@ pub extern "C" fn kmain(bootinfo: &'static mut Bootinfo) -> ! {
     };
     display::init(Console::new(display, font));
     println!("Hello, Kernel!");
+    log::info!("Hello, logging!");
     loop {}
 }

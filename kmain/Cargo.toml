@@ -11,3 +11,4 @@ crate-type = ["staticlib"]
 [dependencies]
 bootinfo = { path = "../bootinfo" }
 framed = { path = "../framed" }
+log = "0.4"

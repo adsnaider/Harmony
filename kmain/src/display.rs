@@ -1,16 +1,24 @@
 use bootinfo::Framebuffer;
 use framed::console::Console;
 use framed::{Frame, Pixel};
+use log;
+use log::{Level, LevelFilter, Metadata, Record};
 
 use crate::live_static::{LiveStatic, StaticBorrowError};
 
 /// The main console for the kernel.
 static CONSOLE: LiveStatic<Console<Display>> = LiveStatic::new();
 
-/// Initializes the console. It's reasonable to use the print!, try_print!, println!, and
-/// try_println! macros after this call.
+/// The global logger.
+static LOGGER: DisplayLogger = DisplayLogger {};
+
+/// Initializes the console and logger. It's reasonable to use the print!, try_print!,
+/// println!, try_println!, and log::* macros after this call.
 pub(super) fn init(console: Console<Display>) {
-    CONSOLE.set(console)
+    CONSOLE.set(console);
+    if let Err(e) = log::set_logger(&LOGGER).map(|()| log::set_max_level(LevelFilter::Info)) {
+        crate::println!("Couldn't initialize logging services: {e}");
+    }
 }
 
 /// The display struct implements the `Frame` trait from the framebuffer pointer.
@@ -56,6 +64,22 @@ unsafe impl Frame for Display {
     fn height(&self) -> usize {
         self.framebuffer.resolution.1
     }
+}
+
+struct DisplayLogger;
+
+impl log::Log for DisplayLogger {
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        metadata.level() <= Level::Info
+    }
+
+    fn log(&self, record: &Record) {
+        if self.enabled(record.metadata()) {
+            crate::println!("{} - {}", record.level(), record.args());
+        }
+    }
+
+    fn flush(&self) {}
 }
 
 /// Prints the arguments to the console. May panic!.
