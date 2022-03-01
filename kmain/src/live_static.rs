@@ -45,7 +45,9 @@ impl<T> LiveStatic<T> {
         }
     }
 
-    /// Sets the value of `self` to Some(`to`).
+    /// Sets the value in `self` to `to`.
+    ///
+    /// After calling, `is_set()` should return true.
     pub fn set(&self, to: T) {
         *self.data.borrow_mut() = Some(to);
     }
