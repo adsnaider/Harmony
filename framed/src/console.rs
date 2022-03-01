@@ -5,6 +5,8 @@ use core::ops::Index;
 
 use crate::{Frame, Pixel};
 
+const FONT_HEIGHT: usize = 16;
+
 /// A console struct that wraps a frame to allow for text rendering.
 #[derive(Debug)]
 pub struct Console<F: Frame> {
@@ -24,19 +26,13 @@ impl<F: Frame> Console<F> {
     }
 }
 
-// TODO(adsnaider): Instead of clearing when the cursor reaches the bottom, move everything
-// updwards a line and clear the last line.
 impl<F: Frame> Console<F> {
     /// Go to the next line.
     fn next_line_or_clear(&mut self) {
-        self.cursor.0 += 16;
+        self.cursor.0 += FONT_HEIGHT;
         self.cursor.1 = 0;
-        if self.cursor.0 >= self.frame.height() - 16 {
-            self.frame.fill_with(Pixel {
-                red: 0,
-                green: 0,
-                blue: 0,
-            });
+        if self.cursor.0 >= self.frame.height() - FONT_HEIGHT {
+            self.frame.fill_with(Pixel::black());
             self.cursor.0 = 0;
             self.cursor.1 = 0;
         }
@@ -50,6 +46,24 @@ impl<F: Frame> Console<F> {
             self.next_line_or_clear();
         }
     }
+
+    /// Writes the byte to the console and moves the cursor.
+    fn write_byte(&mut self, byte: u8) {
+        let bitchar = self.font[byte];
+        for (row_offset, col_offset, value) in bitchar.iter() {
+            self.frame
+                .set_pixel(
+                    self.cursor.0 + row_offset,
+                    self.cursor.1 + col_offset,
+                    match value {
+                        true => Pixel::white(),
+                        false => Pixel::black(),
+                    },
+                )
+                .expect("Attempted to set pixel out of bounds.");
+        }
+        self.wrap_add(8);
+    }
 }
 
 impl<F: Frame> Write for Console<F> {
@@ -59,39 +73,17 @@ impl<F: Frame> Write for Console<F> {
         }
         // Safe to interpret as bytes since we checked that s.is_ascii().
         for c in s.bytes() {
-            if c == b'\n' {
-                self.next_line_or_clear()
-            } else {
-                let bitchar = self.font[c];
-                for (row_offset, col_offset, value) in bitchar.iter() {
-                    self.frame
-                        .set_pixel(
-                            self.cursor.0 + row_offset,
-                            self.cursor.1 + col_offset,
-                            match value {
-                                true => Pixel {
-                                    red: 255,
-                                    green: 255,
-                                    blue: 255,
-                                },
-                                false => Pixel {
-                                    red: 0,
-                                    green: 0,
-                                    blue: 0,
-                                },
-                            },
-                        )
-                        .expect("Attempted to set pixel out of bounds.");
-                }
-                self.wrap_add(8);
+            match c {
+                b'\n' => self.next_line_or_clear(),
+                0x20..=0x7E => self.write_byte(c),
+                _ => self.write_byte(0xFE),
             }
         }
         Ok(())
     }
 }
 
-// TODO(adsnaider): These should be private. Setup a Font trait that allows me to index
-// by character (ascii or not).
+// TODO(#11): Create Font trait and make these private.
 
 /// Bitmap encoded fonts.
 ///
@@ -109,7 +101,7 @@ impl BitmapFont {
     pub fn decode_from(encoded: &[u8]) -> Result<BitmapFont, ()> {
         if encoded.len() == core::mem::size_of::<BitmapFont>() {
             // SAFETY: Size is the same and representation is transparent. All of these decode to a
-            // [u8; 256 * 16] array, so there can't be malinitialized memory.
+            // [u8; 256 * FONT_HEIGHT] array, so there can't be malinitialized memory.
             unsafe {
                 let mut font = MaybeUninit::uninit();
                 core::ptr::copy(
@@ -135,11 +127,11 @@ impl Index<u8> for BitmapFont {
 
 /// A single bitmap character.
 ///
-/// Each character is 16 bytes where each byte is one row.
+/// Each character is `FONT_HEIGHT` bytes where each byte is one row.
 #[derive(Debug, Copy, Clone)]
 #[repr(transparent)]
 pub struct BitmapChar {
-    letter: [u8; 16],
+    letter: [u8; FONT_HEIGHT],
 }
 
 impl BitmapChar {
@@ -165,7 +157,7 @@ impl Iterator for BitmapCharIterator<'_> {
     type Item = (usize, usize, bool);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.row >= 16 {
+        if self.row >= FONT_HEIGHT {
             None
         } else {
             let result = (
@@ -181,4 +173,10 @@ impl Iterator for BitmapCharIterator<'_> {
             Some(result)
         }
     }
+}
+
+#[cfg(target_os = "linux")]
+#[cfg(test)]
+mod tests {
+    // TODO(#12): Add some tests after #11 is fixed.
 }

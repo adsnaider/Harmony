@@ -1,8 +1,7 @@
 use bootinfo::Framebuffer;
 use framed::console::Console;
 use framed::{Frame, Pixel};
-use log;
-use log::{Level, LevelFilter, Metadata, Record};
+use log::{self, Level, LevelFilter, Metadata, Record};
 
 use crate::live_static::{LiveStatic, StaticBorrowError};
 

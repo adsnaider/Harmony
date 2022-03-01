@@ -28,19 +28,11 @@ fn panic(info: &PanicInfo) -> ! {
 pub extern "C" fn kmain(bootinfo: &'static mut Bootinfo) -> ! {
     let mut display = Display::new(bootinfo.framebuffer);
 
-    display.fill_with(Pixel {
-        red: 0,
-        green: 0,
-        blue: 0,
-    });
+    display.fill_with(Pixel::black());
     let font = match BitmapFont::decode_from(bootinfo.font) {
         Ok(font) => font,
         Err(_) => {
-            display.fill_with(Pixel {
-                red: 255,
-                green: 0,
-                blue: 0,
-            });
+            display.fill_with(Pixel::red());
             loop {}
         }
     };
