@@ -44,7 +44,7 @@ pub fn read(path: &str) -> Result<Vec<u8>, Error> {
                     return Err(Error {});
                 }
                 let size: usize = {
-                    // TODO(asnaider): Cheating by creating a fixed-size buffer. This is a common
+                    // TODO(#3): Cheating by creating a fixed-size buffer. This is a common
                     // problem. Maybe make something to read into a Box<[u8]> for all of these
                     // cases.
                     let mut buf: [u8; 128] = [0; 128];

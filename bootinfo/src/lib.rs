@@ -78,7 +78,7 @@ pub enum MemoryType {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 /// Physical properties of the memory region.
 pub enum MemoryAttribute {
-    // TODO(asnaider): Might be useful later.
+    // TODO(#2): Set these up.
     /// Unknow memory attributes.
     Unknown,
 }

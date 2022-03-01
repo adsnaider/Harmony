@@ -40,8 +40,6 @@ unsafe impl Sync for GlobalTable {}
 /// the code should only access the specific sub-system that they have access to.
 ///
 /// For instance, the logging system, can access stdout(), and the framebuffer can access gop().
-// TODO(asnaider): Is the safety explanation sound? Can both subsystems be accessed at the same
-// time?
 pub(crate) static SYSTEM_TABLE: GlobalTable = GlobalTable {
     table: UnsafeCell::new(None),
 };
@@ -118,7 +116,7 @@ pub fn exit_uefi_services(
             entry_size: entry,
         } = table.boot_services().memory_map_size();
         let size = total + entry * 3;
-        // TODO(asnaider): Maybe deallocate pool. Not a huge deal as the kernel can discard
+        // TODO(#5): Maybe deallocate pool. Not a huge deal as the kernel can discard
         // LOADER_DATA memory anyway.
         let address = table
             .boot_services()

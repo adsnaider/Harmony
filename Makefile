@@ -63,7 +63,6 @@ $(CARGO_KERNEL):
 $(KERNEL): $(CARGO_KERNEL) env
 	ld -o $(KERNEL) -ekmain  $(CARGO_KERNEL)
 
-# TODO(asnaider): boot image should ideally be .iso.
 boot_image: $(EFI) $(KERNEL) env
 	echo "\EFI\BOOT\$(ARCHEFI)" > $(IMAGE_ROOT)/startup.nsh
 	cp $(EFI) $(IMAGE_ROOT)/EFI/BOOT/$(ARCHEFI)
