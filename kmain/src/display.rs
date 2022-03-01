@@ -1,14 +1,26 @@
-use core::fmt;
-
 use bootinfo::Framebuffer;
+use framed::console::Console;
 use framed::{Frame, Pixel};
 
+use crate::live_static::{LiveStatic, StaticBorrowError};
+
+/// The main console for the kernel.
+static CONSOLE: LiveStatic<Console<Display>> = LiveStatic::new();
+
+/// Initializes the console. It's reasonable to use the print!, try_print!, println!, and
+/// try_println! macros after this call.
+pub(super) fn init(console: Console<Display>) {
+    CONSOLE.set(console)
+}
+
+/// The display struct implements the `Frame` trait from the framebuffer pointer.
 #[derive(Debug)]
 pub struct Display {
     framebuffer: Framebuffer,
 }
 
 impl Display {
+    /// Create a new display with the framebuffer.
     pub fn new(framebuffer: Framebuffer) -> Self {
         Self { framebuffer }
     }
@@ -44,4 +56,51 @@ unsafe impl Frame for Display {
     fn height(&self) -> usize {
         self.framebuffer.resolution.1
     }
+}
+
+/// Prints the arguments to the console. May panic!.
+#[macro_export]
+macro_rules! print {
+    ($($arg:tt)*) => {$crate::display::_print(format_args!($($arg)*))};
+}
+
+/// Prints the arguments to the console and moves to the next line. May panic!.
+#[macro_export]
+macro_rules! println {
+    () => ($crate::print!("\n"));
+    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+}
+
+/// Prints the arguments to the console. Returns an error on failure.
+#[macro_export]
+macro_rules! try_print {
+    ($($arg:tt)*) => {$crate::display::_try_print(format_args!($($arg)*))};
+}
+
+/// Prints the arguments to the console and moves to the next line. Returns an error on failure..
+#[macro_export]
+macro_rules! try_println {
+    () => ($crate::try_print!("\n"));
+    ($($arg:tt)*) => ($crate::try_print!("{}\n", format_args!($($arg)*)));
+}
+
+#[doc(hidden)]
+pub fn _print(args: core::fmt::Arguments) {
+    use core::fmt::Write;
+    CONSOLE.borrow_mut().write_fmt(args).unwrap();
+}
+
+pub enum PrintError {
+    BorrowError(StaticBorrowError),
+    PrintError,
+}
+
+#[doc(hidden)]
+pub fn _try_print(args: core::fmt::Arguments) -> Result<(), PrintError> {
+    use core::fmt::Write;
+    CONSOLE
+        .try_borrow_mut()
+        .map_err(|e| PrintError::BorrowError(e))?
+        .write_fmt(args)
+        .map_err(|_| PrintError::PrintError)
 }

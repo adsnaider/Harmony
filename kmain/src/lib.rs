@@ -5,29 +5,22 @@
 #![warn(missing_debug_implementations)]
 #![warn(missing_copy_implementations)]
 
-use core::cell::RefCell;
-use core::fmt::Write;
+mod display;
+pub mod live_static;
+
 use core::panic::PanicInfo;
 
 use bootinfo::Bootinfo;
+use display::Display;
 use framed::console::{BitmapFont, Console};
 use framed::{Frame, Pixel};
 
-mod display;
-pub(crate) mod live_static;
-
-use display::Display;
-use live_static::LiveStatic;
-
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    if let Ok(mut console) = CONSOLE.try_borrow_mut() {
-        writeln!(console, "{}", info);
-    }
+    // Can't do much about errors at this point.
+    let _ = try_println!("{}", info);
     loop {}
 }
-
-static CONSOLE: LiveStatic<Console<Display>> = LiveStatic::new();
 
 #[no_mangle]
 /// Kernel's starting point.
@@ -50,8 +43,7 @@ pub extern "C" fn kmain(bootinfo: &'static mut Bootinfo) -> ! {
             loop {}
         }
     };
-    CONSOLE.set(Console::new(display, font));
-    writeln!(CONSOLE.borrow_mut(), "Hello, Kernel!");
-
+    display::init(Console::new(display, font));
+    println!("Hello, Kernel!");
     loop {}
 }
