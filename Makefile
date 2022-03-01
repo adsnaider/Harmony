@@ -32,6 +32,7 @@ ARTIFACTS = $(BUILD_DIR)/artifacts
 # Artifacts generated.
 EFI = $(ARTIFACTS)/$(ARCHEFI)
 KERNEL = $(ARTIFACTS)/kernel
+FONT = $(BASE)/fonts/FONTS/SYSTEM/FREEDOS/CPIDOS30/CP113.F16
 
 # Actual image directory. Eventually, this will become an ISO file.
 IMAGE_ROOT = $(BUILD_DIR)/image
@@ -67,6 +68,7 @@ boot_image: $(EFI) $(KERNEL) env
 	echo "\EFI\BOOT\$(ARCHEFI)" > $(IMAGE_ROOT)/startup.nsh
 	cp $(EFI) $(IMAGE_ROOT)/EFI/BOOT/$(ARCHEFI)
 	cp $(KERNEL) $(IMAGE_ROOT)/kernel
+	cp $(FONT) $(IMAGE_ROOT)/font.bdf
 
 run: boot_image
 	qemu-system-$(ARCH) \

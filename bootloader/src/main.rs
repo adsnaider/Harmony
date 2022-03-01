@@ -53,9 +53,10 @@ fn efi_main(handle: Handle, system_table: SystemTable<Boot>) -> Status {
     // For the initial bootloader, it has to:
     // 1. Read the kernel program from disk.
     // 2. Get the framebuffer structure.
-    // 3. Get the memory map.
-    // 4. Load the kernel to memory.
-    // 5. Run the kernel passing the boot data.
+    // 3. Get the font.
+    // 4. Get the memory map.
+    // 5. Load the kernel to memory.
+    // 6. Run the kernel passing the boot data.
     sys::init(system_table);
     log::info!("Hello, UEFI!");
     let entry = {
@@ -94,23 +95,32 @@ fn efi_main(handle: Handle, system_table: SystemTable<Boot>) -> Status {
         elf.entry
     };
     log::info!("Kernel loaded!");
+
+    let font = sys::fs::read("font.bdf")
+        .expect("Couldn't read font file.")
+        .leak();
+    assert_eq!(font.len(), 256 * 16);
+    log::info!("Loaded font file.");
+
     log::info!("Jumping to kernel!");
 
     unsafe {
         let mut kernel_static: Arena<'static> = Arena::new(
-            sys::alloc::get_pages(None, 8, KERNEL_STATIC_MEMORY)
+            sys::alloc::get_pages(None, 16, KERNEL_STATIC_MEMORY)
                 .expect("Couldn't allocate kernel static pages."),
         );
         let stack: &'static mut [u8] = sys::alloc::get_pages(None, 1024, KERNEL_STACK_MEMORY)
             .expect("Couldn't allocate kernel stack");
 
         let framebuffer = sys::io::get_framebuffer();
+        let font = kernel_static.allocate_and_copy_slice(font);
         // No more allocation services from here on.
         let (_runtime, memory_map) = sys::exit_uefi_services(handle, &mut kernel_static);
         let bootinfo = kernel_static
             .allocate_value(Bootinfo {
                 framebuffer,
                 memory_map,
+                font,
             })
             .expect("Couldn't allocate bootinfo into statics.");
         kernel_handoff(entry as usize, bootinfo, stack);

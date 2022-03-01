@@ -54,6 +54,7 @@ name = "kmain"
 version = "0.1.0"
 dependencies = [
  "bootinfo",
+ "framed",
 ]
 
 [[package]]

@@ -19,6 +19,8 @@ pub struct Bootinfo {
     pub framebuffer: Framebuffer,
     /// The memory map describes the physical regions in memory.
     pub memory_map: MemoryMap<'static>,
+    /// Bitmap-encoded font to use within the kernel.
+    pub font: &'static [u8],
 }
 
 #[repr(C)]

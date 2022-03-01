@@ -130,6 +130,12 @@ impl<'a> Arena<'a> {
             .expect("Out of memory.");
         unsafe { core::slice::from_raw_parts_mut(pointer.as_ptr() as *mut MaybeUninit<T>, length) }
     }
+
+    /// Copies the content of the slice `in` into the arena and returns a mutable reference to it.
+    pub fn allocate_and_copy_slice<T: Copy>(&mut self, from: &[T]) -> &'a mut [T] {
+        let out = self.allocate_uninit_slice(from.len());
+        MaybeUninit::write_slice(out, from)
+    }
 }
 
 struct UefiAlloc {}

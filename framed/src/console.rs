@@ -25,11 +25,14 @@ impl<F: Frame> Console<F> {
 }
 
 impl<F: Frame> Console<F> {
+    /// Go to the next line.
     fn next_line(&mut self) {
         self.cursor.0 += 16;
         self.cursor.1 = 0;
     }
 
+    /// Move the cursor forward `pixel` steps. If reach the end of the frame, move to the next
+    /// line.
     fn wrap_add(&mut self, pixels: usize) {
         self.cursor.1 += pixels;
         if self.cursor.1 >= self.frame.width() - 8 {
@@ -74,6 +77,11 @@ impl<F: Frame> Write for Console<F> {
     }
 }
 
+/// Bitmap encoded fonts.
+///
+/// A bitmap font is a font that is encoded as a large array where each letter becomes a grid of
+/// bits. The bits represent whether it's on or off at that position. Each letter is indexed by its
+/// ascii code. See more at https://wiki.osdev.org/VGA_Fonts.
 #[derive(Debug, Copy, Clone)]
 #[repr(transparent)]
 pub struct BitmapFont {
@@ -81,6 +89,7 @@ pub struct BitmapFont {
 }
 
 impl BitmapFont {
+    /// Decode a font and return the `BitmapFont`.
     pub fn decode_from(encoded: &[u8]) -> Result<BitmapFont, ()> {
         if encoded.len() == core::mem::size_of::<BitmapFont>() {
             // SAFETY: Size is the same and representation is transparent. All of these decode to a
@@ -108,6 +117,9 @@ impl Index<u8> for BitmapFont {
     }
 }
 
+/// A single bitmap character.
+///
+/// Each character is 16 bytes where each byte is one row.
 #[derive(Debug, Copy, Clone)]
 #[repr(transparent)]
 pub struct BitmapChar {
@@ -115,6 +127,7 @@ pub struct BitmapChar {
 }
 
 impl BitmapChar {
+    /// Creates an iterator to go through each bit in the character.
     pub fn iter(&self) -> BitmapCharIterator<'_> {
         BitmapCharIterator {
             bitmap_char: &self,
@@ -124,6 +137,8 @@ impl BitmapChar {
     }
 }
 
+/// An iterator for a bitmap character.
+#[derive(Debug, Copy, Clone)]
 pub struct BitmapCharIterator<'a> {
     bitmap_char: &'a BitmapChar,
     row: usize,
