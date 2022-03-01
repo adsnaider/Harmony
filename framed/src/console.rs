@@ -97,7 +97,7 @@ impl<F: Frame> Write for Console<F> {
 ///
 /// A bitmap font is a font that is encoded as a large array where each letter becomes a grid of
 /// bits. The bits represent whether it's on or off at that position. Each letter is indexed by its
-/// ascii code. See more at https://wiki.osdev.org/VGA_Fonts.
+/// ascii code. See more at <https://wiki.osdev.org/VGA_Fonts>.
 #[derive(Debug, Copy, Clone)]
 #[repr(transparent)]
 pub struct BitmapFont {

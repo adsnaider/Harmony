@@ -77,7 +77,7 @@ macro_rules! try_print {
     ($($arg:tt)*) => {$crate::display::_try_print(format_args!($($arg)*))};
 }
 
-/// Prints the arguments to the console and moves to the next line. Returns an error on failure..
+/// Prints the arguments to the console and moves to the next line. Returns an error on failure.
 #[macro_export]
 macro_rules! try_println {
     () => ($crate::try_print!("\n"));
