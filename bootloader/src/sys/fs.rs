@@ -17,7 +17,7 @@ pub struct Error {}
 pub fn read(path: &str) -> Result<Vec<u8>, Error> {
     let fs: &mut SimpleFileSystem = unsafe {
         &mut *SYSTEM_TABLE
-            .get_mut()
+            .get()
             .boot_services()
             .locate_protocol()
             .expect_success("Can't open filesystem.")
