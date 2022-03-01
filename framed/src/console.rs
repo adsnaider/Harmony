@@ -24,11 +24,22 @@ impl<F: Frame> Console<F> {
     }
 }
 
+// TODO(adsnaider): Instead of clearing when the cursor reaches the bottom, move everything
+// updwards a line and clear the last line.
 impl<F: Frame> Console<F> {
     /// Go to the next line.
-    fn next_line(&mut self) {
+    fn next_line_or_clear(&mut self) {
         self.cursor.0 += 16;
         self.cursor.1 = 0;
+        if self.cursor.0 >= self.frame.height() - 16 {
+            self.frame.fill_with(Pixel {
+                red: 0,
+                green: 0,
+                blue: 0,
+            });
+            self.cursor.0 = 0;
+            self.cursor.1 = 0;
+        }
     }
 
     /// Move the cursor forward `pixel` steps. If reach the end of the frame, move to the next
@@ -36,7 +47,7 @@ impl<F: Frame> Console<F> {
     fn wrap_add(&mut self, pixels: usize) {
         self.cursor.1 += pixels;
         if self.cursor.1 >= self.frame.width() - 8 {
-            self.next_line();
+            self.next_line_or_clear();
         }
     }
 }
@@ -49,26 +60,28 @@ impl<F: Frame> Write for Console<F> {
         // Safe to interpret as bytes since we checked that s.is_ascii().
         for c in s.bytes() {
             if c == b'\n' {
-                self.next_line()
+                self.next_line_or_clear()
             } else {
                 let bitchar = self.font[c];
                 for (row_offset, col_offset, value) in bitchar.iter() {
-                    self.frame.set_pixel(
-                        self.cursor.0 + row_offset,
-                        self.cursor.1 + col_offset,
-                        match value {
-                            true => Pixel {
-                                red: 255,
-                                green: 255,
-                                blue: 255,
+                    self.frame
+                        .set_pixel(
+                            self.cursor.0 + row_offset,
+                            self.cursor.1 + col_offset,
+                            match value {
+                                true => Pixel {
+                                    red: 255,
+                                    green: 255,
+                                    blue: 255,
+                                },
+                                false => Pixel {
+                                    red: 0,
+                                    green: 0,
+                                    blue: 0,
+                                },
                             },
-                            false => Pixel {
-                                red: 0,
-                                green: 0,
-                                blue: 0,
-                            },
-                        },
-                    );
+                        )
+                        .expect("Attempted to set pixel out of bounds.");
                 }
                 self.wrap_add(8);
             }
@@ -76,6 +89,9 @@ impl<F: Frame> Write for Console<F> {
         Ok(())
     }
 }
+
+// TODO(adsnaider): These should be private. Setup a Font trait that allows me to index
+// by character (ascii or not).
 
 /// Bitmap encoded fonts.
 ///

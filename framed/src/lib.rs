@@ -20,6 +20,10 @@ pub struct Pixel {
     pub blue: u8,
 }
 
+/// Error returned when indeces are out of bounds.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct OutOfBoundsError {}
+
 /// The `Frame` trait defines operations on pixels within a frame.
 ///
 /// # Safety
@@ -32,12 +36,14 @@ pub unsafe trait Frame {
     /// # Panics
     ///
     /// If `row` or `col` are out of bounds.
-    fn set_pixel(&mut self, row: usize, col: usize, pixel: Pixel) {
+    fn set_pixel(&mut self, row: usize, col: usize, pixel: Pixel) -> Result<(), OutOfBoundsError> {
         if row >= self.height() || col >= self.width() {
-            panic!("Attempted to set out of bounds pixel: ({row}, {col})");
-        }
-        unsafe {
-            self.set_pixel_unchecked(row, col, pixel);
+            Err(OutOfBoundsError {})
+        } else {
+            unsafe {
+                self.set_pixel_unchecked(row, col, pixel);
+            }
+            Ok(())
         }
     }
 
