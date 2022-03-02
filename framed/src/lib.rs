@@ -27,6 +27,11 @@ impl Pixel {
     }
 
     /// Creates the black pixel.
+    ///
+    /// ```
+    /// # use framed::Pixel;
+    /// assert_eq!(Pixel::black(), Pixel {red: 0, green: 0, blue: 0});
+    /// ```
     pub fn black() -> Pixel {
         Pixel {
             red: 0,
@@ -36,6 +41,11 @@ impl Pixel {
     }
 
     /// Creates the white pixel.
+    ///
+    /// ```
+    /// # use framed::Pixel;
+    /// assert_eq!(Pixel::white(), Pixel {red: 255, green: 255, blue: 255});
+    /// ```
     pub fn white() -> Pixel {
         Pixel {
             red: 255,
@@ -45,6 +55,11 @@ impl Pixel {
     }
 
     /// Creates the red pixel.
+    ///
+    /// ```
+    /// # use framed::Pixel;
+    /// assert_eq!(Pixel::red(), Pixel {red: 255, green: 0, blue: 0});
+    /// ```
     pub fn red() -> Pixel {
         Pixel {
             red: 255,
@@ -54,6 +69,11 @@ impl Pixel {
     }
 
     /// Creates the green pixel.
+    ///
+    /// ```
+    /// # use framed::Pixel;
+    /// assert_eq!(Pixel::green(), Pixel {red: 0, green: 255, blue: 0});
+    /// ```
     pub fn green() -> Pixel {
         Pixel {
             red: 0,
@@ -63,6 +83,11 @@ impl Pixel {
     }
 
     /// Creates the blue pixel.
+    ///
+    /// ```
+    /// # use framed::Pixel;
+    /// assert_eq!(Pixel::blue(), Pixel { red: 0, green: 0, blue: 255 });
+    /// ```
     pub fn blue() -> Pixel {
         Pixel {
             red: 0,
@@ -148,7 +173,7 @@ pub(crate) mod test_utils {
         }
     }
 
-    // SAFETY:
+    // SAFETY: Width and height are correctly set.
     unsafe impl<const W: usize, const H: usize> Frame for SimpleFrame<W, H> {
         unsafe fn set_pixel_unchecked(&mut self, row: usize, col: usize, pixel: Pixel) {
             self.frame[row][col] = pixel;
