@@ -11,5 +11,6 @@ pub unsafe fn aligned_to_high(pointer: *mut u8, alignment: usize) -> *mut u8 {
     // (8 - 7 % 8) % 8 = 1;
     // (8 - 6 % 8) % 8 = 2;
     let offset = (alignment - pointer as usize % alignment) % alignment;
-    pointer.add(offset)
+    // SAFETY: Pointer can't wrap.
+    unsafe { pointer.add(offset) }
 }

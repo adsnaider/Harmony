@@ -48,39 +48,52 @@ impl GlobalTable {
     /// Get a reference to the system table if setup. Otherwise, panic.
     ///
     /// # Safety
+    ///
     /// Aliasing rules apply.
     pub unsafe fn get(&self) -> &SystemTable<Boot> {
-        (&*self.table.get())
-            .as_ref()
-            .expect("System table hasn't been initialized. Forget to call `init()`?")
+        // SAFETY: Precondition.
+        unsafe {
+            (&*self.table.get())
+                .as_ref()
+                .expect("System table hasn't been initialized. Forget to call `init()`?")
+        }
     }
 
     /// Get a mutable reference to the system table if setup. Otherwise, panic.
     ///
     /// # Safety
+    ///
     /// Aliasing rules apply.
+    #[allow(clippy::mut_from_ref)]
     pub unsafe fn get_mut(&self) -> &mut SystemTable<Boot> {
-        (&mut *self.table.get())
-            .as_mut()
-            .expect("System table hasn't been initialized. Forget to call `init()`?")
+        // SAFETY: Precondition.
+        unsafe {
+            (&mut *self.table.get())
+                .as_mut()
+                .expect("System table hasn't been initialized. Forget to call `init()`?")
+        }
     }
 
     /// Sets the system table from the appropriate value.
     ///
     /// # Safety:
+    ///
     /// Aliasing rules apply. In particular, there shouldn't be living references to the previous
     /// system table.
     unsafe fn set(&self, table: SystemTable<Boot>) {
-        *self.table.get() = Some(table)
+        // SAFETY: Precondition.
+        unsafe { *self.table.get() = Some(table) }
     }
 
     /// Returns whether there's a table set.
     ///
     /// # Safety:
+    ///
     /// This will borrow the table immutably. There can't be mutable references to the system
     /// table.
     unsafe fn is_set(&self) -> bool {
-        (&*self.table.get()).is_some()
+        // SAFETY: Precondition.
+        unsafe { (&*self.table.get()).is_some() }
     }
 }
 
@@ -138,6 +151,8 @@ pub fn exit_uefi_services(
     let regions: &'static mut [MaybeUninit<MemoryRegion>] =
         statics.allocate_uninit_slice(descriptors.len());
 
+    // TODO(#2): Remove.
+    #[allow(clippy::match_single_binding)]
     for (i, desc) in descriptors.enumerate() {
         regions[i].write(MemoryRegion {
             ty: match desc.ty {

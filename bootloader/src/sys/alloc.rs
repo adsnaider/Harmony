@@ -16,41 +16,53 @@ use crate::sys::SYSTEM_TABLE;
 #[alloc_error_handler]
 fn alloc_error(layout: Layout) -> ! {
     log::error!("memory allocation of {} bytes failed", layout.size());
+    #[allow(clippy::empty_loop)]
     loop {}
 }
 
 /// UEFI page size in bytes.
 pub const PAGE_SIZE: usize = 4096;
 
+/// Error returned when the bootloader wasn't able to allocate pages.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct PageAllocError {}
+
 /// Attempts to allocate a `count` pages and "labels" them with `memory_type`.
 /// If `address` is given, then the returned buffer will start at `address`.
+///
+/// # Safety
+///
+/// The memory type used will be used by the kernel after boot. If the memory type doesn't match
+/// the true memory type, then the kernel may deallocate pages that shouldn't be deallocated or
+/// keep pages allocated that could be deallocated.
 pub unsafe fn get_pages<'a>(
     address: Option<usize>,
     count: usize,
     memory_type: MemoryType,
-) -> Result<&'a mut [u8], ()> {
-    let pages = SYSTEM_TABLE
-        .get()
-        .boot_services()
-        .allocate_pages(
-            match address {
-                Some(addr) => AllocateType::Address(addr),
-                None => AllocateType::AnyPages,
-            },
-            memory_type,
-            count,
-        )
-        .map_err(|_| ())?
-        .log();
+) -> Result<&'a mut [u8], PageAllocError> {
+    // SAFETY: The system is the only one with access to the system table.
+    let pages = unsafe {
+        SYSTEM_TABLE
+            .get()
+            .boot_services()
+            .allocate_pages(
+                match address {
+                    Some(addr) => AllocateType::Address(addr),
+                    None => AllocateType::AnyPages,
+                },
+                memory_type,
+                count,
+            )
+            .map_err(|_| PageAllocError {})?
+            .log()
+    };
 
     #[cfg(debug_assertions)]
     if let Some(addr) = address {
         assert_eq!(pages, addr as u64);
     }
-    Ok(core::slice::from_raw_parts_mut(
-        pages as *mut u8,
-        count * PAGE_SIZE,
-    ))
+    // SAFETY: Got the memory allocated by the UEFI allocator.
+    Ok(unsafe { core::slice::from_raw_parts_mut(pages as *mut u8, count * PAGE_SIZE) })
 }
 
 #[derive(Debug)]
@@ -151,8 +163,8 @@ unsafe impl GlobalAlloc for UefiAlloc {
             return ptr::null_mut();
         }
 
-        match SYSTEM_TABLE
-            .get()
+        // SAFETY: The system is the only one with access to the system table.
+        match unsafe { SYSTEM_TABLE.get() }
             .boot_services()
             .allocate_pool(MemoryType::LOADER_DATA, layout.size())
         {
@@ -169,7 +181,8 @@ unsafe impl GlobalAlloc for UefiAlloc {
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
-        if let Err(e) = SYSTEM_TABLE.get().boot_services().free_pool(ptr) {
+        // SAFETY: The system is the only one with access to the system table.
+        if let Err(e) = unsafe { SYSTEM_TABLE.get() }.boot_services().free_pool(ptr) {
             log::error!(
                 "Couldn't free pool at address {:p}. Got error: {:?}",
                 ptr,

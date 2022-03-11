@@ -10,6 +10,7 @@
 #![warn(missing_debug_implementations)]
 #![warn(missing_copy_implementations)]
 #![warn(missing_docs)]
+#![warn(unsafe_op_in_unsafe_fn)]
 
 extern crate alloc as alloc_api;
 

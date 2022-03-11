@@ -8,7 +8,6 @@ extern crate alloc as alloc_api;
 
 use core::arch::asm;
 
-use alloc_api::format;
 use bootinfo::Bootinfo;
 use bootloader::sys::alloc::Arena;
 use bootloader::{sys, KERNEL_CODE_MEMORY, KERNEL_STACK_MEMORY, KERNEL_STATIC_MEMORY};
@@ -16,7 +15,6 @@ use goblin::elf;
 use goblin::elf::program_header::PT_LOAD;
 use goblin::elf32::program_header::pt_to_str;
 use uefi::prelude::*;
-use {bootinfo, log};
 
 // TODO(#6): Move to utils crate.
 fn aligned_to_low(address: usize, alignment: usize) -> usize {
@@ -32,6 +30,13 @@ fn panic(info: &PanicInfo) -> ! {
     loop {}
 }
 
+/// Jumps into the kernel's entry point.
+///
+/// # Safety
+///
+/// * The entry address must be correct and match the in-memory kernel. The kernel also needs to be
+/// correctly mapped given the ELF specification.
+/// * The entry function should be take have the signature `fn(&'static mut Bootinfo) -> !`.
 pub unsafe fn kernel_handoff(
     entry: usize,
     bootinfo: &'static mut Bootinfo,
@@ -45,7 +50,7 @@ pub unsafe fn kernel_handoff(
         in(reg) entry,
         in("rdi") bootinfo as *mut Bootinfo as usize,
     );
-    todo!();
+    unreachable!();
 }
 
 #[entry]
@@ -75,11 +80,14 @@ fn efi_main(handle: Handle, system_table: SystemTable<Boot>) -> Status {
                     let count = page_end / 4096 - page_start / 4096 + 1;
                     log::info!("Requesting {} pages at {:#X}", count, page_start);
                     let memory = sys::alloc::get_pages(Some(page_start), count, KERNEL_CODE_MEMORY)
-                        .expect(&format!(
-                            "Couldn't get memory to load the kernel at address: {:#X} - {:#X}",
-                            header.vm_range().start,
-                            header.vm_range().end
-                        ));
+                        .unwrap_or_else(|e| {
+                            panic!(
+                                "Error {:?}: Couldn't get memory to load the kernel at address: {:#X} - {:#X}", 
+                                e,
+                                header.vm_range().start,
+                                header.vm_range().end
+                            )
+                        });
                     memory.iter_mut().for_each(|x| *x = 0);
                     // Memory range doesn't start at the beginning of page. Offset that.
                     let memory = &mut memory[(header.vm_range().start - page_start)..];

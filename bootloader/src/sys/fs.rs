@@ -1,8 +1,8 @@
 //! Simple filesystem API to read and write files within the UEFI environment.
 
-use alloc_api::format;
 use alloc_api::string::String;
 use alloc_api::vec::Vec;
+use alloc_api::{format, vec};
 use uefi::proto::media::file::{File, FileAttribute, FileInfo, FileType};
 use uefi::proto::media::fs::SimpleFileSystem;
 use uefi::ResultExt;
@@ -53,8 +53,7 @@ pub fn read(path: &str) -> Result<Vec<u8>, Error> {
                         .expect_success("Couldn't get file info");
                     info.file_size() as usize
                 };
-                let mut data = Vec::with_capacity(size);
-                data.resize(size, 0);
+                let mut data = vec![0; size];
                 file.read(&mut data)
                     .expect_success(&format!("Couldn't read file: {}", path));
                 return Ok(data);
