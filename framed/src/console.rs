@@ -96,9 +96,13 @@ pub struct BitmapFont {
     letters: [BitmapChar; 256],
 }
 
+/// Error returned when the bitmap font couldn't be decoded.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct DecodeError {}
+
 impl BitmapFont {
     /// Decode a font and return the `BitmapFont`.
-    pub fn decode_from(encoded: &[u8]) -> Result<BitmapFont, ()> {
+    pub fn decode_from(encoded: &[u8]) -> Result<BitmapFont, DecodeError> {
         if encoded.len() == core::mem::size_of::<BitmapFont>() {
             // SAFETY: Size is the same and representation is transparent. All of these decode to a
             // [u8; 256 * FONT_HEIGHT] array, so there can't be malinitialized memory.
@@ -112,7 +116,7 @@ impl BitmapFont {
                 Ok(font.assume_init())
             }
         } else {
-            Err(())
+            Err(DecodeError {})
         }
     }
 }
@@ -138,7 +142,7 @@ impl BitmapChar {
     /// Creates an iterator to go through each bit in the character.
     pub fn iter(&self) -> BitmapCharIterator<'_> {
         BitmapCharIterator {
-            bitmap_char: &self,
+            bitmap_char: self,
             row: 0,
             col: 0,
         }

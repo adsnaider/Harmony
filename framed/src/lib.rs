@@ -1,9 +1,10 @@
 //! Functionalities for displays and frames.
 #![cfg_attr(not(test), no_std)]
 #![deny(absolute_paths_not_starting_with_crate)]
-#![warn(missing_debug_implementations)]
 #![warn(missing_copy_implementations)]
+#![warn(missing_debug_implementations)]
 #![warn(missing_docs)]
+#![warn(unsafe_op_in_unsafe_fn)]
 
 pub mod console;
 
