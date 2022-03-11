@@ -92,7 +92,7 @@ pub enum MemoryAttribute {
 }
 
 /// Determines the format (i.e. byte ordering) of each pixel such as RGB, BGR, etc.
-#[repr(u32)]
+#[repr(C)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum PixelFormat {
     /// Red, green blue,
