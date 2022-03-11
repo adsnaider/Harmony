@@ -28,11 +28,17 @@ pub struct Display {
 
 impl Display {
     /// Create a new display with the framebuffer.
-    pub fn new(framebuffer: Framebuffer) -> Self {
+    ///
+    /// # Safety
+    ///
+    /// The framebuffer must be correct.
+    pub unsafe fn new(framebuffer: Framebuffer) -> Self {
         Self { framebuffer }
     }
 }
 
+// SAFETY: We correctly define the width and height of the display since the framebuffer is correct
+// (precondition).
 unsafe impl Frame for Display {
     unsafe fn set_pixel_unchecked(&mut self, row: usize, col: usize, pixel: Pixel) {
         match self.framebuffer.pixel_format {
@@ -42,7 +48,13 @@ unsafe impl Frame for Display {
                 let offset = row * self.framebuffer.stride * PIXEL_SIZE + col * PIXEL_SIZE;
                 let color: u32 =
                     ((pixel.blue as u32) << 16) + ((pixel.green as u32) << 8) + (pixel.red as u32);
-                core::ptr::write_volatile(self.framebuffer.address.add(offset) as *mut u32, color);
+                // SAFETY: The framebuffer structure is correct (precondition).
+                unsafe {
+                    core::ptr::write_volatile(
+                        self.framebuffer.address.add(offset) as *mut u32,
+                        color,
+                    )
+                };
             }
             bootinfo::PixelFormat::Bgr => {
                 // Each pixel has 4 bytes.
@@ -50,7 +62,13 @@ unsafe impl Frame for Display {
                 let offset = row * self.framebuffer.stride * PIXEL_SIZE + col * PIXEL_SIZE;
                 let color: u32 =
                     ((pixel.red as u32) << 16) + ((pixel.green as u32) << 8) + (pixel.blue as u32);
-                core::ptr::write_volatile(self.framebuffer.address.add(offset) as *mut u32, color);
+                // SAFETY: The framebuffer structure is correct (precondition).
+                unsafe {
+                    core::ptr::write_volatile(
+                        self.framebuffer.address.add(offset) as *mut u32,
+                        color,
+                    )
+                };
             }
             _ => todo!(),
         }
@@ -133,7 +151,7 @@ pub fn _try_print(args: core::fmt::Arguments) -> Result<(), PrintError> {
     use core::fmt::Write;
     CONSOLE
         .try_borrow_mut()
-        .map_err(|e| PrintError::BorrowError(e))?
+        .map_err(PrintError::BorrowError)?
         .write_fmt(args)
         .map_err(|_| PrintError::PrintError)
 }

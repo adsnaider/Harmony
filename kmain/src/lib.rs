@@ -1,6 +1,7 @@
 //! Kernel entry and executable. Ideally, this is just a thin wrapper over all of the kernel's
 //! components.
 #![no_std]
+#![deny(absolute_paths_not_starting_with_crate)]
 #![warn(missing_copy_implementations)]
 #![warn(missing_debug_implementations)]
 #![warn(missing_docs)]
@@ -26,18 +27,20 @@ fn panic(info: &PanicInfo) -> ! {
 /// Kernel's starting point.
 #[no_mangle]
 pub extern "C" fn kmain(bootinfo: &'static mut Bootinfo) -> ! {
-    let mut display = Display::new(bootinfo.framebuffer);
+    // SAFETY: Bootloader passed the framebuffer correctly.
+    let mut display = unsafe { Display::new(bootinfo.framebuffer) };
 
     display.fill_with(Pixel::black());
     let font = match BitmapFont::decode_from(bootinfo.font) {
         Ok(font) => font,
         Err(_) => {
             display.fill_with(Pixel::red());
-            loop {}
+            panic!("Can't get display to work.");
         }
     };
     display::init(Console::new(display, font));
     println!("Hello, Kernel!");
     log::info!("Hello, logging!");
+    #[allow(clippy::empty_loop)]
     loop {}
 }
