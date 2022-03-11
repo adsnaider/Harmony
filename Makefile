@@ -41,13 +41,17 @@ IMAGE_ROOT = $(BUILD_DIR)/image
 ARCHITECTURES = $(BASE)/arch
 TARGET = $(ARCHITECTURES)/$(ARCH)-unknown-none.json
 
-.PHONY: $(CARGO_EFI) $(CARGO_KERNEL) boot_image clean all env
+.PHONY: $(CARGO_EFI) $(CARGO_KERNEL) boot_image clean all env check
 
 all: boot_image
 
 env:
 	mkdir -p $(ARTIFACTS)
 	mkdir -p $(IMAGE_ROOT)/EFI/BOOT
+
+check:
+	cd $(BOOTLOADER) && cargo clippy
+	cd $(KMAIN) && cargo clippy
 
 $(CARGO_EFI):
 	# We cd to run the command because we want to use the .cargo/config.toml
