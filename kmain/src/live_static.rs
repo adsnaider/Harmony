@@ -2,7 +2,7 @@
 
 use core::cell::{Ref, RefCell, RefMut};
 
-// TODO(#14): Once async, we should use an async lock instead of a RefCell.
+// TODO(#14): Once async (or interrupts) we should use an async lock instead of a RefCell.
 /// A kernel `LiveStatic` is a structure that holds a value after being setup. The value will be
 /// guarded by a RefCell.
 #[derive(Debug)]

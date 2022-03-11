@@ -107,17 +107,27 @@ macro_rules! try_println {
     ($($arg:tt)*) => ($crate::try_print!("{}\n", format_args!($($arg)*)));
 }
 
+/// Prints the arguments to the screen, panicking if unable to.
 #[doc(hidden)]
 pub fn _print(args: core::fmt::Arguments) {
-    use core::fmt::Write;
-    CONSOLE.borrow_mut().write_fmt(args).unwrap();
+    _try_print(args).unwrap();
 }
 
+/// Returned when the try_print! macros fail to print to the screen.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum PrintError {
+    /// Couldn't print due to a borrowing error (in use)
     BorrowError(StaticBorrowError),
+    /// General fmt error.
     PrintError,
 }
 
+/// Tries to print the args using the default printer.
+///
+/// # Errors
+///
+/// * If the console is currently in use.
+/// * If the console wasn't able to print the arguments.
 #[doc(hidden)]
 pub fn _try_print(args: core::fmt::Arguments) -> Result<(), PrintError> {
     use core::fmt::Write;

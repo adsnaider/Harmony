@@ -1,9 +1,10 @@
 //! Kernel entry and executable. Ideally, this is just a thin wrapper over all of the kernel's
 //! components.
 #![no_std]
-#![warn(missing_docs)]
-#![warn(missing_debug_implementations)]
 #![warn(missing_copy_implementations)]
+#![warn(missing_debug_implementations)]
+#![warn(missing_docs)]
+#![warn(unsafe_op_in_unsafe_fn)]
 
 mod display;
 pub mod live_static;
@@ -14,7 +15,6 @@ use bootinfo::Bootinfo;
 use display::Display;
 use framed::console::{BitmapFont, Console};
 use framed::{Frame, Pixel};
-use log;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -23,8 +23,8 @@ fn panic(info: &PanicInfo) -> ! {
     loop {}
 }
 
-#[no_mangle]
 /// Kernel's starting point.
+#[no_mangle]
 pub extern "C" fn kmain(bootinfo: &'static mut Bootinfo) -> ! {
     let mut display = Display::new(bootinfo.framebuffer);
 
