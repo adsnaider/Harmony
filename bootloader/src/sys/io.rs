@@ -29,17 +29,18 @@ pub fn get_framebuffer() -> Framebuffer {
         pixel_format: match mode.pixel_format() {
             uefi::proto::console::gop::PixelFormat::Rgb => PixelFormat::Rgb,
             uefi::proto::console::gop::PixelFormat::Bgr => PixelFormat::Bgr,
-            uefi::proto::console::gop::PixelFormat::Bitmask => PixelFormat::Bitmask,
-            uefi::proto::console::gop::PixelFormat::BltOnly => PixelFormat::BltOnly,
-        },
-        bitmask: match mode.pixel_bitmask() {
-            None => None,
-            Some(bitmask) => Some(PixelBitmask {
-                red: bitmask.red,
-                green: bitmask.green,
-                blue: bitmask.blue,
-                reserved: bitmask.reserved,
+            uefi::proto::console::gop::PixelFormat::Bitmask => PixelFormat::Bitmask({
+                let bitmask = mode
+                    .pixel_bitmask()
+                    .expect("Bitmask should be set when pixel format is bitmask.");
+                PixelBitmask {
+                    red: bitmask.red,
+                    green: bitmask.green,
+                    blue: bitmask.blue,
+                    reserved: bitmask.reserved,
+                }
             }),
+            uefi::proto::console::gop::PixelFormat::BltOnly => PixelFormat::BltOnly,
         },
         stride: mode.stride(),
     }

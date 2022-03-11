@@ -11,9 +11,9 @@ pub const KERNEL_STACK: u32 = 0x80000001;
 /// Memory type used to identify the kernel code.
 pub const KERNEL_CODE: u32 = 0x80000002;
 
+/// The `Bootinfo` struct gets passed from the bootloader to the kernel.
 #[repr(C)]
 #[derive(Debug)]
-/// The `Bootinfo` struct gets passed from the bootloader to the kernel.
 pub struct Bootinfo {
     /// Framebuffer structure that can be used in the kernel to control the screen.
     pub framebuffer: Framebuffer,
@@ -23,17 +23,22 @@ pub struct Bootinfo {
     pub font: &'static [u8],
 }
 
+/// System memory map. This is a physical representation of the memory (i.e. identity-mapped).
+///
+/// The memory referenced in the map represents the physical frames. At boot time, the memory will
+/// be identity mapped. It's up to the OS to create a different virtual -> physical abstraction.
+/// Additionally, the bootloader doesn't setup any kind of memory protection for stack overflow or
+/// unused memory. It's up to the OS to set this up.
 #[repr(C)]
 #[derive(Debug)]
-/// System memory map. This is a physical representation of the memory (i.e. identity-mapped).
 pub struct MemoryMap<'a> {
     /// Region describing 1 or more set of contiguous pages in memory.
     pub regions: &'a mut [MemoryRegion],
 }
 
+/// Represents a contiguous region in memory of the same type.
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-/// Represents a contiguous region in memory of the same type.
 pub struct MemoryRegion {
     /// Type of this memory region. Used to decide if the memory is usable.
     pub ty: MemoryType,
@@ -46,9 +51,9 @@ pub struct MemoryRegion {
     pub attribute: MemoryAttribute,
 }
 
+/// Describes the type of memory in a particular region.
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-/// Describes the type of memory in a particular region.
 pub enum MemoryType {
     /// Unusable, system-reserved memory.
     Reserved,
@@ -72,36 +77,37 @@ pub enum MemoryType {
     KernelCode,
     /// Unusable memory region where kernel boot data is loaded.
     KernelData,
-    /// Unusable memory region used for the kernel's stack.
+    /// Unusable memory region used for the kernel's stack. The OS may setup the lowest page in the
+    /// range for stack overflow protection by unmapping the page.
     KernelStack,
 }
 
+/// Physical properties of the memory region.
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-/// Physical properties of the memory region.
 pub enum MemoryAttribute {
     // TODO(#2): Set these up.
     /// Unknow memory attributes.
     Unknown,
 }
 
+/// Determines the format (i.e. byte ordering) of each pixel such as RGB, BGR, etc.
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-/// Determines the format (i.e. byte ordering) of each pixel such as RGB, BGR, etc.
 pub enum PixelFormat {
     /// Red, green blue,
     Rgb,
     /// Blue, green, red.
     Bgr,
     /// Bitmask. If this, `bitmask` will be set in ramebuffer.
-    Bitmask,
+    Bitmask(PixelBitmask),
     /// Blt.
     BltOnly,
 }
 
+/// The PixelBitmask represents the structure of a single pixel when the format is Bitmask.
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-/// Framebuffer bitmask.
 pub struct PixelBitmask {
     /// Red mask.
     pub red: u32,
@@ -113,9 +119,9 @@ pub struct PixelBitmask {
     pub reserved: u32,
 }
 
+/// Framebuffer structure.
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-/// Framebuffer structure.
 pub struct Framebuffer {
     /// Initial address of the framebuffer.
     pub address: *mut u8,
@@ -123,8 +129,6 @@ pub struct Framebuffer {
     pub resolution: (usize, usize),
     /// Format of each pixel in the screen.
     pub pixel_format: PixelFormat,
-    /// Bitmaks used in case PixelFormat::Bitmask.
-    pub bitmask: Option<PixelBitmask>,
     /// Strides determines the size of each row in the framebuffer. This may be >= resolution.0.
     pub stride: usize,
 }
