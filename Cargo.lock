@@ -68,6 +68,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "memory"
+version = "0.1.0"
+
+[[package]]
 name = "plain"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
