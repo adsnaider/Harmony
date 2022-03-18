@@ -1,14 +1,21 @@
 //! Allocator that manages free memory with a linked list.
 
+mod node;
+
 use core::alloc::{AllocError, Allocator, Layout};
 use core::ptr::NonNull;
 
+use self::node::Node;
 use super::{ExtendError, MemoryRegion, MemoryRegionAllocator};
 
 /// A type of allocator that uses a linked list to manage free memory blocks.
 #[allow(missing_copy_implementations)]
 #[derive(Debug)]
-pub struct LinkedListAllocator {}
+pub struct LinkedListAllocator {
+    head: NonNull<Node>,
+    tail: NonNull<Node>,
+    coverage: MemoryRegion,
+}
 
 unsafe impl Allocator for LinkedListAllocator {
     fn allocate(&self, _layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
@@ -21,8 +28,14 @@ unsafe impl Allocator for LinkedListAllocator {
 }
 
 unsafe impl MemoryRegionAllocator for LinkedListAllocator {
-    unsafe fn from_region(_memory_region: MemoryRegion) -> Option<Self> {
-        todo!();
+    unsafe fn from_region(memory_region: MemoryRegion) -> Option<Self> {
+        // SAFETY: We are passed ownership of the memory region.
+        let node = unsafe { Node::claim_region(memory_region)? };
+        Some(LinkedListAllocator {
+            head: node.into(),
+            tail: node.into(),
+            coverage: memory_region,
+        })
     }
 
     unsafe fn extend(&mut self, _size: usize) -> Result<(), ExtendError> {
@@ -30,7 +43,7 @@ unsafe impl MemoryRegionAllocator for LinkedListAllocator {
     }
 
     fn coverage(&self) -> MemoryRegion {
-        todo!();
+        self.coverage
     }
 }
 
