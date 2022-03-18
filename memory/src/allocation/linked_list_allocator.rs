@@ -33,3 +33,55 @@ unsafe impl MemoryRegionAllocator for LinkedListAllocator {
         todo!();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::allocation::test_utils::Arena;
+    use crate::test_utils::init_logging;
+
+    #[test]
+    fn one_alloc() {
+        init_logging();
+        let arena = Arena::new(4096);
+        let alloc = unsafe { LinkedListAllocator::from_region(arena.region()) }.unwrap();
+
+        let a = Box::new_in(5, &alloc);
+        assert_eq!(*a, 5);
+    }
+
+    #[test]
+    fn multiple_alloc() {
+        init_logging();
+        let arena = Arena::new(4096);
+        let alloc = unsafe { LinkedListAllocator::from_region(arena.region()) }.unwrap();
+
+        let a = Box::new_in(5, &alloc);
+        {
+            let b = Box::new_in(6, &alloc);
+            {
+                let c = Box::new_in(7, &alloc);
+                assert_eq!(*c, 7);
+            }
+            assert_eq!(*b, 6);
+        }
+        assert_eq!(*a, 5);
+    }
+
+    #[test]
+    fn vec_growing_alloc() {
+        init_logging();
+        let arena = Arena::new(4096);
+        let alloc = unsafe { LinkedListAllocator::from_region(arena.region()) }.unwrap();
+
+        let mut v: Vec<usize, _> = Vec::new_in(&alloc);
+
+        for i in 0..256 {
+            v.push(i);
+        }
+
+        for (i, val) in v.iter().copied().enumerate() {
+            assert_eq!(i, val);
+        }
+    }
+}
