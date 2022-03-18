@@ -9,11 +9,19 @@
 
 pub mod allocation;
 
-#[cfg(target_os = "linux")]
+#[cfg(test)]
+pub(crate) mod test_utils {
+    pub fn init_logging() {
+        let _ = env_logger::try_init();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
     fn it_works() {
+        crate::test_utils::init_logging();
+        log::info!("Hello world!");
         let result = 2 + 2;
         assert_eq!(result, 4);
     }
