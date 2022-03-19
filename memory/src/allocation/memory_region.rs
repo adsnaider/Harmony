@@ -7,7 +7,9 @@ use core::ops::Range;
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[repr(C)]
 pub struct MemoryRegion {
+    /// Starting address of the region.
     addr: *mut u8,
+    /// Size in bytes covered by the region.
     size: usize,
 }
 

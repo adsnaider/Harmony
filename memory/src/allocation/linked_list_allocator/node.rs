@@ -9,14 +9,23 @@ use crate::allocation::MemoryRegion;
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[repr(C)]
 pub struct Node {
+    /// Next pointer.
     next: Option<NonNull<Node>>,
+    /// Previous pointer.
     prev: Option<NonNull<Node>>,
+    /// Buffer managed by this `Node`.
     buffer: MemoryRegion,
 }
 
+// TODO(adsnaider): Statically check that the Node's alignment + the size is aligned to 8 bytes.
+
+/// The result of splitting a node for a layout.
 pub enum SplitNodeResult {
+    /// Hijack the node, taking all the data with it.
     Hijack,
+    /// Partition the node at `.0` before using for allocation.
     Partition(usize),
+    /// Don't use the node for allocation.
     Misfit,
 }
 

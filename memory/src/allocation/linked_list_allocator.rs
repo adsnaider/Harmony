@@ -14,8 +14,11 @@ use super::{ExtendError, MemoryRegion, MemoryRegionAllocator};
 #[allow(missing_copy_implementations)]
 #[derive(Debug)]
 pub struct LinkedListAllocator {
+    /// Head of the linked list allocator (sentinel).
     head: NonNull<Node>,
+    /// Tail of the linked list allocator (sentinel).
     tail: NonNull<Node>,
+    /// The coverage of the allocator.
     coverage: MemoryRegion,
 }
 
@@ -42,30 +45,73 @@ impl LinkedListAllocator {
     ///
     /// The entire design depends on the linked list being correct. For this to make sense, `prev`
     /// shoud be part of the free list and `next` should not be part of the free list.
+    /// Additionally, no references should exist anywhere accross the list (other than `prev` and
+    /// `next`) during the function call.
     ///
     /// # Panics
     ///
-    /// if `prev.buffer().end() != next as *mut Node as *mut u8` (if the nodes aren't sorted in
-    /// memory).
+    /// If the node inserted causes the list to get out of order.
     unsafe fn insert_after(prev: &mut Node, next: &mut Node) {
-        let mut after = prev.next().unwrap();
-        Node::link(next, unsafe { after.as_mut() });
+        if !prev.is_sentinel() && prev.buffer().start() > next.buffer().start() {
+            panic!(
+                "Inserting {:?} ({:p}) after {:?} ({:p}) would cause the list to get out of order.",
+                next, next, prev, prev
+            );
+        }
+        let after = unsafe { prev.next().unwrap().as_mut() };
+        if !after.is_sentinel() && next.buffer().start() > after.buffer().start() {
+            panic!(
+                "Inserting {:?} ({:p}) after {:?} ({:p}) would cause the list to get out of order because the following node {:?} ({:p}) should be behind.",
+                next, next, prev, prev, after, after);
+        }
+        Node::link(next, after);
         Node::link(prev, next);
     }
 
+    /// Inserts a node to the end of the list (right before the `tail` sentinel).
+    ///
+    /// # Safety
+    ///
+    /// No references can exist to any nodes in the list during the functio call (other than
+    /// `node`).
+    ///
+    /// # Panics
+    ///
+    /// If the node inserted causes the list to get out of order.
     unsafe fn insert_last(&self, node: &mut Node) {
         unsafe {
             Self::insert_after(self.tail.as_ref().prev().unwrap().as_mut(), node);
         }
     }
 
+    /// Inserts a node to the beginning of the list (right after the `head` sentinel).
+    ///
+    /// # Safety
+    ///
+    ///  No references can exist to any nodes in the list during the functio call (other than
+    /// `node`).
+    ///
+    /// # Panics
+    ///
+    /// If the node inserted causes the list to get out of order.
     unsafe fn insert_first(&self, node: &mut Node) {
-        let mut head = self.head;
         unsafe {
-            Self::insert_after(head.as_mut(), node);
+            Self::insert_after(&mut *self.head.as_ptr(), node);
         }
     }
 
+    /// Unlinks a node from the list.
+    ///
+    /// This method causes `node`'s neighbors to skip through `node`. Additionally, the method will
+    /// clear out the links from `node`.
+    ///
+    /// # Safety
+    ///
+    /// No references must exist to any nodes other than `node` in the list.
+    ///
+    /// # Panics
+    ///
+    /// If the node is a `sentinel` node.
     unsafe fn unlink_node(&self, node: &mut Node) {
         Node::link(unsafe { node.prev().unwrap().as_mut() }, unsafe {
             node.next().unwrap().as_mut()
@@ -75,6 +121,19 @@ impl LinkedListAllocator {
         node.set_prev(None);
     }
 
+    /// Coalesces 2 nodes if they are contiguous in memory.
+    ///
+    /// # Safety
+    ///
+    /// * After the function returns, if the result is Some, then the returned node can be
+    ///   derreferenced but neither one of the parameters should be dereferenced.
+    /// * Additionally, no references can exist to either of the nodes or the neighbors when
+    ///   calling this function.
+    /// * Lastly, this function expects both `left` and `right` to be true neighbors in the list.
+    ///
+    /// # Panics
+    ///
+    /// If either `left` or `right` are the sentinel nodes.
     unsafe fn coalesce_neighbors(
         left: NonNull<Node>,
         right: NonNull<Node>,
@@ -97,6 +156,16 @@ impl LinkedListAllocator {
         }
     }
 
+    /// Coalesces a node with it's left and rigth neighbors.
+    ///
+    /// # Safety
+    ///
+    /// * No references can exist into the list at the call of this function.
+    /// * `node` must be a valid node in the list.
+    ///
+    /// # Panics
+    ///
+    /// If `node` is either sentinel node.
     unsafe fn coalesce(&self, mut node: NonNull<Node>) -> NonNull<Node> {
         unsafe {
             log::info!("Coallescing node {:?} ({:p})", node.as_ref(), node.as_ref());
@@ -119,8 +188,14 @@ impl LinkedListAllocator {
     }
 }
 
+/// Iterator over the linked list allocator.
+///
+/// This iterator will start at head->next and be done when it hits the tail of the list. In
+/// particular, the iterator will never return a sentinel node.
 struct Iter<'a> {
+    /// The next node to return.
     current: NonNull<Node>,
+    /// phantom for lifetimes.
     _phantom: PhantomData<&'a Node>,
 }
 
@@ -138,6 +213,18 @@ impl Iterator for Iter<'_> {
     }
 }
 
+// TODO(adsnaider): Implement better `grow` and `shrink` methods.
+// TODO(adsnaider): Allow cloning the allocator. This might be tricky in an async environment right
+// now since we can get interrupts during the allocation/deallocation/etc., so we will need better
+// safety guarantees.
+//
+// SAFTEY: We hopefully implemented the allocator correctly. In particular,
+//
+// * Memory blocks returned point to valid blocks since creating the allocator and extending it
+//   provide ownership of the memory chunks as a precondition. Additionally, the implementation
+//   guarantees that no allocated block will be reallocated without being freed first.
+// * We don't have a method for cloning the allocator.
+// * Allocated pointers may be passed to the `grow`, `shrink`, and `deallocate` methods safely.
 unsafe impl Allocator for LinkedListAllocator {
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
         log::info!("Requesting allocation for {:?}", layout);
@@ -332,4 +419,25 @@ mod tests {
             assert_eq!(i as u32, val);
         }
     }
+
+    #[test]
+    fn multiple_alloc_and_frees() {
+        init_logging();
+        let arena = Arena::new(4096);
+        let alloc = unsafe { LinkedListAllocator::from_region(arena.region()) }.unwrap();
+
+        for i in 0..1024 {
+            let mut v: Vec<u32, _> = Vec::new_in(&alloc);
+
+            for x in 0..u32::min(i, 256) {
+                v.push(x);
+            }
+
+            for (i, val) in v.iter().copied().enumerate() {
+                assert_eq!(i as u32, val);
+            }
+        }
+    }
+
+    // TODO(adsnaider): Fuzz tests.
 }

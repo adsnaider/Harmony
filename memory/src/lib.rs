@@ -7,6 +7,7 @@
 #![warn(missing_copy_implementations)]
 #![warn(missing_debug_implementations)]
 #![warn(missing_docs)]
+#![warn(clippy::missing_docs_in_private_items)]
 #![warn(unsafe_op_in_unsafe_fn)]
 
 pub mod allocation;
