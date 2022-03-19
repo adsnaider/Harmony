@@ -5,6 +5,7 @@ mod node;
 use core::alloc::{AllocError, Allocator, Layout};
 use core::cell::Cell;
 use core::marker::PhantomData;
+use core::ops::Range;
 use core::ptr::NonNull;
 
 use self::node::{Node, SplitNodeResult};
@@ -57,17 +58,92 @@ impl LinkedListAllocator {
         }
     }
 
-    unsafe fn cover_node(&self, node: &mut Node) {
+    unsafe fn insert_first(&self, node: &mut Node) {
+        node.set_next(None);
+        node.set_prev(None);
+        if let Some(mut head) = self.head.get() {
+            Node::link(node, unsafe { head.as_mut() });
+        }
+
+        self.head.set(Some(node.into()));
+        if self.tail.get().is_none() {
+            self.tail.set(Some(node.into()));
+        }
+    }
+
+    unsafe fn unlink_node(&self, node: &mut Node) {
         unsafe {
             if let Some(mut prev) = node.prev() {
                 prev.as_mut().set_next(node.next());
-            } else {
-                debug_assert_eq!(self.head.get().unwrap().as_ptr(), node as *mut Node);
-                self.head.set(node.next());
-                if self.head.get().is_none() {
-                    self.tail.set(None);
-                }
             }
+
+            if let Some(mut next) = node.next() {
+                next.as_mut().set_prev(node.prev());
+            }
+        }
+
+        if self.head.get().unwrap() == node.into() {
+            debug_assert!(node.prev().is_none());
+            self.head.set(node.next());
+        }
+        if self.tail.get().unwrap() == node.into() {
+            debug_assert!(node.next().is_none());
+            self.tail.set(node.next());
+        }
+
+        node.set_next(None);
+        node.set_prev(None);
+    }
+
+    unsafe fn coalesce_neighbors(
+        left: NonNull<Node>,
+        right: NonNull<Node>,
+    ) -> Option<NonNull<Node>> {
+        if unsafe { left.as_ref() }.buffer().end() as usize == right.as_ptr() as usize {
+            let chunk = MemoryRegion::from_ptr_range(Range {
+                start: left.as_ptr() as *mut u8,
+                end: unsafe { right.as_ref() }.buffer().end(),
+            });
+            let left_neighbor = unsafe { left.as_ref().prev() };
+            let right_neighbor = unsafe { right.as_ref().next() };
+
+            let (pre, node) = unsafe { Node::claim_region(chunk).unwrap() };
+            debug_assert!(pre.is_empty());
+            if let Some(mut left_neighbor) = left_neighbor {
+                Node::link(unsafe { left_neighbor.as_mut() }, node);
+            }
+            if let Some(mut right_neighbor) = right_neighbor {
+                Node::link(node, unsafe { right_neighbor.as_mut() });
+            }
+            Some(node.into())
+        } else {
+            None
+        }
+    }
+
+    unsafe fn coalesce(&self, mut node: NonNull<Node>) -> NonNull<Node> {
+        unsafe {
+            log::info!("Coallescing node {:?} ({:p})", node.as_ref(), node.as_ref());
+            if let Some(prev) = node.as_ref().prev() {
+                if let Some(new_node) = Self::coalesce_neighbors(prev, node) {
+                    if self.tail.get().unwrap() == node {
+                        self.tail.set(Some(new_node));
+                    }
+                    log::info!("Combined with prev");
+                    node = new_node;
+                }
+            };
+            if let Some(next) = node.as_ref().next() {
+                if let Some(new_node) = Self::coalesce_neighbors(node, next) {
+                    if self.head.get().unwrap() == node {
+                        self.head.set(Some(new_node));
+                    }
+                    log::info!("Combined with next");
+                    node = new_node;
+                }
+            };
+            log::info!("Final node is {:?} ({:p})", node.as_ref(), node.as_ref());
+            node
         }
     }
 }
@@ -90,6 +166,7 @@ impl Iterator for Iter<'_> {
 
 unsafe impl Allocator for LinkedListAllocator {
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+        log::info!("Requesting allocation for {:?}", layout);
         let (mut node, split) = unsafe { self.iter() }
             .map(|node| (node, unsafe { node.as_ref() }.split_for_layout(layout)))
             .find(|(_, split)| {
@@ -98,14 +175,20 @@ unsafe impl Allocator for LinkedListAllocator {
                     SplitNodeResult::Hijack | SplitNodeResult::Partition(_)
                 )
             })
-            .ok_or(AllocError {})?;
+            .ok_or(AllocError {})
+            .inspect_err(|_| log::error!("Allocation error"))?;
 
         // SAFETY: We don't have any more references into the list.
         let node = unsafe { node.as_mut() };
 
+        log::info!("Found suitable node: {:?} ({:p})", node, node);
+
         match split {
-            SplitNodeResult::Hijack => {}
+            SplitNodeResult::Hijack => {
+                log::debug!("Hijacking node.")
+            }
             SplitNodeResult::Partition(at) => {
+                log::info!("Partition node at {}", at);
                 let remainder = node.shrink_to(at).unwrap();
                 // SAFETY: We've shrunk the previous node, so the region is completely managed by
                 // the new Node.
@@ -131,7 +214,7 @@ unsafe impl Allocator for LinkedListAllocator {
         }
 
         unsafe {
-            self.cover_node(node);
+            self.unlink_node(node);
         }
         Ok(NonNull::slice_from_raw_parts(
             NonNull::new(node.buffer().start()).unwrap(),
@@ -139,8 +222,42 @@ unsafe impl Allocator for LinkedListAllocator {
         ))
     }
 
-    unsafe fn deallocate(&self, _ptr: NonNull<u8>, _layout: Layout) {
-        todo!();
+    unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+        log::info!(
+            "Deallocation of {:p} with layout: {:?}",
+            ptr.as_ptr(),
+            layout
+        );
+        let node =
+            unsafe { &mut *(ptr.as_ptr().wrapping_sub(core::mem::size_of::<Node>()) as *mut Node) };
+
+        log::trace!("Got node {:?} ({:p})", node, node);
+
+        let mut prev = None;
+        for candidate in unsafe { self.iter() } {
+            if ptr.as_ptr() < candidate.as_ptr() as *mut u8 {
+                break;
+            }
+            prev = Some(candidate);
+        }
+        if let Some(mut prev) = prev {
+            unsafe {
+                log::info!(
+                    "Linking node after {:?} ({:p})",
+                    prev.as_ref(),
+                    prev.as_ref()
+                );
+                self.insert_after(prev.as_mut(), node);
+            }
+        } else {
+            unsafe {
+                self.insert_first(node);
+            }
+        }
+
+        unsafe {
+            self.coalesce(node.into());
+        }
     }
 }
 
@@ -219,14 +336,14 @@ mod tests {
         let arena = Arena::new(4096);
         let alloc = unsafe { LinkedListAllocator::from_region(arena.region()) }.unwrap();
 
-        let mut v: Vec<usize, _> = Vec::new_in(&alloc);
+        let mut v: Vec<u32, _> = Vec::new_in(&alloc);
 
         for i in 0..256 {
             v.push(i);
         }
 
         for (i, val) in v.iter().copied().enumerate() {
-            assert_eq!(i, val);
+            assert_eq!(i as u32, val);
         }
     }
 }

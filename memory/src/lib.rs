@@ -1,6 +1,7 @@
 //! Memory allocation and paging utilities.
 #![cfg_attr(not(test), no_std)]
 #![feature(allocator_api)]
+#![feature(result_option_inspect)]
 #![feature(nonnull_slice_from_raw_parts)]
 #![deny(absolute_paths_not_starting_with_crate)]
 #![warn(missing_copy_implementations)]

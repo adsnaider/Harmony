@@ -55,6 +55,10 @@ impl Node {
         self.prev
     }
 
+    pub fn set_prev(&mut self, prev: Option<NonNull<Node>>) {
+        self.prev = prev;
+    }
+
     pub fn buffer(&self) -> MemoryRegion {
         self.buffer
     }
