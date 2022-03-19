@@ -1,6 +1,7 @@
 //! Memory allocation and paging utilities.
 #![cfg_attr(not(test), no_std)]
 #![feature(allocator_api)]
+#![feature(nonnull_slice_from_raw_parts)]
 #![deny(absolute_paths_not_starting_with_crate)]
 #![warn(missing_copy_implementations)]
 #![warn(missing_debug_implementations)]
@@ -12,7 +13,7 @@ pub mod allocation;
 #[cfg(test)]
 pub(crate) mod test_utils {
     pub fn init_logging() {
-        let _ = env_logger::try_init();
+        let _ = env_logger::builder().is_test(true).try_init();
     }
 }
 

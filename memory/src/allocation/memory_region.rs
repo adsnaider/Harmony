@@ -48,7 +48,7 @@ impl MemoryRegion {
     /// Partitions the region into two contiguous chunks at `at` bytes.
     ///
     /// Returns None if `at > self.len()`
-    pub fn partition(self, at: usize) -> Option<(Self, Self)> {
+    pub fn partition(&self, at: usize) -> Option<(Self, Self)> {
         if at > self.len() {
             None
         } else {
@@ -59,14 +59,25 @@ impl MemoryRegion {
         }
     }
 
+    /// Returns true when the start of the region is aligned to `alignemnt`.
+    pub fn is_aligned(&self, alignment: usize) -> bool {
+        (alignment - ((self.addr as usize) % alignment)) % alignment == 0
+    }
+
     /// Returns an aligned copy of the memory region and the pre-padding leftover.
-    pub fn aligned(self, alignment: usize) -> Option<(Self, Self)> {
+    pub fn aligned(&self, alignment: usize) -> Option<(Self, Self)> {
         let offset = (alignment - ((self.addr as usize) % alignment)) % alignment;
         self.partition(offset)
     }
 
+    /// Returns the first possible partition at or after `hint` that is aligned to `alignment`.
+    pub fn aligned_at(&self, alignment: usize, hint: usize) -> Option<(Self, Self)> {
+        let offset = (alignment - (self.addr as usize + hint) % alignment) % alignment;
+        self.partition(hint + offset)
+    }
+
     /// Same as `aligned()` but uses the appropriate alignment for `T`.
-    pub fn aligned_for<T>(self) -> Option<(Self, Self)> {
+    pub fn aligned_for<T>(&self) -> Option<(Self, Self)> {
         self.aligned(core::mem::align_of::<T>())
     }
 
@@ -76,7 +87,9 @@ impl MemoryRegion {
     /// # Safety
     ///
     /// The caller must guarantee that we can create a mutable reference within the region.
-    pub unsafe fn reinterpret_aligned<'a, T>(self) -> Option<(Self, &'a mut MaybeUninit<T>, Self)> {
+    pub unsafe fn reinterpret_aligned<'a, T>(
+        &self,
+    ) -> Option<(Self, &'a mut MaybeUninit<T>, Self)> {
         let (pre, buffer) = self.aligned_for::<T>()?;
         let (data, post) = buffer.partition(core::mem::size_of::<T>())?;
         let data = unsafe { &mut *(data.addr as *mut MaybeUninit<T>) };
