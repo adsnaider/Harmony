@@ -70,6 +70,10 @@ impl Node {
         Some(leftover)
     }
 
+    pub fn grow(&mut self, by: usize) {
+        self.buffer = MemoryRegion::from_addr_and_size(self.buffer.start(), self.buffer.len() + by);
+    }
+
     pub fn split_for_layout(&self, layout: Layout) -> SplitNodeResult {
         if !self.buffer.is_aligned(layout.align()) {
             return SplitNodeResult::Misfit;

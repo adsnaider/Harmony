@@ -155,8 +155,23 @@ unsafe impl MemoryRegionAllocator for LinkedListAllocator {
         })
     }
 
-    unsafe fn extend(&mut self, _size: usize) -> Result<(), ExtendError> {
-        todo!();
+    unsafe fn extend(&mut self, size: usize) -> Result<(), ExtendError> {
+        if let Some(mut tail) = self.tail.get() {
+            unsafe {
+                if tail.as_ref().buffer().end() == self.coverage().end() {
+                    tail.as_mut().grow(size)
+                }
+            }
+        }
+        let (_pad, last) = unsafe {
+            Node::claim_region(MemoryRegion::from_addr_and_size(self.coverage.end(), size))
+                .ok_or(ExtendError::Insufficient)?
+        };
+        if let Some(mut tail) = self.tail.get() {
+            Node::link(unsafe { tail.as_mut() }, last);
+        }
+        self.tail.set(Some(last.into()));
+        Ok(())
     }
 
     fn coverage(&self) -> MemoryRegion {
