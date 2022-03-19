@@ -30,6 +30,18 @@ impl Node {
         }
     }
 
+    pub fn sentinel() -> Self {
+        Self {
+            next: None,
+            prev: None,
+            buffer: MemoryRegion::from_addr_and_size(core::ptr::null_mut(), 0),
+        }
+    }
+
+    pub fn is_sentinel(&self) -> bool {
+        self.buffer.start().is_null() && self.buffer.is_empty()
+    }
+
     /// Constructs a node, hijacking the region for self storage.
     ///
     /// # Safety
@@ -61,11 +73,6 @@ impl Node {
 
     pub fn buffer(&self) -> MemoryRegion {
         self.buffer
-    }
-
-    /// Returns true if the node can be used to allocate the `layout`.
-    pub fn fits(&self, layout: Layout) -> bool {
-        self.buffer.is_aligned(layout.align()) && self.buffer.len() >= layout.size()
     }
 
     pub fn shrink_to(&mut self, size: usize) -> Option<MemoryRegion> {

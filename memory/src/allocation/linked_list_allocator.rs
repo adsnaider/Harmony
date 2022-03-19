@@ -3,7 +3,6 @@
 mod node;
 
 use core::alloc::{AllocError, Allocator, Layout};
-use core::cell::Cell;
 use core::marker::PhantomData;
 use core::ops::Range;
 use core::ptr::NonNull;
@@ -15,8 +14,8 @@ use super::{ExtendError, MemoryRegion, MemoryRegionAllocator};
 #[allow(missing_copy_implementations)]
 #[derive(Debug)]
 pub struct LinkedListAllocator {
-    head: Cell<Option<NonNull<Node>>>,
-    tail: Cell<Option<NonNull<Node>>>,
+    head: NonNull<Node>,
+    tail: NonNull<Node>,
     coverage: MemoryRegion,
 }
 
@@ -31,7 +30,7 @@ impl LinkedListAllocator {
     /// the linked list also shouldn't change between iteration.
     unsafe fn iter(&self) -> Iter<'_> {
         Iter {
-            current: self.head.get(),
+            current: unsafe { self.head.as_ref().next().unwrap() },
             _phantom: PhantomData,
         }
     }
@@ -48,48 +47,29 @@ impl LinkedListAllocator {
     ///
     /// if `prev.buffer().end() != next as *mut Node as *mut u8` (if the nodes aren't sorted in
     /// memory).
-    unsafe fn insert_after(&self, prev: &mut Node, next: &mut Node) {
-        if let Some(mut after) = prev.next() {
-            Node::link(next, unsafe { after.as_mut() });
-        }
+    unsafe fn insert_after(prev: &mut Node, next: &mut Node) {
+        let mut after = prev.next().unwrap();
+        Node::link(next, unsafe { after.as_mut() });
         Node::link(prev, next);
-        if prev as *mut Node == self.tail.get().unwrap().as_ptr() {
-            self.tail.set(Some(next.into()));
+    }
+
+    unsafe fn insert_last(&self, node: &mut Node) {
+        unsafe {
+            Self::insert_after(self.tail.as_ref().prev().unwrap().as_mut(), node);
         }
     }
 
     unsafe fn insert_first(&self, node: &mut Node) {
-        node.set_next(None);
-        node.set_prev(None);
-        if let Some(mut head) = self.head.get() {
-            Node::link(node, unsafe { head.as_mut() });
-        }
-
-        self.head.set(Some(node.into()));
-        if self.tail.get().is_none() {
-            self.tail.set(Some(node.into()));
+        let mut head = self.head;
+        unsafe {
+            Self::insert_after(head.as_mut(), node);
         }
     }
 
     unsafe fn unlink_node(&self, node: &mut Node) {
-        unsafe {
-            if let Some(mut prev) = node.prev() {
-                prev.as_mut().set_next(node.next());
-            }
-
-            if let Some(mut next) = node.next() {
-                next.as_mut().set_prev(node.prev());
-            }
-        }
-
-        if self.head.get().unwrap() == node.into() {
-            debug_assert!(node.prev().is_none());
-            self.head.set(node.next());
-        }
-        if self.tail.get().unwrap() == node.into() {
-            debug_assert!(node.next().is_none());
-            self.tail.set(node.next());
-        }
+        Node::link(unsafe { node.prev().unwrap().as_mut() }, unsafe {
+            node.next().unwrap().as_mut()
+        });
 
         node.set_next(None);
         node.set_prev(None);
@@ -104,17 +84,13 @@ impl LinkedListAllocator {
                 start: left.as_ptr() as *mut u8,
                 end: unsafe { right.as_ref() }.buffer().end(),
             });
-            let left_neighbor = unsafe { left.as_ref().prev() };
-            let right_neighbor = unsafe { right.as_ref().next() };
+            let left_neighbor = unsafe { left.as_ref().prev().unwrap().as_mut() };
+            let right_neighbor = unsafe { right.as_ref().next().unwrap().as_mut() };
 
             let (pre, node) = unsafe { Node::claim_region(chunk).unwrap() };
             debug_assert!(pre.is_empty());
-            if let Some(mut left_neighbor) = left_neighbor {
-                Node::link(unsafe { left_neighbor.as_mut() }, node);
-            }
-            if let Some(mut right_neighbor) = right_neighbor {
-                Node::link(node, unsafe { right_neighbor.as_mut() });
-            }
+            Node::link(left_neighbor, node);
+            Node::link(node, right_neighbor);
             Some(node.into())
         } else {
             None
@@ -124,24 +100,19 @@ impl LinkedListAllocator {
     unsafe fn coalesce(&self, mut node: NonNull<Node>) -> NonNull<Node> {
         unsafe {
             log::info!("Coallescing node {:?} ({:p})", node.as_ref(), node.as_ref());
-            if let Some(prev) = node.as_ref().prev() {
-                if let Some(new_node) = Self::coalesce_neighbors(prev, node) {
-                    if self.tail.get().unwrap() == node {
-                        self.tail.set(Some(new_node));
-                    }
-                    log::info!("Combined with prev");
-                    node = new_node;
+            let prev = node.as_ref().prev().unwrap();
+            if !prev.as_ref().is_sentinel() {
+                if let Some(n) = Self::coalesce_neighbors(prev, node) {
+                    node = n;
                 }
-            };
-            if let Some(next) = node.as_ref().next() {
-                if let Some(new_node) = Self::coalesce_neighbors(node, next) {
-                    if self.head.get().unwrap() == node {
-                        self.head.set(Some(new_node));
-                    }
-                    log::info!("Combined with next");
-                    node = new_node;
+            }
+            let next = node.as_ref().next().unwrap();
+            if !next.as_ref().is_sentinel() {
+                if let Some(n) = Self::coalesce_neighbors(node, next) {
+                    node = n;
                 }
-            };
+            }
+
             log::info!("Final node is {:?} ({:p})", node.as_ref(), node.as_ref());
             node
         }
@@ -149,7 +120,7 @@ impl LinkedListAllocator {
 }
 
 struct Iter<'a> {
-    current: Option<NonNull<Node>>,
+    current: NonNull<Node>,
     _phantom: PhantomData<&'a Node>,
 }
 
@@ -157,10 +128,13 @@ impl Iterator for Iter<'_> {
     type Item = NonNull<Node>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let current = self.current?;
+        if unsafe { self.current.as_ref().is_sentinel() } {
+            return None;
+        }
+        let current = Some(self.current);
         // SAFETY: No mutable references can exist during iteration (precondition).
-        self.current = unsafe { current.as_ref() }.next();
-        Some(current)
+        self.current = unsafe { self.current.as_ref() }.next().unwrap();
+        current
     }
 }
 
@@ -205,7 +179,7 @@ unsafe impl Allocator for LinkedListAllocator {
                 // SAFETY: We maintin the linked list. Linking the original node with the new node
                 // that came off from the partition.
                 unsafe {
-                    self.insert_after(node, next);
+                    Self::insert_after(node, next);
                 }
             }
             SplitNodeResult::Misfit => {
@@ -247,7 +221,7 @@ unsafe impl Allocator for LinkedListAllocator {
                     prev.as_ref(),
                     prev.as_ref()
                 );
-                self.insert_after(prev.as_mut(), node);
+                Self::insert_after(prev.as_mut(), node);
             }
         } else {
             unsafe {
@@ -264,30 +238,42 @@ unsafe impl Allocator for LinkedListAllocator {
 unsafe impl MemoryRegionAllocator for LinkedListAllocator {
     unsafe fn from_region(memory_region: MemoryRegion) -> Option<Self> {
         // SAFETY: We are passed ownership of the memory region.
-        let (_pre, node) = unsafe { Node::claim_region(memory_region)? };
+        let (pre, node, leftover) = unsafe { memory_region.reinterpret_aligned()? };
+        log::debug!("Wrote head sentinel. Wasted {} bytes", pre.len());
+        let head = node.write(Node::sentinel());
+        let (pre, node, leftover) = unsafe { leftover.reinterpret_aligned()? };
+        let tail = node.write(Node::sentinel());
+        log::debug!("Wrote tail sentinel. Wasted {} bytes", pre.len());
+
+        let (pre, node) = unsafe { Node::claim_region(leftover)? };
+        log::debug!("Wrote intial buffer node. Wasted {} bytes", pre.len());
+
+        Node::link(head, node);
+        Node::link(node, tail);
+
         Some(LinkedListAllocator {
-            head: Cell::new(Some(node.into())),
-            tail: Cell::new(Some(node.into())),
+            head: head.into(),
+            tail: tail.into(),
             coverage: memory_region,
         })
     }
 
     unsafe fn extend(&mut self, size: usize) -> Result<(), ExtendError> {
-        if let Some(mut tail) = self.tail.get() {
+        let new_region = MemoryRegion::from_addr_and_size(self.coverage.end(), size);
+        if new_region.wraps() {
+            return Err(ExtendError::WouldWrap);
+        }
+        if let Some(mut last) = unsafe { self.tail.as_ref().prev() } {
             unsafe {
-                if tail.as_ref().buffer().end() == self.coverage().end() {
-                    tail.as_mut().grow(size)
+                if last.as_ref().buffer().end() == self.coverage().end() {
+                    last.as_mut().grow(size)
                 }
             }
         }
-        let (_pad, last) = unsafe {
-            Node::claim_region(MemoryRegion::from_addr_and_size(self.coverage.end(), size))
-                .ok_or(ExtendError::Insufficient)?
-        };
-        if let Some(mut tail) = self.tail.get() {
-            Node::link(unsafe { tail.as_mut() }, last);
+        unsafe {
+            let (_pad, last) = Node::claim_region(new_region).ok_or(ExtendError::Insufficient)?;
+            self.insert_last(last);
         }
-        self.tail.set(Some(last.into()));
         Ok(())
     }
 
