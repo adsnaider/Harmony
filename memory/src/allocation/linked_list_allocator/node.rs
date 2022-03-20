@@ -59,7 +59,7 @@ impl Node {
     ///
     /// The caller must guarantee that we can create a mutable reference within the region.
     pub unsafe fn claim_region<'a>(region: MemoryRegion) -> Option<(MemoryRegion, &'a mut Self)> {
-        // SAFETY: We are gauaranteed that the can be mutably aliased.
+        // SAFETY: We are gauaranteed that the region can be mutably aliased.
         let (pre, node, buffer) = unsafe { region.reinterpret_aligned()? };
         Some((pre, node.write(Node::new(buffer))))
     }

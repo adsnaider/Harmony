@@ -99,6 +99,8 @@ impl MemoryRegion {
     ) -> Option<(Self, &'a mut MaybeUninit<T>, Self)> {
         let (pre, buffer) = self.aligned_for::<T>()?;
         let (data, post) = buffer.partition(core::mem::size_of::<T>())?;
+        // SAFETY: Caller guarantees that the region can be reinterpreted. Additionally, we have
+        // correct alignment and size because we checked so.
         let data = unsafe { &mut *(data.addr as *mut MaybeUninit<T>) };
         Some((pre, data, post))
     }

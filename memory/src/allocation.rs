@@ -21,7 +21,7 @@ pub enum ExtendError {
 ///
 /// # Safety
 ///
-/// The allocator must correctly coverage.
+/// The allocator must correctly describe its coverage.
 pub unsafe trait MemoryRegionAllocator: Allocator + Sized {
     /// Attempts to construct the allocator from the provided region.
     ///
