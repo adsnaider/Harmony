@@ -10,6 +10,11 @@ use core::ptr::NonNull;
 use self::node::{Node, SplitNodeResult};
 use super::{ExtendError, MemoryRegion, MemoryRegionAllocator};
 
+// TODO(adsnaider): Rust is unclear what the pointer offset arithmetic allowed operations are. In
+// particular, it's undefined behavior to have pointers offset 1 element past the original
+// allocated object. In the context of an allocator, it's unclear what that means though as memory
+// is directly provided to the allocator by the operating system and the allocator can sort of
+// extend itself when the OS says it can.
 /// A type of allocator that uses a linked list to manage free memory blocks.
 ///
 /// There's a safety invariant associated with the structure. The linked list is said to be
@@ -220,7 +225,7 @@ impl LinkedListAllocator {
     unsafe fn coalesce(&self, mut node: NonNull<Node>) -> NonNull<Node> {
         // SAFETY: No references exist and `node` is valid.
         unsafe {
-            log::info!("Coallescing node {:?}", node.as_ref());
+            log::debug!("Coallescing node {:#?}", node.as_ref());
         }
         // SAFETY: No references exist and `node` is valid.
         let prev = unsafe { node.as_ref().prev().unwrap() };
@@ -259,7 +264,7 @@ impl LinkedListAllocator {
 
         // SAFETY: `node` is valid because we've updated it and no references exist into the list.
         unsafe {
-            log::debug!("Final node is {:?}", node.as_ref());
+            log::debug!("Final node is {:#?}", node.as_ref());
         }
         node
     }
@@ -324,7 +329,7 @@ unsafe impl Allocator for LinkedListAllocator {
         // SAFETY: We don't have any more references into the list and iteration is done.
         let node = unsafe { node.as_mut() };
 
-        log::info!("Found suitable node: {:?}", node);
+        log::info!("Found suitable node: {:#?}", node);
 
         match split {
             SplitNodeResult::Hijack => {
@@ -379,10 +384,12 @@ unsafe impl Allocator for LinkedListAllocator {
         // SAFETY: For a `ptr` to be allocated, there must have been a `node` right behind it (with
         // no padding), since otherwise, the allocation would have been a misfit. No references
         // exist into the list at this point.
-        let node =
-            unsafe { &mut *(ptr.as_ptr().wrapping_sub(core::mem::size_of::<Node>()) as *mut Node) };
+        // TODO(adsnaider): Does ptr and the node belong to the same allocation? Rust's raw pointer
+        // manipulation is a bit wonky when it comes to pointer offsets, so this may not be
+        // allowed.
+        let node = unsafe { &mut *(ptr.as_ptr().sub(core::mem::size_of::<Node>()) as *mut Node) };
 
-        log::trace!("Got node {:?} ({:p})", node, node);
+        log::info!("Deallocating node {:#?}", node);
 
         let mut prev = None;
         // SAFETY: The only mutable reference alive is `node`. Notice that `node` can't be in the
@@ -397,7 +404,7 @@ unsafe impl Allocator for LinkedListAllocator {
             // SAFETY: prev hasn't been dereferenced. Must be distnct from `node` since `node`
             // wasn't on the list to begin with. Additionally, the list is well-structured.
             unsafe {
-                log::info!("Linking node after {:?}", prev.as_ref(),);
+                log::debug!("Linking node after {:#?}", prev.as_ref(),);
                 Self::insert_after(prev.as_mut(), node);
                 // Note: List is still well-structured.
             }

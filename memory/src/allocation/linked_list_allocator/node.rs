@@ -6,7 +6,7 @@ use core::ptr::NonNull;
 use crate::allocation::MemoryRegion;
 
 /// A node in a linked list for the free list allocator.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 #[repr(C)]
 pub struct Node {
     /// Next pointer.
@@ -15,6 +15,24 @@ pub struct Node {
     prev: Option<NonNull<Node>>,
     /// Buffer managed by this `Node`.
     buffer: MemoryRegion,
+}
+
+impl core::fmt::Debug for Node {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if f.alternate() {
+            write!(
+                f,
+                "Node {{\n\tnext: {:?},\n\tprev: {:?},\n\tbuffer: {:?}\n}} ({:p})",
+                self.next, self.prev, self.buffer, self
+            )
+        } else {
+            write!(
+                f,
+                "Node {{ next: {:?}, prev: {:?}, buffer: {:?} }} ({:p})",
+                self.next, self.prev, self.buffer, self
+            )
+        }
+    }
 }
 
 // TODO(adsnaider): Statically check that the Node's alignment + the size is aligned to 8 bytes.
