@@ -22,14 +22,14 @@ impl MemoryRegion {
         }
     }
 
-    /// Returns true if the memory region wraps through the virtual memory space.
-    pub fn wraps(&self) -> bool {
-        (self.addr as usize).overflowing_add(self.size - 1).1
-    }
-
     /// Constructs a MemoryRegion with the range [addr, addr + size)
     pub fn from_addr_and_size(addr: *mut u8, size: usize) -> Self {
         Self { addr, size }
+    }
+
+    /// Returns true if the memory region wraps through the virtual memory space.
+    pub fn wraps(&self) -> bool {
+        (self.addr as usize).overflowing_add(self.size - 1).1
     }
 
     /// Returns the start pointer in the range.

@@ -3,6 +3,8 @@
 use core::alloc::Layout;
 use core::ptr::NonNull;
 
+use static_assertions as sa;
+
 use crate::allocation::MemoryRegion;
 
 /// A node in a linked list for the free list allocator.
@@ -16,6 +18,8 @@ pub struct Node {
     /// Buffer managed by this `Node`.
     buffer: MemoryRegion,
 }
+
+sa::const_assert!((core::mem::align_of::<Node>() + core::mem::size_of::<Node>()) % 8 == 0);
 
 impl core::fmt::Debug for Node {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {

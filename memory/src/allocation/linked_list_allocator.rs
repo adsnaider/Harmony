@@ -79,8 +79,8 @@ impl LinkedListAllocator {
     unsafe fn insert_after(prev: &mut Node, next: &mut Node) {
         if !prev.is_sentinel() && prev.buffer().start() > next.buffer().start() {
             panic!(
-                "Inserting {:?} ({:p}) after {:?} ({:p}) would cause the list to get out of order.",
-                next, next, prev, prev
+                "Inserting {:#?} after {:#?} would cause the list to get out of order.",
+                next, prev
             );
         }
         // SAFETY: No references exist into the linked list and because the list is will strutured
@@ -88,8 +88,8 @@ impl LinkedListAllocator {
         let after = unsafe { prev.next().unwrap().as_mut() };
         if !after.is_sentinel() && next.buffer().start() > after.buffer().start() {
             panic!(
-                "Inserting {:?} ({:p}) after {:?} ({:p}) would cause the list to get out of order because the following node {:?} ({:p}) should be behind.",
-                next, next, prev, prev, after, after);
+                "Inserting {:#?} after {:#?} would cause the list to get out of order because the following node {:#?} should be behind.",
+                next, prev, after);
         }
         Node::link(next, after);
         Node::link(prev, next);
@@ -468,33 +468,36 @@ unsafe impl MemoryRegionAllocator for LinkedListAllocator {
             return Err(ExtendError::WouldWrap);
         }
         // Check to see if we can extend the tail.
-        // SAFETY: We don't have any other references into the list.
-        if let Some(mut last) = unsafe { self.tail.as_ref().prev() } {
-            // SAFETY: We don't have any references into the list other than `last`. Additionally,
-            // we can assume ownership of the region so, in this case, the ownership is give to the
-            // `last` node.
-            unsafe {
-                if last.as_ref().buffer().end() == self.coverage().end() {
-                    last.as_mut().grow(size)
+        {
+            // SAFETY: We don't have any other references into the list.
+            let last = unsafe { self.tail.as_ref().prev().unwrap().as_mut() };
+            if !last.is_sentinel() && last.buffer().end() == self.coverage().end() {
+                // SAFETY: We don't have any references into the list other than `last`.
+                // Additionally, we can assume ownership of the region so, in this case, the
+                // ownership is give to the `last` node.
+                last.grow(size)
+                // NOTE: The list is still well-structured here as we only extend the last node
+                // (so no overlapping), and only do so if the the end of its range matches the end
+                // of coverage. This guarantees that there aren't any nodes or allocated space that
+                // is getting invalidated by growing the node.
+            } else {
+                // We couldn't extend the last block because either there is no last or because the
+                // node isn't contiguous with the extra memory region. Regardless, we crate a new
+                // node and insert it to the end of the list.
+
+                // SAFETY: We use a new node to take possession of the memory region. This is fine
+                // because we take ownership of the region.
+                unsafe {
+                    let (_pad, last) =
+                        Node::claim_region(new_region).ok_or(ExtendError::Insufficient)?;
+                    self.insert_last(last);
+                    // NOTE: The list is still well-structured here as insert_last guarantees so.
                 }
-            }
-            // NOTE: The list is still well-structured here as we only extend the last node (so no
-            // overlapping), and only do so if the the end of its range matches the end of
-            // coverage. This guarantees that there aren't any nodes or allocated space that is
-            // getting invalidated by growing the node.
-        } else {
-            // SAFETY: We use a new node to take possession of the memory region. This is fine
-            // because we take ownership of the region.
-            unsafe {
-                let (_pad, last) =
-                    Node::claim_region(new_region).ok_or(ExtendError::Insufficient)?;
-                self.insert_last(last);
-                // NOTE: The list is still well-structured here as insert_last guarantees so.
             }
         }
         self.coverage =
             MemoryRegion::from_addr_and_size(self.coverage.start(), self.coverage.len() + size);
-        // NOTE: We maintain the coverage to be accurate.
+        // NOTE: We update the coverage to be accurate.
         Ok(())
     }
 
