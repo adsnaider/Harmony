@@ -12,6 +12,8 @@
 #![warn(unsafe_op_in_unsafe_fn)]
 
 pub mod allocation;
+pub mod system;
+pub mod structures;
 
 #[cfg(test)]
 pub(crate) mod test_utils {
