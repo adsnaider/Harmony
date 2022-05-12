@@ -12,3 +12,4 @@ crate-type = ["staticlib"]
 bootinfo = { path = "../bootinfo" }
 framed = { path = "../framed" }
 log = "0.4"
+spin = "0.9"

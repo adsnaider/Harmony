@@ -7,18 +7,17 @@
 #![warn(missing_docs)]
 #![warn(unsafe_op_in_unsafe_fn)]
 
-mod display;
-pub mod live_static;
-
-use core::panic::PanicInfo;
+pub mod display;
+pub(crate) mod singleton;
 
 use bootinfo::Bootinfo;
 use display::Display;
 use framed::console::{BitmapFont, Console};
 use framed::{Frame, Pixel};
 
+#[cfg(target_os = "none")]
 #[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
+fn panic(info: &core::panic::PanicInfo) -> ! {
     // Can't do much about errors at this point.
     let _ = try_println!("{}", info);
     loop {}

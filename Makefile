@@ -37,9 +37,7 @@ FONT = $(BASE)/fonts/FONTS/SYSTEM/FREEDOS/CPIDOS30/CP113.F16
 # Actual image directory. Eventually, this will become an ISO file.
 IMAGE_ROOT = $(BUILD_DIR)/image
 
-# Targets directories.
-ARCHITECTURES = $(BASE)/arch
-TARGET = $(ARCHITECTURES)/$(ARCH)-unknown-none.json
+TARGET = $(ARCH)-unknown-none
 
 .PHONY: $(CARGO_EFI) $(CARGO_KERNEL) boot_image clean all env check
 

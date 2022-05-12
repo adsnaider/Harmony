@@ -1,37 +1,45 @@
+//! System display and console.
+
 use bootinfo::Framebuffer;
 use framed::console::Console;
 use framed::{Frame, Pixel};
 use log::{self, Level, LevelFilter, Metadata, Record};
 
-use crate::live_static::{LiveStatic, StaticBorrowError};
+use crate::singleton::Singleton;
 
 /// The main console for the kernel.
-static CONSOLE: LiveStatic<Console<Display>> = LiveStatic::new();
-
+static CONSOLE: Singleton<Console<Display>> = Singleton::uninit();
 /// The global logger.
 static LOGGER: DisplayLogger = DisplayLogger {};
 
 /// Initializes the console and logger. It's reasonable to use the print!, try_print!,
 /// println!, try_println!, and log::* macros after this call.
 pub(super) fn init(console: Console<Display>) {
-    CONSOLE.set(console);
+    CONSOLE.initialize(console);
     if let Err(e) = log::set_logger(&LOGGER).map(|()| log::set_max_level(LevelFilter::Info)) {
         crate::println!("Couldn't initialize logging services: {e}");
     }
 }
 
 /// The display struct implements the `Frame` trait from the framebuffer pointer.
+#[allow(missing_copy_implementations)]
 #[derive(Debug)]
 pub struct Display {
     framebuffer: Framebuffer,
 }
+
+// SAFETY: Precondition for creating the display prevents multiple frame buffers from existing in
+// the system.
+unsafe impl Send for Display {}
 
 impl Display {
     /// Create a new display with the framebuffer.
     ///
     /// # Safety
     ///
-    /// The framebuffer must be correct.
+    /// * The framebuffer must be correct.
+    /// * There should only be one framebuffer (i.e. the memory in the framebuffer is now owned
+    /// by the display).
     pub unsafe fn new(framebuffer: Framebuffer) -> Self {
         Self { framebuffer }
     }
@@ -128,16 +136,19 @@ macro_rules! try_println {
 /// Prints the arguments to the screen, panicking if unable to.
 #[doc(hidden)]
 pub fn _print(args: core::fmt::Arguments) {
-    _try_print(args).unwrap();
+    use core::fmt::Write;
+    CONSOLE.lock().write_fmt(args).unwrap();
 }
 
 /// Returned when the try_print! macros fail to print to the screen.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum PrintError {
     /// Couldn't print due to a borrowing error (in use)
-    BorrowError(StaticBorrowError),
+    LockError,
     /// General fmt error.
     PrintError,
+    /// Console hasn't been initialized.
+    UninitError,
 }
 
 /// Tries to print the args using the default printer.
@@ -150,8 +161,8 @@ pub enum PrintError {
 pub fn _try_print(args: core::fmt::Arguments) -> Result<(), PrintError> {
     use core::fmt::Write;
     CONSOLE
-        .try_borrow_mut()
-        .map_err(PrintError::BorrowError)?
+        .try_lock()
+        .ok_or(PrintError::LockError)?
         .write_fmt(args)
         .map_err(|_| PrintError::PrintError)
 }
