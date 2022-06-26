@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html dir="ltr" class="client-js" lang="en"><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<title>APIC - OSDev Wiki</title>
+<meta charset="UTF-8">
+<meta name="generator" content="MediaWiki 1.18.0">
+<link rel="shortcut icon" href="https://wiki.osdev.org/favicon.ico">
+<link rel="search" type="application/opensearchdescription+xml" href="https://wiki.osdev.org/opensearch_desc.php" title="OSDev Wiki (en)">
+<link rel="EditURI" type="application/rsd+xml" href="https://wiki.osdev.org/api.php?action=rsd">
+<link rel="alternate" type="application/atom+xml" title="OSDev Wiki Atom feed" href="https://wiki.osdev.org/index.php?title=Special:RecentChanges&amp;feed=atom">
+<link rel="stylesheet" href="APIC%20-%20OSDev%20Wiki_files/load.css">
+<style type="text/css" media="all">.mw-collapsible-toggle{float:right} li .mw-collapsible-toggle{float:none} .mw-collapsible-toggle-li{list-style:none}
+
+/* cache key: wikidb:resourceloader:filter:minify-css:4:4250852ed2349a0d4d0fc6509a3e7d4c */
+</style><style type="text/css" media="all">.js-messagebox{margin:1em 5%;padding:0.5em 2.5%;border:1px solid #ccc;background-color:#fcfcfc;font-size:0.8em}.js-messagebox .js-messagebox-group{margin:1px;padding:0.5em 2.5%;border-bottom:1px solid #ddd}.js-messagebox .js-messagebox-group:last-child{border-bottom:thin none transparent}
+
+/* cache key: wikidb:resourceloader:filter:minify-css:4:8b08bdc91c52a9ffba396dccfb5b473c */
+</style><meta name="ResourceLoaderDynamicStyles" content="">
+<link rel="stylesheet" href="APIC%20-%20OSDev%20Wiki_files/load_002.css">
+<style>a:lang(ar),a:lang(ckb),a:lang(fa),a:lang(kk-arab),a:lang(mzn),a:lang(ps),a:lang(ur){text-decoration:none}a.new,#quickbar a.new{color:#ba0000}
+
+/* cache key: wikidb:resourceloader:filter:minify-css:4:c88e2bcd56513749bec09a7e29cb3ffa */
+</style>
+<script src="APIC%20-%20OSDev%20Wiki_files/load_006.es"></script><script src="APIC%20-%20OSDev%20Wiki_files/load.es"></script>
+<script>if(window.mw){
+	mw.config.set({"wgCanonicalNamespace": "", "wgCanonicalSpecialPageName": false, "wgNamespaceNumber": 0, "wgPageName": "APIC", "wgTitle": "APIC", "wgCurRevisionId": 26530, "wgArticleId": 1882, "wgIsArticle": true, "wgAction": "view", "wgUserName": null, "wgUserGroups": ["*"], "wgCategories": ["Interrupts", "Time", "Multiprocessing"], "wgBreakFrames": false, "wgRestrictionEdit": [], "wgRestrictionMove": []});
+}
+</script><script>if(window.mw){
+	mw.loader.load(["mediawiki.page.startup"]);
+}
+</script><script type="text/javascript" src="APIC%20-%20OSDev%20Wiki_files/load_004.es"></script>
+<style type="text/css">/*<![CDATA[*/
+.source-c {line-height: normal;}
+.source-c li, .source-c pre {
+	line-height: normal; border: 0px none white;
+}
+/**
+ * GeSHi Dynamically Generated Stylesheet
+ * --------------------------------------
+ * Dynamically generated stylesheet for c
+ * CSS class: source-c, CSS id: 
+ * GeSHi (C) 2004 - 2007 Nigel McNie, 2007 - 2008 Benny Baumann
+ * (http://qbnz.com/highlighter/ and http://geshi.org/)
+ * --------------------------------------
+ */
+.c.source-c .de1, .c.source-c .de2 {font: normal normal 1em/1.2em monospace; margin:0; padding:0; background:none; vertical-align:top;}
+.c.source-c  {font-family:monospace;}
+.c.source-c .imp {font-weight: bold; color: red;}
+.c.source-c li, .c.source-c .li1 {font-weight: normal; vertical-align:top;}
+.c.source-c .ln {width:1px;text-align:right;margin:0;padding:0 2px;vertical-align:top;}
+.c.source-c .li2 {font-weight: bold; vertical-align:top;}
+.c.source-c .kw1 {color: #b1b100;}
+.c.source-c .kw2 {color: #000000; font-weight: bold;}
+.c.source-c .kw3 {color: #000066;}
+.c.source-c .kw4 {color: #993333;}
+.c.source-c .co1 {color: #666666; font-style: italic;}
+.c.source-c .co2 {color: #339933;}
+.c.source-c .coMULTI {color: #808080; font-style: italic;}
+.c.source-c .es0 {color: #000099; font-weight: bold;}
+.c.source-c .es1 {color: #000099; font-weight: bold;}
+.c.source-c .es2 {color: #660099; font-weight: bold;}
+.c.source-c .es3 {color: #660099; font-weight: bold;}
+.c.source-c .es4 {color: #660099; font-weight: bold;}
+.c.source-c .es5 {color: #006699; font-weight: bold;}
+.c.source-c .br0 {color: #009900;}
+.c.source-c .sy0 {color: #339933;}
+.c.source-c .st0 {color: #ff0000;}
+.c.source-c .nu0 {color: #0000dd;}
+.c.source-c .nu6 {color: #208080;}
+.c.source-c .nu8 {color: #208080;}
+.c.source-c .nu12 {color: #208080;}
+.c.source-c .nu16 {color:#800080;}
+.c.source-c .nu17 {color:#800080;}
+.c.source-c .nu18 {color:#800080;}
+.c.source-c .nu19 {color:#800080;}
+.c.source-c .me1 {color: #202020;}
+.c.source-c .me2 {color: #202020;}
+.c.source-c .ln-xtra, .c.source-c li.ln-xtra, .c.source-c div.ln-xtra {background-color: #ffc;}
+.c.source-c span.xtra { display:block; }
+
+/*]]>*/
+</style>
+<style type="text/css">/*<![CDATA[*/
+@import "/index.php?title=MediaWiki:Geshi.css&usemsgcache=yes&action=raw&ctype=text/css&smaxage=18000";
+/*]]>*/
+</style><!--[if lt IE 7]><style type="text/css">body{behavior:url("/skins/vector/csshover.min.htc")}</style><![endif]--></head>
+<body class="mediawiki ltr sitedir-ltr ns-0 ns-subject page-APIC action-view skin-vector">
+		<div id="mw-page-base" class="noprint"></div>
+		<div id="mw-head-base" class="noprint"></div>
+		<!-- content -->
+		<div id="content">
+			<a id="top"></a>
+			<div id="mw-js-message" style="display:none;" class="js-messagebox"></div>
+						<!-- firstHeading -->
+			<h1 id="firstHeading" class="firstHeading">APIC</h1>
+			<!-- /firstHeading -->
+			<!-- bodyContent -->
+			<div id="bodyContent">
+								<!-- tagline -->
+				<div id="siteSub">From OSDev Wiki</div>
+				<!-- /tagline -->
+								<!-- subtitle -->
+				<div id="contentSub"></div>
+				<!-- /subtitle -->
+																<!-- jumpto -->
+				<div id="jump-to-nav">
+					Jump to: <a href="#mw-head">navigation</a>,
+					<a href="#p-search">search</a>
+				</div>
+				<!-- /jumpto -->
+								<!-- bodycontent -->
+				<div dir="ltr" class="mw-content-ltr" lang="en"><p>APIC ("Advanced Programmable Interrupt Controller") is the updated Intel standard for the older <a href="https://wiki.osdev.org/PIC" title="PIC" class="mw-redirect">PIC</a>.
+ It is used in multiprocessor systems and is an integral part of all 
+recent Intel (and compatible) processors. The APIC is used for 
+sophisticated interrupt redirection, and for sending interrupts between 
+processors. These things weren't possible using the older PIC 
+specification.
+</p>
+<table id="toc" class="toc"><tbody><tr><td><div id="toctitle"><h2>Contents</h2><span class="toctoggle">&nbsp;[<a href="#" class="internal" id="togglelink">hide</a>]&nbsp;</span></div>
+<ul>
+<li class="toclevel-1 tocsection-1"><a href="#Detection"><span class="tocnumber">1</span> <span class="toctext">Detection</span></a></li>
+<li class="toclevel-1 tocsection-2"><a href="#Local_APIC_and_IO-APIC"><span class="tocnumber">2</span> <span class="toctext">Local APIC and IO-APIC</span></a></li>
+<li class="toclevel-1 tocsection-3"><a href="#Inter-Processor_Interrupts"><span class="tocnumber">3</span> <span class="toctext">Inter-Processor Interrupts</span></a></li>
+<li class="toclevel-1 tocsection-4"><a href="#Local_APIC_configuration"><span class="tocnumber">4</span> <span class="toctext">Local APIC configuration</span></a></li>
+<li class="toclevel-1 tocsection-5"><a href="#Local_APIC_and_x86_SMM_Attacks"><span class="tocnumber">5</span> <span class="toctext">Local APIC and x86 SMM Attacks</span></a></li>
+<li class="toclevel-1 tocsection-6"><a href="#Local_APIC_registers"><span class="tocnumber">6</span> <span class="toctext">Local APIC registers</span></a>
+<ul>
+<li class="toclevel-2 tocsection-7"><a href="#EOI_Register"><span class="tocnumber">6.1</span> <span class="toctext">EOI Register</span></a></li>
+<li class="toclevel-2 tocsection-8"><a href="#Local_Vector_Table_Registers"><span class="tocnumber">6.2</span> <span class="toctext">Local Vector Table Registers</span></a></li>
+<li class="toclevel-2 tocsection-9"><a href="#Spurious_Interrupt_Vector_Register"><span class="tocnumber">6.3</span> <span class="toctext">Spurious Interrupt Vector Register</span></a></li>
+<li class="toclevel-2 tocsection-10"><a href="#Interrupt_Command_Register"><span class="tocnumber">6.4</span> <span class="toctext">Interrupt Command Register</span></a></li>
+</ul>
+</li>
+<li class="toclevel-1 tocsection-11"><a href="#IO_APIC_Configuration"><span class="tocnumber">7</span> <span class="toctext">IO APIC Configuration</span></a></li>
+<li class="toclevel-1 tocsection-12"><a href="#IO_APIC_Registers"><span class="tocnumber">8</span> <span class="toctext">IO APIC Registers</span></a></li>
+<li class="toclevel-1 tocsection-13"><a href="#Logical_Destination_Mode"><span class="tocnumber">9</span> <span class="toctext">Logical Destination Mode</span></a></li>
+<li class="toclevel-1 tocsection-14"><a href="#See_Also"><span class="tocnumber">10</span> <span class="toctext">See Also</span></a>
+<ul>
+<li class="toclevel-2 tocsection-15"><a href="#Articles"><span class="tocnumber">10.1</span> <span class="toctext">Articles</span></a></li>
+<li class="toclevel-2 tocsection-16"><a href="#Threads"><span class="tocnumber">10.2</span> <span class="toctext">Threads</span></a></li>
+<li class="toclevel-2 tocsection-17"><a href="#External_Links"><span class="tocnumber">10.3</span> <span class="toctext">External Links</span></a></li>
+</ul>
+</li>
+</ul>
+</td></tr></tbody></table>
+<h2> <span class="mw-headline" id="Detection"> Detection </span></h2>
+<p>The <a href="https://wiki.osdev.org/CPUID" title="CPUID">CPUID</a>.01h:EDX[bit
+ 9] flag specifies whether a CPU has a built-in local APIC. You can find
+ all of the APICs on a system (both local and IO APICs) by parsing the <a href="https://wiki.osdev.org/MADT" title="MADT">MADT</a>.
+</p>
+<h2> <span class="mw-headline" id="Local_APIC_and_IO-APIC"> Local APIC and IO-APIC </span></h2>
+<p>In an APIC-based system, each CPU is made of a "core" and a "local 
+APIC". The local APIC is responsible for handling cpu-specific interrupt
+ configuration. Among other things, it contains the <i>Local Vector Table (LVT)</i>
+ that translates events such as "internal clock" and other "local" 
+interrupt sources into a interrupt vector (e.g. LocalINT1 pin could be 
+raising an NMI exception by storing "2" in the corresponding entry of 
+the LVT).
+</p><p>More information about the local APIC can be found in Chapter 10 of the <a rel="nofollow" class="external text" href="https://www.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-software-developer-vol-3a-part-1-manual.pdf">Intel System Programming Guide, Vol 3A Part 1</a>.
+</p><p>In addition, there is an I/O APIC (e.g. intel 82093AA) that is 
+part of the chipset and provides multi-processor interrupt management, 
+incorporating both static and dynamic symmetric interrupt distribution 
+across all processors. In systems with multiple I/O subsystems, each 
+subsystem can have its own set of interrupts.
+</p><p>Each interrupt pin is individually programmable as either edge or
+ level triggered. The interrupt vector and interrupt steering 
+information can be specified per interrupt. An indirect register 
+accessing scheme optimizes the memory space needed to access the I/O 
+APIC's internal registers. To increase system flexibility when assigning
+ memory space usage, the I/O APIC's two-register memory space is 
+relocatable, but defaults to 0xFEC00000.
+</p><p>The Intel standards for the APIC can be found on the Intel site under the category "Multiprocessor Specification", or simply <a rel="nofollow" class="external text" href="http://web.archive.org/web/20070112195752/http://developer.intel.com/design/pentium/datashts/24201606.pdf">this PDF file</a>.
+</p>
+<h2> <span class="mw-headline" id="Inter-Processor_Interrupts"> Inter-Processor Interrupts </span></h2>
+<p>Inter-Processor Interrupts (IPIs) are generated by a local APIC and 
+can be used as basic signaling for scheduling coordination, 
+multi-processor bootstrapping, etc.
+</p>
+<h2> <span class="mw-headline" id="Local_APIC_configuration"> Local APIC configuration </span></h2>
+<p>The local APIC is enabled at boot-time and can be disabled by clearing bit 11 of the IA32_APIC_BASE <a href="https://wiki.osdev.org/Model_Specific_Registers" title="Model Specific Registers"> Model Specific Register</a>
+ (MSR) (see example below, this only works on CPUs with family &gt;5, as
+ the Pentium does not have such MSR). The CPU then receives its 
+interrupts directly from a 8259-compatible PIC. The Intel Software 
+Developer's Manual, however states that, once you have disabled the 
+local APIC through IA32_APIC_BASE you can't enable it anymore until a 
+complete reset. The I/O APIC can also be configured to run in legacy 
+mode so that it emulates an 8259 device.
+</p><p>The local APIC's registers are memory-mapped in physical page 
+FEE00xxx (as seen in table 8-1 of Intel P4 SPG). This address is the 
+same for each local APIC that exists in a configuration, meaning you are
+ only able to directly access the registers of the local APIC of the 
+core that your code is currently executing on. Note that there is a MSR 
+that specifies the actual APIC base (only available on CPUs with family 
+&gt;5). The <a href="https://wiki.osdev.org/MADT" title="MADT">MADT</a> 
+contains the local APIC base and on 64-bit systems it may also contain a
+ field specifying a 64-bit base address override which you ought to use 
+instead. You can choose to leave the Local APIC base just where you find
+ it, or to move it at your pleasure. <b>Note:</b> I don't think you can move it any further than the 4th Gb.
+</p><p>To enable the Local APIC to receive interrupts it is necessary to
+ configure the "Spurious Interrupt Vector Register". The correct value 
+for this field is the IRQ number that you want to map the spurious 
+interrupts to within the lowest 8 bits, and the 8th bit set to 1 to 
+actually enable the APIC (see the specification for more details). You 
+should choose an interrupt number that has its lowest 4 bits set and is 
+above 32 (as you might guess); easiest is to use 0xFF. This is important
+ on some older processors because the lowest 4 bits for this value must 
+be set to 1 on these.
+</p><p><b>Disable the <a href="https://wiki.osdev.org/PIC" title="PIC" class="mw-redirect">8259 PIC</a></b>
+ properly. This is nearly as important as setting up the APIC. You do 
+this in two steps: masking all interrupts and remapping the IRQs. 
+Masking all interrupts disables them in the PIC. Remapping is what you 
+probably already did when you used the PIC: you want interrupt requests 
+to start at 32 instead of 0 to avoid conflicts with the exceptions. You 
+should then avoid using these interrupt vectors for other purposes. This
+ is necessary because even though you masked all interrupts on the PIC, 
+it could still give out spurious interrupts which will then be 
+misinterpreted from your kernel as exceptions.
+</p><p><br>
+Here are some code examples on setting up the APIC:
+</p>
+<div dir="ltr" class="mw-geshi" style="text-align: left;"><div class="c source-c"><pre class="de1"><span class="co2">#define IA32_APIC_BASE_MSR 0x1B</span>
+<span class="co2">#define IA32_APIC_BASE_MSR_BSP 0x100 // Processor is a BSP</span>
+<span class="co2">#define IA32_APIC_BASE_MSR_ENABLE 0x800</span>
+&nbsp;
+<span class="coMULTI">/** returns a 'true' value if the CPU supports APIC
+ *  and if the local APIC hasn't been disabled in MSRs
+ *  note that this requires CPUID to be supported.
+ */</span>
+bool check_apic<span class="br0">(</span><span class="br0">)</span> <span class="br0">{</span>
+   <span class="kw4">uint32_t</span> eax<span class="sy0">,</span> edx<span class="sy0">;</span>
+   cpuid<span class="br0">(</span><span class="nu0">1</span><span class="sy0">,</span> <span class="sy0">&amp;</span>eax<span class="sy0">,</span> <span class="sy0">&amp;</span>edx<span class="br0">)</span><span class="sy0">;</span>
+   <span class="kw1">return</span> edx <span class="sy0">&amp;</span> CPUID_FEAT_EDX_APIC<span class="sy0">;</span>
+<span class="br0">}</span>
+&nbsp;
+<span class="coMULTI">/* Set the physical address for local APIC registers */</span>
+<span class="kw4">void</span> cpu_set_apic_base<span class="br0">(</span><span class="kw4">uintptr_t</span> apic<span class="br0">)</span> <span class="br0">{</span>
+   <span class="kw4">uint32_t</span> edx <span class="sy0">=</span> <span class="nu0">0</span><span class="sy0">;</span>
+   <span class="kw4">uint32_t</span> eax <span class="sy0">=</span> <span class="br0">(</span>apic <span class="sy0">&amp;</span> <span class="nu12">0xfffff0000</span><span class="br0">)</span> <span class="sy0">|</span> IA32_APIC_BASE_MSR_ENABLE<span class="sy0">;</span>
+&nbsp;
+<span class="co2">#ifdef __PHYSICAL_MEMORY_EXTENSION__</span>
+   edx <span class="sy0">=</span> <span class="br0">(</span>apic <span class="sy0">&gt;&gt;</span> <span class="nu0">32</span><span class="br0">)</span> <span class="sy0">&amp;</span> <span class="nu12">0x0f</span><span class="sy0">;</span>
+<span class="co2">#endif</span>
+&nbsp;
+   cpuSetMSR<span class="br0">(</span>IA32_APIC_BASE_MSR<span class="sy0">,</span> eax<span class="sy0">,</span> edx<span class="br0">)</span><span class="sy0">;</span>
+<span class="br0">}</span>
+&nbsp;
+<span class="coMULTI">/**
+ * Get the physical address of the APIC registers page
+ * make sure you map it to virtual memory&nbsp;;)
+ */</span>
+<span class="kw4">uintptr_t</span> cpu_get_apic_base<span class="br0">(</span><span class="br0">)</span> <span class="br0">{</span>
+   <span class="kw4">uint32_t</span> eax<span class="sy0">,</span> edx<span class="sy0">;</span>
+   cpuGetMSR<span class="br0">(</span>IA32_APIC_BASE_MSR<span class="sy0">,</span> <span class="sy0">&amp;</span>eax<span class="sy0">,</span> <span class="sy0">&amp;</span>edx<span class="br0">)</span><span class="sy0">;</span>
+&nbsp;
+<span class="co2">#ifdef __PHYSICAL_MEMORY_EXTENSION__</span>
+   <span class="kw1">return</span> <span class="br0">(</span>eax <span class="sy0">&amp;</span> <span class="nu12">0xfffff000</span><span class="br0">)</span> <span class="sy0">|</span> <span class="br0">(</span><span class="br0">(</span>edx <span class="sy0">&amp;</span> <span class="nu12">0x0f</span><span class="br0">)</span> <span class="sy0">&lt;&lt;</span> <span class="nu0">32</span><span class="br0">)</span><span class="sy0">;</span>
+<span class="co2">#else</span>
+   <span class="kw1">return</span> <span class="br0">(</span>eax <span class="sy0">&amp;</span> <span class="nu12">0xfffff000</span><span class="br0">)</span><span class="sy0">;</span>
+<span class="co2">#endif</span>
+<span class="br0">}</span>
+&nbsp;
+<span class="kw4">void</span> enable_apic<span class="br0">(</span><span class="br0">)</span> <span class="br0">{</span>
+    <span class="coMULTI">/* Hardware enable the Local APIC if it wasn't enabled */</span>
+    cpu_set_apic_base<span class="br0">(</span>cpu_get_apic_base<span class="br0">(</span><span class="br0">)</span><span class="br0">)</span><span class="sy0">;</span>
+&nbsp;
+    <span class="coMULTI">/* Set the Spurious Interrupt Vector Register bit 8 to start receiving interrupts */</span>
+    write_reg<span class="br0">(</span><span class="nu12">0xF0</span><span class="sy0">,</span> ReadRegister<span class="br0">(</span><span class="nu12">0xF0</span><span class="br0">)</span> <span class="sy0">|</span> <span class="nu12">0x100</span><span class="br0">)</span><span class="sy0">;</span>
+<span class="br0">}</span></pre></div></div>
+<h2> <span class="mw-headline" id="Local_APIC_and_x86_SMM_Attacks"> Local APIC and x86 SMM Attacks </span></h2>
+<p>The APIC was introduced to the core Intel processor architecture skeleton in <a rel="nofollow" class="external text" href="https://4donline.ihs.com/images/VipMasterIC/IC/INTL/INTLD047/INTLD047-2-1259.pdf?hkey=EF798316E3902B6ED9A73243A3159BB0">Intel's 82489DX discrete chip</a> in a similar time period as <a href="https://wiki.osdev.org/System_Management_Mode" title="System Management Mode">System Management Mode</a>
+ was introduced to operating systems. In original architecture, the APIC
+ could not be mapped to memory, and it wasn't until later changes that 
+it became mappable.
+</p><p>As System Management Mode's memory (SMRAM) is given a protected 
+range of memory (which can vary from system to system), it is possible 
+to map the APIC memory location into the SMRAM. The result of this is 
+that SMM memory is pushed outside its protected range and exposed to 
+lesser-privileged permission rings. Using this method, attackers can 
+leverage their permissions using System Management Mode, which is 
+protected from all rings above -2.
+</p><p>In newer generation Intel processors (starting with the <a rel="nofollow" class="external text" href="https://en.wikipedia.org/wiki/Intel_Atom">Intel Atom</a> in 2013), this has been taken into account. An undocumented check is performed against the <a href="https://wiki.osdev.org/index.php?title=System_Management_Range_Registers&amp;action=edit&amp;redlink=1" class="new" title="System Management Range Registers (page does not exist)">System Management Range Registers</a> when the APIC is relocated to memory. This check ensures that the APIC does not overlap with the SMRAM. <b>However</b>,
+ this relies on the SMRR to be configured correctly. Otherwise, this 
+mitigation will not work properly and attackers will still be able to 
+use the attack.
+</p>
+<h2> <span class="mw-headline" id="Local_APIC_registers"> Local APIC registers </span></h2>
+<p>The local APIC registers are memory mapped to an address that can be 
+found in the MP/MADT tables. Make sure you map these to virtual memory 
+if you are using paging. Each register is 32 bits long, and expects to 
+be written and read as a 32 bit integer. Although each register is 4 
+bytes, they are all aligned on a 16 byte boundary. 
+</p><p>List of local APIC registers (TODO: Add descriptions for all registers):
+</p>
+<table style="margin-top:1em; margin-bottom:1em; background:#f9f9f9; border:1px #aaa solid; border-collapse:collapse; {{{1}}}" cellspacing="0" cellpadding="4" border="2">
+
+<tbody><tr>
+<td> Offset
+</td>
+<td> Register name
+</td>
+<td> Read/Write permissions
+</td></tr>
+
+<tr>
+<td> 000h - 010h
+</td>
+<td> Reserved
+</td>
+<td>
+</td></tr>
+
+<tr>
+<td> 020h
+</td>
+<td> LAPIC ID Register
+</td>
+<td> Read/Write
+</td></tr>
+
+<tr>
+<td> 030h
+</td>
+<td> LAPIC Version Register
+</td>
+<td> Read only
+</td></tr>
+
+<tr>
+<td> 040h - 070h
+</td>
+<td> Reserved
+</td>
+<td>
+</td></tr>
+
+<tr>
+<td> 080h
+</td>
+<td> Task Priority Register (TPR)
+</td>
+<td> Read/Write
+</td></tr>
+
+<tr>
+<td> 090h
+</td>
+<td> Arbitration Priority Register (APR)
+</td>
+<td> Read only
+</td></tr>
+
+<tr>
+<td> 0A0h
+</td>
+<td> Processor Priority Register (PPR)
+</td>
+<td> Read only
+</td></tr>
+
+<tr>
+<td> 0B0h
+</td>
+<td> EOI register
+</td>
+<td> Write only
+</td></tr>
+
+<tr>
+<td> 0C0h
+</td>
+<td> Remote Read Register (RRD)
+</td>
+<td> Read only
+</td></tr>
+
+<tr>
+<td> 0D0h
+</td>
+<td> Logical Destination Register
+</td>
+<td> Read/Write
+</td></tr>
+
+<tr>
+<td> 0E0h
+</td>
+<td> Destination Format Register
+</td>
+<td> Read/Write
+</td></tr>
+
+<tr>
+<td> 0F0h
+</td>
+<td> Spurious Interrupt Vector Register
+</td>
+<td> Read/Write
+</td></tr>
+
+<tr>
+<td> 100h - 170h
+</td>
+<td> In-Service Register (ISR)
+</td>
+<td> Read only
+</td></tr>
+
+<tr>
+<td> 180h - 1F0h
+</td>
+<td> Trigger Mode Register (TMR)
+</td>
+<td> Read only
+</td></tr>
+
+<tr>
+<td> 200h - 270h
+</td>
+<td> Interrupt Request Register (IRR)
+</td>
+<td> Read only
+</td></tr>
+
+<tr>
+<td> 280h
+</td>
+<td> Error Status Register
+</td>
+<td> Read only
+</td></tr>
+
+<tr>
+<td> 290h - 2E0h
+</td>
+<td> Reserved
+</td>
+<td>
+</td></tr>
+
+<tr>
+<td> 2F0h
+</td>
+<td> LVT Corrected Machine Check Interrupt (CMCI) Register
+</td>
+<td> Read/Write
+</td></tr>
+
+<tr>
+<td> 300h - 310h
+</td>
+<td> Interrupt Command Register (ICR)
+</td>
+<td> Read/Write
+</td></tr>
+
+<tr>
+<td> 320h
+</td>
+<td> LVT Timer Register
+</td>
+<td> Read/Write
+</td></tr>
+
+<tr>
+<td> 330h
+</td>
+<td> LVT Thermal Sensor Register
+</td>
+<td> Read/Write
+</td></tr>
+
+<tr>
+<td> 340h
+</td>
+<td> LVT Performance Monitoring Counters Register
+</td>
+<td> Read/Write
+</td></tr>
+
+<tr>
+<td> 350h
+</td>
+<td> LVT LINT0 Register
+</td>
+<td> Read/Write
+</td></tr>
+
+<tr>
+<td> 360h
+</td>
+<td> LVT LINT1 Register
+</td>
+<td> Read/Write
+</td></tr>
+
+<tr>
+<td> 370h
+</td>
+<td> LVT Error Register
+</td>
+<td> Read/Write
+</td></tr>
+
+<tr>
+<td> 380h
+</td>
+<td> Initial Count Register (for Timer)
+</td>
+<td> Read/Write
+</td></tr>
+
+<tr>
+<td> 390h
+</td>
+<td> Current Count Register (for Timer)
+</td>
+<td> Read only
+</td></tr>
+
+<tr>
+<td> 3A0h - 3D0h
+</td>
+<td> Reserved
+</td>
+<td>
+</td></tr>
+
+<tr>
+<td> 3E0h
+</td>
+<td> Divide Configuration Register (for Timer)
+</td>
+<td> Read/Write
+</td></tr>
+
+<tr>
+<td> 3F0h
+</td>
+<td> Reserved
+</td>
+<td>
+</td></tr>
+</tbody></table>
+<h3> <span class="mw-headline" id="EOI_Register"> EOI Register </span></h3>
+<p>Write to the register with offset 0xB0 using the value 0 to signal an
+ end of interrupt. A non-zero value may cause a general protection 
+fault.
+</p>
+<h3> <span class="mw-headline" id="Local_Vector_Table_Registers"> Local Vector Table Registers </span></h3>
+<p>There are some special interrupts that the processor and LAPIC can 
+generate themselves. While external interrupts are configured in the I/O
+ APIC, these interrupts must be configured using registers in the LAPIC.
+ The most interesting registers are: 0x320 = lapic timer, 0x350 = lint0,
+ 0x360 = lint1. See the Intel SDM vol 3 for more info. 
+</p><p>Register format:
+</p>
+<table style="margin-top:1em; margin-bottom:1em; background:#f9f9f9; border:1px #aaa solid; border-collapse:collapse; {{{1}}}" cellspacing="0" cellpadding="4" border="2">
+
+<tbody><tr>
+<td> Bits 0-7
+</td>
+<td> The vector number
+</td></tr>
+<tr>
+<td> Bits 8-10 (reserved for timer)
+</td>
+<td> 100b if NMI
+</td></tr>
+<tr>
+<td> Bit 11
+</td>
+<td> Reserved
+</td></tr>
+<tr>
+<td> Bit 12
+</td>
+<td> Set if interrupt pending.
+</td></tr>
+<tr>
+<td> Bit 13 (reserved for timer)
+</td>
+<td> Polarity, set is low triggered
+</td></tr>
+<tr>
+<td> Bit 14 (reserved for timer)
+</td>
+<td> Remote IRR
+</td></tr>
+<tr>
+<td> Bit 15 (reserved for timer)
+</td>
+<td> trigger mode, set is level triggered
+</td></tr>
+<tr>
+<td> Bit 16
+</td>
+<td> Set to mask
+</td></tr>
+<tr>
+<td> Bits 17-31
+</td>
+<td> Reserved
+</td></tr></tbody></table>
+<h3> <span class="mw-headline" id="Spurious_Interrupt_Vector_Register"> Spurious Interrupt Vector Register </span></h3>
+<p>The offset is 0xF0. The low byte contains the number of the spurious 
+interrupt. As noted above, you should probably set this to 0xFF. To 
+enable the APIC, set bit 8 (or 0x100) of this register. If bit 12 is set
+ then EOI messages will not be broadcast. All the other bits are 
+currently reserved.
+</p>
+<h3> <span class="mw-headline" id="Interrupt_Command_Register"> Interrupt Command Register </span></h3>
+<p>The interrupt command register is made of two 32-bit registers; one 
+at 0x300 and the other at 0x310. It is used for sending interrupts to 
+different processors. The interrupt is issued when 0x300 is written to, 
+but not when 0x310 is written to. Thus, to send an interrupt command one
+ should first write to 0x310, then to 0x300. At 0x310 there is one field
+ at bits 24-27, which is local APIC ID of the target processor (for a 
+physical destination mode). Here is how 0x300 is structured:
+</p>
+<table style="margin-top:1em; margin-bottom:1em; background:#f9f9f9; border:1px #aaa solid; border-collapse:collapse; {{{1}}}" cellspacing="0" cellpadding="4" border="2">
+
+<tbody><tr>
+<td> Bits 0-7
+</td>
+<td> The vector number, or starting page number for SIPIs
+</td></tr>
+<tr>
+<td> Bits 8-10
+</td>
+<td> The destination mode. 0 is normal, 1 is lowest priority, 2 is SMI, 4
+ is NMI, 5 can be INIT or INIT level de-assert, 6 is a SIPI.
+</td></tr>
+<tr>
+<td> Bit 11
+</td>
+<td> The destination mode. Clear for a physical destination, or set for a
+ logical destination. If the bit is clear, then the destination field in
+ 0x310 is treated normally.
+</td></tr>
+<tr>
+<td> Bit 12
+</td>
+<td> Delivery status. Cleared when the interrupt has been accepted by 
+the target. You should usually wait until this bit clears after sending 
+an interrupt.
+</td></tr>
+<tr>
+<td> Bit 13
+</td>
+<td> Reserved
+</td></tr>
+<tr>
+<td> Bit 14
+</td>
+<td> Clear for INIT level de-assert, otherwise set.
+</td></tr>
+<tr>
+<td> Bit 15
+</td>
+<td> Set for INIT level de-assert, otherwise clear.
+</td></tr>
+<tr>
+<td> Bits 18-19
+</td>
+<td> Destination type. If this is &gt; 0 then the destination field in 
+0x310 is ignored. 1 will always send the interrupt to itself, 2 will 
+send it to all processors, and 3 will send it to all processors aside 
+from the current one. It is best to avoid using modes 1, 2 and 3, and 
+stick with 0.
+</td></tr>
+<tr>
+<td> Bits 20-31
+</td>
+<td> Reserved
+</td></tr></tbody></table>
+<h2> <span class="mw-headline" id="IO_APIC_Configuration"> IO APIC Configuration </span></h2>
+<p>The IO APIC uses two registers for most of its operation - an address
+ register at IOAPICBASE+0 and a data register at 
+IOAPICBASE+0x10.  All accesses must be done on 4 byte boundaries.  The 
+address register uses the bottom 8 bits for register select.  Here is 
+some example code that illustrates this:
+</p>
+<div dir="ltr" class="mw-geshi" style="text-align: left;"><div class="c source-c"><pre class="de1"><span class="kw4">uint32_t</span> cpuReadIoApic<span class="br0">(</span><span class="kw4">void</span> <span class="sy0">*</span>ioapicaddr<span class="sy0">,</span> <span class="kw4">uint32_t</span> reg<span class="br0">)</span>
+<span class="br0">{</span>
+   <span class="kw4">uint32_t</span> <span class="kw4">volatile</span> <span class="sy0">*</span>ioapic <span class="sy0">=</span> <span class="br0">(</span><span class="kw4">uint32_t</span> <span class="kw4">volatile</span> <span class="sy0">*</span><span class="br0">)</span>ioapicaddr<span class="sy0">;</span>
+   ioapic<span class="br0">[</span><span class="nu0">0</span><span class="br0">]</span> <span class="sy0">=</span> <span class="br0">(</span>reg <span class="sy0">&amp;</span> <span class="nu12">0xff</span><span class="br0">)</span><span class="sy0">;</span>
+   <span class="kw1">return</span> ioapic<span class="br0">[</span><span class="nu0">4</span><span class="br0">]</span><span class="sy0">;</span>
+<span class="br0">}</span>
+&nbsp;
+<span class="kw4">void</span> cpuWriteIoApic<span class="br0">(</span><span class="kw4">void</span> <span class="sy0">*</span>ioapicaddr<span class="sy0">,</span> <span class="kw4">uint32_t</span> reg<span class="sy0">,</span> <span class="kw4">uint32_t</span> value<span class="br0">)</span>
+<span class="br0">{</span>
+   <span class="kw4">uint32_t</span> <span class="kw4">volatile</span> <span class="sy0">*</span>ioapic <span class="sy0">=</span> <span class="br0">(</span><span class="kw4">uint32_t</span> <span class="kw4">volatile</span> <span class="sy0">*</span><span class="br0">)</span>ioapicaddr<span class="sy0">;</span>
+   ioapic<span class="br0">[</span><span class="nu0">0</span><span class="br0">]</span> <span class="sy0">=</span> <span class="br0">(</span>reg <span class="sy0">&amp;</span> <span class="nu12">0xff</span><span class="br0">)</span><span class="sy0">;</span>
+   ioapic<span class="br0">[</span><span class="nu0">4</span><span class="br0">]</span> <span class="sy0">=</span> value<span class="sy0">;</span>
+<span class="br0">}</span></pre></div></div>
+<p>Note the use of the <a href="https://wiki.osdev.org/Volatile_(keyword)" title="Volatile (keyword)">volatile</a> keyword. This prevents a compiler like <a href="https://wiki.osdev.org/Visual_C" title="Visual C" class="mw-redirect">Visual C</a>
+ from reordering or optimizing away the memory accesses, which would be a
+ Bad Thing™. The volatile keyword is put before the '*' sign. It means 
+that the <i>value pointed to</i> is volatile, not the pointer itself.
+</p>
+<h2> <span class="mw-headline" id="IO_APIC_Registers"> IO APIC Registers </span></h2>
+<p>Using the methods described above, the following registers are accessible.
+</p>
+<table style="margin-top:1em; margin-bottom:1em; background:#f9f9f9; border:1px #aaa solid; border-collapse:collapse; {{{1}}}" cellspacing="0" cellpadding="4" border="2">
+
+<tbody><tr>
+<td> 0x00
+</td>
+<td> Get/set the IO APIC's id in bits 24-27. All other bits are reserved.
+</td></tr>
+<tr>
+<td> 0x01
+</td>
+<td> Get the version in bits 0-7. Get the maximum amount of redirection 
+entries in bits 16-23. All other bits are reserved. Read only.
+</td></tr>
+<tr>
+<td> 0x02
+</td>
+<td> Get the arbitration priority in bits 24-27. All other bits are reserved. Read only.
+</td></tr>
+<tr>
+<td> 0x10 to 0x3F
+</td>
+<td> Contains a list of redirection entries. They can be read from and 
+written to. Each entries uses two addresses, e.g. 0x12 and 0x13.
+</td></tr></tbody></table>
+<p>Here is what a redirection entry looks like.
+</p>
+<table style="margin-top:1em; margin-bottom:1em; background:#f9f9f9; border:1px #aaa solid; border-collapse:collapse; {{{1}}}" cellspacing="0" cellpadding="4" border="2">
+
+<tbody><tr>
+<td> Bits 0-7
+</td>
+<td> Interrupt vector. Allowed values are from 0x10 to 0xFE.
+</td></tr>
+<tr>
+<td> Bits 8-10
+</td>
+<td> Type of delivery mode. 0 = Normal, 1 = Low priority, 2 = System 
+management interrupt, 4 = Non maskable interrupt, 5 = INIT, 7 = 
+External. All others are reserved.
+</td></tr>
+<tr>
+<td> Bit 11
+</td>
+<td> Destination mode. Affects how the destination field is read, 0 is 
+physical mode, 1 is logical. If the Destination Mode of this entry is 
+Physical Mode, bits 56-59 contain an APIC ID.
+</td></tr>
+<tr>
+<td> Bit 12
+</td>
+<td> Set if this interrupt is going to be sent, but the APIC is busy. Read only.
+</td></tr>
+<tr>
+<td> Bit 13
+</td>
+<td> Polarity of the interrupt. 0 = High is active, 1 = Low is active.
+</td></tr>
+<tr>
+<td> Bit 14
+</td>
+<td> Used for level triggered interrupts only to show if a local APIC 
+has received the interrupt (= 1), or has sent an EOI (= 0). Read only.
+</td></tr>
+<tr>
+<td> Bit 15
+</td>
+<td> Trigger mode. 0 = Edge sensitive, 1 = Level sensitive.
+</td></tr>
+<tr>
+<td> Bit 16
+</td>
+<td> Interrupt mask. Stops the interrupt from reaching the processor if set.
+</td></tr>
+<tr>
+<td> Bits 17-55
+</td>
+<td> Reserved.
+</td></tr>
+<tr>
+<td> Bits 56-63
+</td>
+<td> Destination field. If the destination mode bit was clear, then the 
+lower 4 bits contain the bit APIC ID to sent the interrupt to. If the 
+bit was set, the upper 4 bits also contain a set of processors. (See 
+below)
+</td></tr></tbody></table>
+<p>For more information, check out chapter 3 of <a rel="nofollow" class="external text" href="http://web.archive.org/web/20161130153145/http://download.intel.com/design/chipsets/datashts/29056601.pdf">the I/O APIC datasheet</a>.
+</p><p>The redirection table allows you to choose which external 
+interrupts are sent to which processors and with which interrupt 
+vectors. When choosing the processors you should consider: spreading out
+ the workload between the processors, avoiding processors in a low-power
+ state, and avoiding throttled processors. When choosing the interrupt 
+vectors you should remember that interrupts 0x00 to 0x1F are reserved 
+for internal processor exceptions, the interrupts you remapped the PIC 
+to may receive spurious interrupts, that 0xFF is probably where you put 
+the APIC spurious interrupt, and that the upper 4 bits of an interrupt 
+vector indicate its priority.
+</p>
+<h2> <span class="mw-headline" id="Logical_Destination_Mode"> Logical Destination Mode </span></h2>
+<p>Logical destination mode uses an 8-bit logical APIC ID, contained in 
+the LDR (logical destination register, unique to each APIC). All APICs 
+compare their local ID to the destination code sent with the interrupt. 
+This allows to target a group of processors by programming them with the
+ same logical APIC ID.
+</p><p>The LDR is formatted as follows
+</p>
+<table class="wikitable">
+
+<tbody><tr>
+<td> Bits 0-23
+</td>
+<td> Reserved.
+</td></tr>
+<tr>
+<td rowspan="3"> Bits 24-31
+</td>
+<td> Flat model
+</td>
+<td> Bitmap of target processors (bit identifies single processor; supports a maximum of 8 local APIC units)
+</td></tr>
+<tr>
+<td rowspan="2"> Cluster model
+</td>
+<td> Bits 24-27
+</td>
+<td> Local APIC address (identifies the specific processor in a group)
+</td></tr>
+<tr>
+<td> Bits 28-31
+</td>
+<td> Cluster address (identifies a group of processors)
+</td></tr></tbody></table>
+<p>The DFR (destination format register) specifies Flat or Cluster model and is structured as follows
+</p>
+<table class="wikitable">
+
+<tbody><tr>
+<td> Bits 0-27
+</td>
+<td> Reserved.
+</td></tr>
+<tr>
+<td> Bits 28-31
+</td>
+<td> Model (1111b = Flat model, 0000b = Cluster model)
+</td></tr></tbody></table>
+<p>'Don't use cluster mode addressing, especially "hierarchical cluster 
+mode". AFAIK it was intended for large NUMA systems, where there's a 
+"node controller" for each NUMA domain that forwarded interrupts to CPUs
+ within that NUMA domain (with a seperate APIC bus for each NUMA 
+domain). Unless your chipset has these "node controllers" (or "cluster 
+managers" as Intel calls them) it won't work, and no modern computers 
+have them (AFAIK there are only a few obscure Pentium III/P6 NUMA 
+systems that ever did). You want to use "flat model" for normal SMP and 
+for most NUMA systems (including AMD's).' (<a rel="nofollow" class="external text" href="http://forum.osdev.org/viewtopic.php?f=1&amp;t=14808&amp;start=17">Brendan</a>)
+</p><p>More info can be found in <a rel="nofollow" class="external text" href="https://books.google.com/books?id=TVzjEZg1--YC&amp;printsec=frontcover">"Pentium Processor System Architecture. Chapter 15: The APIC"</a>
+</p>
+<h2> <span class="mw-headline" id="See_Also"> See Also </span></h2>
+<h3> <span class="mw-headline" id="Articles"> Articles </span></h3>
+<ul><li> <a href="https://wiki.osdev.org/8259_PIC" title="8259 PIC">8259 PIC</a>
+</li><li> <a href="https://wiki.osdev.org/IOAPIC" title="IOAPIC">IOAPIC</a>
+</li><li> <a href="https://wiki.osdev.org/APIC_timer" title="APIC timer">APIC timer</a>
+</li></ul>
+<h3> <span class="mw-headline" id="Threads">Threads</span></h3>
+<ul><li> <a rel="nofollow" class="external text" href="https://forum.osdev.org/viewtopic.php?t=10686">APIC timer</a>
+</li><li> <a rel="nofollow" class="external text" href="https://forum.osdev.org/viewtopic.php?t=11529">Mapping the I/O APIC</a>
+</li><li> <a rel="nofollow" class="external text" href="https://forum.osdev.org/viewtopic.php?p=107868#107868">Brendan gives some general info on the APIC and implementing it</a>
+</li></ul>
+<h3> <span class="mw-headline" id="External_Links">External Links</span></h3>
+<ul><li> <a rel="nofollow" class="external text" href="https://web.archive.org/web/20161128201003/http://www.intel.com/design/chipsets/datashts/290566.htm">Original I/O APIC specification/datasheet</a>
+</li><li> <a rel="nofollow" class="external text" href="https://web.archive.org/web/20170430050751/http://www.intel.com/design/chipsets/specupdt/290710.htm">Updated I/O APIC specification/datasheet</a>
+</li><li> <a rel="nofollow" class="external text" href="https://www.intel.com/products/processor/manuals/">Volume 3A:System Programming Guide, Part 1,manuals has a chapter on the APIC</a>
+</li><li> <a rel="nofollow" class="external text" href="https://www.intel.com/products/processor/manuals/">Volume 3A:System Programming Guide, Chapter 10.4 for further reading about the LAPIC</a>
+</li><li> <a rel="nofollow" class="external text" href="https://web.archive.org/web/20140308064246/http://www.osdever.net/tutorials/pdf/apic.pdf">Advanced Programmable Interrupt Controller by Mike Rieker</a>
+</li><li> <a rel="nofollow" class="external text" href="https://web.archive.org/web/20121026064337/http://msdn.microsoft.com/en-us/windows/hardware/gg462964.aspx">"The Importance of Implementing APIC-Based Interrupt Subsystems on Uniprocessor PCs". Microsoft. 7 January 2003</a>
+</li><li> <a rel="nofollow" class="external text" href="https://books.google.com/books?id=TVzjEZg1--YC">Pentium Processor System Architecture</a>
+</li></ul>
+
+<!-- 
+NewPP limit report
+Preprocessor node count: 146/1000000
+Post-expand include size: 810/2097152 bytes
+Template argument size: 0/2097152 bytes
+Expensive parser function count: 0/100
+-->
+
+<!-- Saved in parser cache with key wikidb:pcache:idhash:1882-0!*!0!!en!*!* and timestamp 20220612131557 -->
+</div>				<!-- /bodycontent -->
+								<!-- printfooter -->
+				<div class="printfooter">
+				Retrieved from "<a href="https://wiki.osdev.org/index.php?title=APIC&amp;oldid=26530">https://wiki.osdev.org/index.php?title=APIC&amp;oldid=26530</a>"				</div>
+				<!-- /printfooter -->
+												<!-- catlinks -->
+				<div id="catlinks" class="catlinks"><div id="mw-normal-catlinks"><a href="https://wiki.osdev.org/Special:Categories" title="Special:Categories">Categories</a>: <ul><li><a href="https://wiki.osdev.org/Category:Interrupts" title="Category:Interrupts">Interrupts</a></li><li><a href="https://wiki.osdev.org/Category:Time" title="Category:Time">Time</a></li><li><a href="https://wiki.osdev.org/Category:Multiprocessing" title="Category:Multiprocessing">Multiprocessing</a></li></ul></div></div>				<!-- /catlinks -->
+												<div class="visualClear"></div>
+				<!-- debughtml -->
+								<!-- /debughtml -->
+			</div>
+			<!-- /bodyContent -->
+		</div>
+		<!-- /content -->
+		<!-- header -->
+		<div id="mw-head" class="noprint">
+			
+<!-- 0 -->
+<div id="p-personal" class="">
+	<h5>Personal tools</h5>
+	<ul>
+		<li id="pt-login"><a href="https://wiki.osdev.org/index.php?title=Special:UserLogin&amp;returnto=APIC" title="You are encouraged to log in; however, it is not mandatory [alt-shift-o]" accesskey="o">Log in</a></li>
+	</ul>
+</div>
+
+<!-- /0 -->
+			<div id="left-navigation">
+				
+<!-- 0 -->
+<div id="p-namespaces" class="vectorTabs">
+	<h5>Namespaces</h5>
+	<ul>
+					<li id="ca-nstab-main" class="selected"><span><a href="https://wiki.osdev.org/APIC" title="View the content page [alt-shift-c]" accesskey="c">Page</a></span></li>
+					<li id="ca-talk"><span><a href="https://wiki.osdev.org/Talk:APIC" title="Discussion about the content page [alt-shift-t]" accesskey="t">Discussion</a></span></li>
+			</ul>
+</div>
+
+<!-- /0 -->
+
+<!-- 1 -->
+<div id="p-variants" class="vectorMenu emptyPortlet">
+		<h5><span>Variants</span><a href="#"></a></h5>
+	<div class="menu">
+		<ul>
+					</ul>
+	</div>
+</div>
+
+<!-- /1 -->
+			</div>
+			<div id="right-navigation">
+				
+<!-- 0 -->
+<div id="p-views" class="vectorTabs">
+	<h5>Views</h5>
+	<ul>
+					<li id="ca-view" class="selected"><span><a href="https://wiki.osdev.org/APIC">Read</a></span></li>
+					<li id="ca-viewsource"><span><a href="https://wiki.osdev.org/index.php?title=APIC&amp;action=edit" title="This page is protected.
+You can view its source [alt-shift-e]" accesskey="e">View source</a></span></li>
+					<li id="ca-history" class="collapsible"><span><a href="https://wiki.osdev.org/index.php?title=APIC&amp;action=history" title="Past revisions of this page [alt-shift-h]" accesskey="h">View history</a></span></li>
+			</ul>
+</div>
+
+<!-- /0 -->
+
+<!-- 1 -->
+<div id="p-cactions" class="vectorMenu emptyPortlet">
+	<h5><span>Actions</span><a href="#"></a></h5>
+	<div class="menu">
+		<ul>
+					</ul>
+	</div>
+</div>
+
+<!-- /1 -->
+
+<!-- 2 -->
+<div id="p-search">
+	<h5><label for="searchInput">Search</label></h5>
+	<form action="/index.php" id="searchform">
+		<input type="hidden" name="title" value="Special:Search">
+				<input type="search" name="search" title="Search OSDev Wiki [alt-shift-f]" accesskey="f" id="searchInput">		<input type="submit" name="go" value="Go" title="Go to a page with this exact name if exists" id="searchGoButton" class="searchButton">		<input type="submit" name="fulltext" value="Search" title="Search the pages for this text" id="mw-searchButton" class="searchButton">			</form>
+</div>
+
+<!-- /2 -->
+			</div>
+		</div>
+		<!-- /header -->
+		<!-- panel -->
+			<div id="mw-panel" class="noprint">
+				<!-- logo -->
+					<div id="p-logo"><a style="background-image: url(/skins/common/images/osdev.png);" href="https://wiki.osdev.org/Main_Page" title="Visit the main page"></a></div>
+				<!-- /logo -->
+				
+<!-- navigation -->
+<div class="portal" id="p-navigation">
+	<h5>Navigation</h5>
+	<div class="body">
+		<ul>
+			<li id="n-mainpage"><a href="https://wiki.osdev.org/Main_Page" title="Visit the main page [alt-shift-z]" accesskey="z">Main Page</a></li>
+			<li id="n-portal"><a href="http://forum.osdev.org/" rel="nofollow" title="About the project, what you can do, where to find things">Forums</a></li>
+			<li id="n-FAQ"><a href="https://wiki.osdev.org/Category:FAQ">FAQ</a></li>
+			<li id="n-OS-Projects"><a href="https://wiki.osdev.org/Projects">OS Projects</a></li>
+			<li id="n-randompage"><a href="https://wiki.osdev.org/Special:Random" title="Load a random page [alt-shift-x]" accesskey="x">Random page</a></li>
+		</ul>
+	</div>
+</div>
+
+<!-- /navigation -->
+
+<!-- about -->
+<div class="portal" id="p-about">
+	<h5>About</h5>
+	<div class="body">
+		<ul>
+			<li id="n-This-site"><a href="https://wiki.osdev.org/OSDevWiki:About">This site</a></li>
+			<li id="n-Joining"><a href="https://wiki.osdev.org/OSDevWiki:Joining">Joining</a></li>
+			<li id="n-Editing-help"><a href="https://wiki.osdev.org/OSDevWiki:Editing">Editing help</a></li>
+			<li id="n-recentchanges"><a href="https://wiki.osdev.org/Special:RecentChanges" title="A list of recent changes in the wiki [alt-shift-r]" accesskey="r">Recent changes</a></li>
+		</ul>
+	</div>
+</div>
+
+<!-- /about -->
+
+<!-- SEARCH -->
+
+<!-- /SEARCH -->
+
+<!-- TOOLBOX -->
+<div class="portal" id="p-tb">
+	<h5>Toolbox</h5>
+	<div class="body">
+		<ul>
+			<li id="t-whatlinkshere"><a href="https://wiki.osdev.org/Special:WhatLinksHere/APIC" title="A list of all wiki pages that link here [alt-shift-j]" accesskey="j">What links here</a></li>
+			<li id="t-recentchangeslinked"><a href="https://wiki.osdev.org/Special:RecentChangesLinked/APIC" title="Recent changes in pages linked from this page [alt-shift-k]" accesskey="k">Related changes</a></li>
+			<li id="t-specialpages"><a href="https://wiki.osdev.org/Special:SpecialPages" title="A list of all special pages [alt-shift-q]" accesskey="q">Special pages</a></li>
+			<li><a href="https://wiki.osdev.org/index.php?title=APIC&amp;printable=yes" rel="alternate">Printable version</a></li>
+			<li id="t-permalink"><a href="https://wiki.osdev.org/index.php?title=APIC&amp;oldid=26530" title="Permanent link to this revision of the page">Permanent link</a></li>
+		</ul>
+	</div>
+</div>
+
+<!-- /TOOLBOX -->
+
+<!-- LANGUAGES -->
+<div class="portal" id="p-lang">
+	<h5>In other languages</h5>
+	<div class="body">
+		<ul>
+			<li class="interwiki-de"><a href="http://www.lowlevel.eu/wiki/Advanced_Programmable_Interrupt_Controller" title="Advanced Programmable Interrupt Controller">Deutsch</a></li>
+		</ul>
+	</div>
+</div>
+
+<!-- /LANGUAGES -->
+			</div>
+		<!-- /panel -->
+		<!-- footer -->
+		<div id="footer">
+							<ul id="footer-info">
+											<li id="footer-info-lastmod"> This page was last modified on 17 October 2021, at 20:56.</li>
+											<li id="footer-info-viewcount">This page has been accessed 267,109 times.</li>
+									</ul>
+							<ul id="footer-places">
+											<li id="footer-places-privacy"><a href="https://wiki.osdev.org/OSDev_Wiki:Privacy_policy" title="OSDev Wiki:Privacy policy">Privacy policy</a></li>
+											<li id="footer-places-about"><a href="https://wiki.osdev.org/OSDev_Wiki:About" title="OSDev Wiki:About">About OSDev Wiki</a></li>
+											<li id="footer-places-disclaimer"><a href="https://wiki.osdev.org/OSDev_Wiki:General_disclaimer" title="OSDev Wiki:General disclaimer">Disclaimers</a></li>
+									</ul>
+										<ul id="footer-icons" class="noprint">
+					<li id="footer-poweredbyico">
+						<a href="http://www.mediawiki.org/"><img src="APIC%20-%20OSDev%20Wiki_files/poweredby_mediawiki_88x31.png" alt="Powered by MediaWiki" width="88" height="31"></a>
+					</li>
+				</ul>
+						<div style="clear:both"></div>
+		</div>
+		<!-- /footer -->
+		<!-- fixalpha -->
+		<script type="text/javascript"> if ( window.isMSIE55 ) fixalpha(); </script>
+		<!-- /fixalpha -->
+		<script src="APIC%20-%20OSDev%20Wiki_files/load_003.es"></script>
+<script>if(window.mw){
+	mw.loader.load(["mediawiki.user", "mediawiki.util", "mediawiki.page.ready", "mediawiki.legacy.wikibits", "mediawiki.legacy.ajax"]);
+}
+</script><script type="text/javascript" src="APIC%20-%20OSDev%20Wiki_files/load_005.es"></script>
+<script src="APIC%20-%20OSDev%20Wiki_files/load_002.es"></script>
+<script>if(window.mw){
+	mw.user.options.set({"ccmeonemails":0,"cols":80,"date":"default","diffonly":0,"disablemail":0,"disablesuggest":0,"editfont":"default","editondblclick":0,"editsection":1,"editsectiononrightclick":0,"enotifminoredits":0,"enotifrevealaddr":0,"enotifusertalkpages":1,"enotifwatchlistpages":0,"extendwatchlist":0,"externaldiff":0,"externaleditor":0,"fancysig":0,"forceeditsummary":0,"gender":"unknown","hideminor":0,"hidepatrolled":0,"highlightbroken":1,"imagesize":2,"justify":0,"math":1,"minordefault":0,"newpageshidepatrolled":0,"nocache":0,"noconvertlink":0,"norollbackdiff":0,"numberheadings":0,"previewonfirst":0,"previewontop":1,"quickbar":5,"rcdays":7,"rclimit":50,"rememberpassword":0,"rows":25,"searchlimit":20,"showhiddencats":0,"showjumplinks":1,"shownumberswatching":1,"showtoc":1,"showtoolbar":1,"skin":"vector","stubthreshold":0,"thumbsize":2,"underline":2,"uselivepreview":0,"usenewrc":0,"watchcreations":0,"watchdefault":0,"watchdeletion":0,"watchlistdays":3,"watchlisthideanons":0,
+	"watchlisthidebots":0,"watchlisthideliu":0,"watchlisthideminor":0,"watchlisthideown":0,"watchlisthidepatrolled":0,"watchmoves":0,"wllimit":250,"variant":"en","language":"en","searchNs0":true,"searchNs1":false,"searchNs2":false,"searchNs3":false,"searchNs4":false,"searchNs5":false,"searchNs6":false,"searchNs7":false,"searchNs8":false,"searchNs9":false,"searchNs10":false,"searchNs11":false,"searchNs12":false,"searchNs13":false,"searchNs14":false,"searchNs15":false});;mw.user.tokens.set({"editToken":"+\\","watchToken":false});;mw.loader.state({"user.options":"ready","user.tokens":"ready"});
+	
+	/* cache key: wikidb:resourceloader:filter:minify-js:4:19a4b18a9ac79a6b8c60b24af4668814 */
+}
+</script><!-- Served in 0.024 secs. -->
+	
+
+</body></html>
