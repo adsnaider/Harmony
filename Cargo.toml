@@ -6,3 +6,7 @@ members = [
   "kmain",
   "memory",
 ]
+
+[profile.dev]
+# TODO(adam): Issues jumping to kernel without optimizations.
+opt-level = 2

@@ -53,7 +53,7 @@ impl GlobalTable {
     pub unsafe fn get(&self) -> &SystemTable<Boot> {
         // SAFETY: Precondition.
         unsafe {
-            (&*self.table.get())
+            (*self.table.get())
                 .as_ref()
                 .expect("System table hasn't been initialized. Forget to call `init()`?")
         }
@@ -68,7 +68,7 @@ impl GlobalTable {
     pub unsafe fn get_mut(&self) -> &mut SystemTable<Boot> {
         // SAFETY: Precondition.
         unsafe {
-            (&mut *self.table.get())
+            (*self.table.get())
                 .as_mut()
                 .expect("System table hasn't been initialized. Forget to call `init()`?")
         }
@@ -93,7 +93,7 @@ impl GlobalTable {
     /// table.
     unsafe fn is_set(&self) -> bool {
         // SAFETY: Precondition.
-        unsafe { (&*self.table.get()).is_some() }
+        unsafe { (*self.table.get()).is_some() }
     }
 }
 

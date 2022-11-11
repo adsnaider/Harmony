@@ -125,7 +125,7 @@ impl<'a> Arena<'a> {
     /// Allocates the `value` into the arena and returns a mutable reference to the allocated
     /// memory if successful.
     pub fn allocate_value<T>(&mut self, value: T) -> Result<&'a mut T, AllocError> {
-        let mut pointer: NonNull<T> = {
+        let pointer: NonNull<T> = {
             let pointer = self.allocate(Layout::for_value(&value))?;
             assert!(pointer.len() >= core::mem::size_of::<T>());
             pointer.cast()
