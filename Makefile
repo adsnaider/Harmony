@@ -64,7 +64,7 @@ $(CARGO_KERNEL):
 	cd $(KMAIN) && cargo build --profile $(PROFILE) --target $(TARGET)
 
 $(KERNEL): $(CARGO_KERNEL) env
-	ld -o $(KERNEL) -ekmain  $(CARGO_KERNEL)
+	ld -o $(KERNEL) -e kmain  $(CARGO_KERNEL)
 
 boot_image: $(EFI) $(KERNEL) env
 	echo "\EFI\BOOT\$(ARCHEFI)" > $(IMAGE_ROOT)/startup.nsh

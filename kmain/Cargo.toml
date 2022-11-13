@@ -13,3 +13,5 @@ bootinfo = { path = "../bootinfo" }
 framed = { path = "../framed" }
 log = "0.4"
 spin = "0.9"
+x86_64 = "0.14"
+lazy_static = { version = "1.4", features = ["spin_no_std"] }
