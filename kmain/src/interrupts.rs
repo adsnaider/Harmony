@@ -1,56 +1,25 @@
 //! Interrupts initialization and handling.
 
 use lazy_static::lazy_static;
-use x86_64::instructions::tables::load_tss;
-use x86_64::registers::segmentation::{Segment, CS};
-use x86_64::structures::gdt::{Descriptor, GlobalDescriptorTable, SegmentSelector};
+use pc_keyboard::layouts::Us104Key;
+use pc_keyboard::{DecodedKey, HandleControl, Keyboard, ScancodeSet1};
+use pic8259::ChainedPics;
+use spin::Mutex;
+use x86_64::instructions::port::Port;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
-use x86_64::structures::tss::TaskStateSegment;
-use x86_64::VirtAddr;
 
-use crate::println;
+use crate::{gdt, println, try_print};
 
-const DOUBLE_FAULT_IST_INDEX: u16 = 0;
+const PIC1_OFFSET: u8 = 32;
+const PIC2_OFFSET: u8 = PIC1_OFFSET + 8;
 
-/// Sets up the GDT with a TSS that is used for double fault handler stack.
-fn init_gdt() {
-    struct Selectors {
-        code_selector: SegmentSelector,
-        tss_selector: SegmentSelector,
-    }
-    lazy_static! {
-        static ref TSS: TaskStateSegment = {
-            let mut tss = TaskStateSegment::new();
-            tss.interrupt_stack_table[DOUBLE_FAULT_IST_INDEX as usize] = {
-                const STACK_SIZE: usize = 4096 * 5;
-                static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
+static PICS: Mutex<ChainedPics> = Mutex::new(
+    // SAFETY: PIC Offsets don't collide with exceptions.
+    unsafe { ChainedPics::new(PIC1_OFFSET, PIC2_OFFSET) },
+);
 
-                // SAFETY: Although it's a static mut, STACK is only used in this context.
-                let stack_start = VirtAddr::from_ptr(unsafe {&STACK});
-                stack_start + STACK_SIZE // stack end.
-            };
-            tss
-        };
-        static ref GDT: (GlobalDescriptorTable, Selectors) = {
-            let mut gdt = GlobalDescriptorTable::new();
-            let code_selector = gdt.add_entry(Descriptor::kernel_code_segment());
-            let tss_selector = gdt.add_entry(Descriptor::tss_segment(&TSS));
-            (
-                gdt,
-                Selectors {
-                    code_selector,
-                    tss_selector,
-                },
-            )
-        };
-    }
-    GDT.0.load();
-    // SAFETY: Segment selectors are valid, and appropriately setup in the GDT.
-    unsafe {
-        CS::set_reg(GDT.1.code_selector);
-        load_tss(GDT.1.tss_selector);
-    }
-}
+const TIMER_INT: u8 = PIC1_OFFSET;
+const KEYBOARD_INT: u8 = PIC1_OFFSET + 1;
 
 /// Initializes the interrupt descriptor table.
 fn init_idt() {
@@ -58,26 +27,87 @@ fn init_idt() {
         static ref IDT: InterruptDescriptorTable = {
             let mut idt = InterruptDescriptorTable::new();
             idt.breakpoint.set_handler_fn(breakpoint_handler);
+            idt.general_protection_fault.set_handler_fn(general_protection_fault_handler);
             // SAFETY: Stack index provided is valid and only used for the double fault handler.
             unsafe {
                 idt.double_fault
                     .set_handler_fn(double_fault_handler)
-                    .set_stack_index(DOUBLE_FAULT_IST_INDEX);
+                    .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
             }
+
+            // PIC interrupts
+            idt[TIMER_INT as usize].set_handler_fn(timer_interrupt_handler);
+            idt[KEYBOARD_INT as usize].set_handler_fn(keyboard_interrupt_handler);
             idt
         };
     }
     IDT.load();
 }
 
-/// Initializes interrupts and exceptions alongside their predefined handlers.
+/// Initializes the IDT and sets up the 8259 PIC.
 pub fn init() {
-    init_gdt();
     init_idt();
+    // SAFETY: PIC Initialization. We only initialize interrupts that we are currently handling.
+    unsafe {
+        let mut pics = PICS.lock();
+        pics.initialize();
+        pics.write_masks(0xFC, 0xFF);
+    }
+}
+
+extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
+    let _ = try_print!(".");
+    // SAFETY: Notify timer interrupt vector.
+    unsafe {
+        PICS.lock().notify_end_of_interrupt(TIMER_INT);
+    }
+}
+
+extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
+    lazy_static! {
+        static ref KEYBOARD: Mutex<Keyboard<Us104Key, ScancodeSet1>> =
+            Mutex::new(Keyboard::new(Us104Key, ScancodeSet1, HandleControl::Ignore));
+    }
+
+    let mut port = Port::new(0x60);
+    // SAFETY: I/O read shouldn't have side effects.
+    let scancode: u8 = unsafe { port.read() };
+
+    let mut keyboard = KEYBOARD.lock();
+    match keyboard.add_byte(scancode) {
+        Ok(Some(event)) => {
+            if let Some(key) = keyboard.process_keyevent(event) {
+                match key {
+                    DecodedKey::Unicode(character) => {
+                        let _ = try_print!("{}", character);
+                    }
+                    DecodedKey::RawKey(key) => {
+                        let _ = try_print!("{:?}", key);
+                    }
+                }
+            }
+        }
+        Ok(None) => {}
+        Err(e) => {
+            let _ = try_print!("Keyboard error: {e:?}");
+        }
+    }
+
+    // SAFETY: Notify keyboard interrupt vector.
+    unsafe {
+        PICS.lock().notify_end_of_interrupt(KEYBOARD_INT);
+    }
 }
 
 extern "x86-interrupt" fn breakpoint_handler(stack_frame: InterruptStackFrame) {
     println!("EXCEPTION BREAKPOINT:\n{stack_frame:#?}");
+}
+
+extern "x86-interrupt" fn general_protection_fault_handler(
+    stack_frame: InterruptStackFrame,
+    error_code: u64,
+) {
+    panic!("EXCEPTION: GENERAL PROTECTION - {error_code}\n{stack_frame:#?}");
 }
 
 extern "x86-interrupt" fn double_fault_handler(

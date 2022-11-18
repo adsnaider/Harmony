@@ -10,6 +10,7 @@
 #![warn(clippy::undocumented_unsafe_blocks)]
 
 pub mod display;
+pub mod gdt;
 pub mod interrupts;
 pub(crate) mod singleton;
 
@@ -27,6 +28,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 }
 
 fn system_init(bootinfo: &'static mut Bootinfo) {
+    x86_64::instructions::interrupts::disable();
     // SAFETY: Bootloader passed the framebuffer correctly.
     let mut display = unsafe { Display::new(bootinfo.framebuffer) };
 
@@ -42,8 +44,10 @@ fn system_init(bootinfo: &'static mut Bootinfo) {
     println!("Hello, Kernel!");
     log::info!("Hello, logging!");
 
+    gdt::init();
     interrupts::init();
     log::info!("Interrupt handlers initialized");
+    x86_64::instructions::interrupts::enable();
 }
 
 /// Kernel's starting point.
@@ -52,7 +56,7 @@ pub extern "C" fn kmain(bootinfo: &'static mut Bootinfo) -> ! {
     system_init(bootinfo);
 
     log::info!("Initialization sequence complete.");
-
-    #[allow(clippy::empty_loop)]
-    loop {}
+    loop {
+        x86_64::instructions::hlt();
+    }
 }
