@@ -4,7 +4,8 @@ members = [
   "bootloader",
   "framed",
   "kmain",
-  "memory",
+  "bitalloc",
+  "ralloc",
 ]
 
 [profile.dev]

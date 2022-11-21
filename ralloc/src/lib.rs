@@ -1,4 +1,12 @@
-//! Memory allocators.
+//! Memory allocators!
+#![cfg_attr(not(test), no_std)]
+#![feature(allocator_api)]
+#![feature(result_option_inspect)]
+#![feature(nonnull_slice_from_raw_parts)]
+#![warn(missing_copy_implementations)]
+#![warn(missing_debug_implementations)]
+#![warn(missing_docs)]
+#![warn(unsafe_op_in_unsafe_fn)]
 
 use core::alloc::Allocator;
 
@@ -55,6 +63,10 @@ pub unsafe trait MemoryRegionAllocator: Allocator + Sized {
 #[cfg(test)]
 pub(crate) mod test_utils {
     use super::*;
+
+    pub fn init_logging() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
 
     #[derive(Debug)]
     pub struct Arena {

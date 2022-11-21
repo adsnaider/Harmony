@@ -1,5 +1,7 @@
 //! An implementaiton of boolean bitmap.
 
+#![allow(dead_code)]
+
 mod unsigned_numeric;
 use unsigned_numeric::UnsignedNumeric;
 
@@ -49,6 +51,16 @@ impl<'a, U: UnsignedNumeric> Bitmap<'a, U> {
         Some(idx * U::BITS + offset)
     }
 
+    /// Returns the index of the first element unset or returns None if all elements are set.
+    pub fn find_first_unset(&mut self) -> Option<usize> {
+        let (idx, elem) = self
+            .buffer
+            .iter()
+            .enumerate()
+            .find(|&(_, &x)| x != U::MAX)?;
+        let offset = elem.trailing_ones() as usize;
+        Some(idx * U::BITS + offset)
+    }
     /// Truncates the bitmap and returns the leftover storage.
     pub fn truncate(self, count: usize) -> (Self, &'a mut [U]) {
         let (truncated, leftover) = self.buffer.split_at_mut((count - 1) / U::BITS + 1);
@@ -76,6 +88,7 @@ pub mod tests {
         assert!(!bitmap.get(4));
         assert!(!bitmap.get(35));
         assert_eq!(bitmap.find_first_set().unwrap(), 3);
+        assert_eq!(bitmap.find_first_unset().unwrap(), 0);
 
         let (mut bitmap, leftover) = bitmap.truncate(4);
         assert_eq!(leftover.len(), 1023);

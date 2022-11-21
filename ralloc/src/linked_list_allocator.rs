@@ -507,8 +507,7 @@ unsafe impl MemoryRegionAllocator for LinkedListAllocator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::allocation::test_utils::Arena;
-    use crate::test_utils::init_logging;
+    use crate::test_utils::{init_logging, Arena};
 
     #[test]
     fn one_alloc() {
