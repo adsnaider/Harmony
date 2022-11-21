@@ -63,8 +63,8 @@ $(CARGO_KERNEL):
 	# We cd to run the command because we want to use the .cargo/config.toml
 	cd $(KMAIN) && cargo build --profile $(PROFILE) --target $(TARGET)
 
-$(KERNEL): $(CARGO_KERNEL) env
-	ld -o $(KERNEL) -e kmain  $(CARGO_KERNEL)
+$(KERNEL): $(CARGO_KERNEL) linker.ld env
+	ld -T linker.ld -o $(KERNEL) $(CARGO_KERNEL)
 
 boot_image: $(EFI) $(KERNEL) env
 	echo "\EFI\BOOT\$(ARCHEFI)" > $(IMAGE_ROOT)/startup.nsh

@@ -70,6 +70,11 @@ pub unsafe fn kernel_handoff(
     unreachable!();
 }
 
+struct MappedAllocation<'a> {
+    identity_buffer: &'a mut [u8],
+    mapped_buffer: &'a mut [u8],
+}
+
 /// Remaps a chunk of contiguous pages to a chunk of contiguous frames.
 ///
 /// # Safety
@@ -81,7 +86,7 @@ unsafe fn allocate_mapped<S: PageSize>(
     memory_type: MemoryType,
     page_table_flags: PageTableFlags,
     page_map: &mut impl Mapper<S>,
-) -> &'static mut [u8] {
+) -> MappedAllocation<'static> {
     let mut page_frame_allocator = PageFrameAllocator {};
 
     let buffer = sys::alloc::get_pages(None, count, memory_type).expect("Allocation failure");
@@ -106,11 +111,15 @@ unsafe fn allocate_mapped<S: PageSize>(
         }
     }
     // SAFETY: Allocated and mapped to virtual address.
-    unsafe {
+    let mapped_buffer = unsafe {
         core::slice::from_raw_parts_mut(
             virtual_address_start.as_mut_ptr(),
             count * S::SIZE as usize,
         )
+    };
+    MappedAllocation {
+        identity_buffer: buffer,
+        mapped_buffer,
     }
 }
 
@@ -143,23 +152,37 @@ fn efi_main(handle: Handle, system_table: SystemTable<Boot>) -> Status {
         for header in elf.program_headers {
             match header.p_type {
                 PT_LOAD => unsafe {
+                    let mut flags = PageTableFlags::PRESENT;
+                    if !header.is_executable() {
+                        flags |= PageTableFlags::NO_EXECUTE;
+                    }
+                    if header.is_write() {
+                        flags |= PageTableFlags::WRITABLE;
+                    }
+
                     let page_start = aligned_to_low(header.vm_range().start, 4096);
-                    let page_end = aligned_to_low(header.vm_range().end, 4096);
+                    let page_end = aligned_to_low(header.vm_range().end - 1, 4096);
                     let count = page_end / 4096 - page_start / 4096 + 1;
-                    log::info!("Requesting {} pages at {:#X}", count, page_start);
-                    let memory = sys::alloc::get_pages(Some(page_start), count, KERNEL_CODE_MEMORY)
-                        .unwrap_or_else(|e| {
-                            panic!(
-                                "Error {:?}: Couldn't get memory to load the kernel at address: {:#X} - {:#X}", 
-                                e,
-                                header.vm_range().start,
-                                header.vm_range().end
-                            )
-                        });
-                    memory.iter_mut().for_each(|x| *x = 0);
+                    log::info!(
+                        "Requesting {} pages to be loaded at {:#X}",
+                        count,
+                        page_start
+                    );
+                    // We don't need the virtual pointer for this and using the identity buffer
+                    // us to directly set up the appropriate page table flags.
+                    let segment = allocate_mapped::<Size4KiB>(
+                        Page::from_start_address(VirtAddr::new(page_start as u64)).unwrap(),
+                        count,
+                        KERNEL_CODE_MEMORY,
+                        flags,
+                        &mut page_map,
+                    )
+                    .identity_buffer;
+
+                    segment.iter_mut().for_each(|x| *x = 0);
                     // Memory range doesn't start at the beginning of page. Offset that.
-                    let memory = &mut memory[(header.vm_range().start - page_start)..];
-                    memory[..header.p_filesz as usize]
+                    let segment = &mut segment[(header.vm_range().start - page_start)..];
+                    segment[..header.p_filesz as usize]
                         .copy_from_slice(&kernel[header.file_range()]);
                 },
                 other => log::info!(
@@ -181,13 +204,16 @@ fn efi_main(handle: Handle, system_table: SystemTable<Boot>) -> Status {
     log::info!("Jumping to kernel!");
 
     unsafe {
-        let mut kernel_static: Arena<'static> = Arena::new(allocate_mapped::<Size4KiB>(
-            Page::from_start_address(VirtAddr::new(KERNEL_STATICS_BOTTOM as u64)).unwrap(),
-            KERNEL_STATICS_PAGE_COUNT,
-            KERNEL_STATIC_MEMORY,
-            PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE,
-            &mut page_map,
-        ));
+        let mut kernel_static: Arena<'static> = Arena::new(
+            allocate_mapped::<Size4KiB>(
+                Page::from_start_address(VirtAddr::new(KERNEL_STATICS_BOTTOM as u64)).unwrap(),
+                KERNEL_STATICS_PAGE_COUNT,
+                KERNEL_STATIC_MEMORY,
+                PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE,
+                &mut page_map,
+            )
+            .mapped_buffer,
+        );
 
         let stack: &'static mut [u8] = allocate_mapped::<Size4KiB>(
             Page::from_start_address(VirtAddr::new(STACK_BOTTOM as u64)).unwrap(),
@@ -195,7 +221,8 @@ fn efi_main(handle: Handle, system_table: SystemTable<Boot>) -> Status {
             KERNEL_STACK_MEMORY,
             PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE,
             &mut page_map,
-        );
+        )
+        .mapped_buffer;
 
         // TODO: Remap frame buffer and other MMIO?
         let framebuffer = sys::io::get_framebuffer();
