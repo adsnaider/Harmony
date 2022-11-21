@@ -10,3 +10,6 @@ uefi = "0.14.0"
 log = "0.4"
 bootinfo = { path = "../bootinfo" }
 goblin = { version = "0.5", default-features = false, features = ["elf32", "elf64", "endian_fd"] }
+
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+x86_64 = "0.14"

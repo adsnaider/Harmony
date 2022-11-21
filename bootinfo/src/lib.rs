@@ -10,6 +10,8 @@ pub const KERNEL_STATIC: u32 = 0x80000000;
 pub const KERNEL_STACK: u32 = 0x80000001;
 /// Memory type used to identify the kernel code.
 pub const KERNEL_CODE: u32 = 0x80000002;
+/// Memory type used to identify page tables for the physical memory offset.
+pub const PAGING: u32 = 0x80000003;
 
 /// The `Bootinfo` struct gets passed from the bootloader to the kernel.
 #[repr(C)]
@@ -21,6 +23,8 @@ pub struct Bootinfo {
     pub memory_map: MemoryMap<'static>,
     /// Bitmap-encoded font to use within the kernel.
     pub font: &'static [u8],
+    /// Virtual address to which all physical memory is mapped.
+    pub physical_memory_offset: usize,
 }
 
 /// System memory map. This is a physical representation of the memory (i.e. identity-mapped).
@@ -80,6 +84,9 @@ pub enum MemoryType {
     /// Unusable memory region used for the kernel's stack. The OS may setup the lowest page in the
     /// range for stack overflow protection by unmapping the page.
     KernelStack,
+    /// This region is used to store PageTables. It shouldn't be used by the
+    /// kernel unless it discards the original page tables.
+    PageMapData,
 }
 
 /// Physical properties of the memory region.

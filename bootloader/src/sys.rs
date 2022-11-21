@@ -26,7 +26,7 @@ use uefi::{Handle, ResultExt};
 
 use self::alloc::Arena;
 use crate::mem::aligned_to_high;
-use crate::{KERNEL_CODE_MEMORY, KERNEL_STACK_MEMORY, KERNEL_STATIC_MEMORY};
+use crate::{KERNEL_CODE_MEMORY, KERNEL_STACK_MEMORY, KERNEL_STATIC_MEMORY, PAGING_MEMORY};
 
 /// GlobalTable holds a reference to the UEFI system table.
 pub(crate) struct GlobalTable {
@@ -115,6 +115,38 @@ pub fn is_init() -> bool {
     unsafe { SYSTEM_TABLE.is_set() }
 }
 
+/// Retrieves the memory map.
+pub fn get_memory_map() -> impl ExactSizeIterator<Item = &'static MemoryDescriptor> + Clone {
+    let table = unsafe { SYSTEM_TABLE.get() };
+
+    let memory_map_buf = {
+        // Extra buffer since the size might change.
+        let MemoryMapSize {
+            map_size: total,
+            entry_size: entry,
+        } = table.boot_services().memory_map_size();
+        let size = total + entry * 3;
+        // TODO(#5): Maybe deallocate pool. Not a huge deal as the kernel can discard
+        // LOADER_DATA memory anyway.
+        let address = table
+            .boot_services()
+            .allocate_pool(MemoryType::LOADER_DATA, size)
+            .expect_success("Couldn't allocate data for memory map.");
+        let address = unsafe { aligned_to_high(address, MemoryDescriptor::alignment()) };
+
+        unsafe {
+            let buf = core::slice::from_raw_parts_mut(address, size);
+            MemoryDescriptor::assert_aligned(buf);
+            buf
+        }
+    };
+    table
+        .boot_services()
+        .memory_map(memory_map_buf)
+        .expect_success("Not enough memory to get memory map.")
+        .1
+}
+
 /// After this call, UEFI system services will become unavailable. The function also returns UEFI
 /// runtime table and the current memory map.
 pub fn exit_uefi_services(
@@ -174,6 +206,7 @@ pub fn exit_uefi_services(
                 KERNEL_STACK_MEMORY => bootinfo::MemoryType::KernelStack,
                 KERNEL_STATIC_MEMORY => bootinfo::MemoryType::KernelData,
                 KERNEL_CODE_MEMORY => bootinfo::MemoryType::KernelCode,
+                PAGING_MEMORY => bootinfo::MemoryType::PageMapData,
                 other => panic!("Unknown memory type: {:?}", other),
             },
             phys_start: desc.phys_start as usize,

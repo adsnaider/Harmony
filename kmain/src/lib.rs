@@ -14,7 +14,7 @@ pub mod gdt;
 pub mod interrupts;
 pub(crate) mod singleton;
 
-use bootinfo::Bootinfo;
+use bootinfo::{Bootinfo, MemoryRegion};
 use display::Display;
 use framed::console::{BitmapFont, Console};
 use framed::{Frame, Pixel};
@@ -44,6 +44,18 @@ fn system_init(bootinfo: &'static mut Bootinfo) {
     println!("Hello, Kernel!");
     log::info!("Hello, logging!");
 
+    log::info!("Found bootinfo at {:#?}", bootinfo as *const Bootinfo);
+    log::info!("Found framebuffer at {:#?}", bootinfo.framebuffer.address);
+    log::info!("Found font at {:#?}", bootinfo.font as *const [u8]);
+    log::info!(
+        "Memory map starts at {:#?}",
+        bootinfo.memory_map.regions as *const [MemoryRegion]
+    );
+    log::info!(
+        "Physical memory offset is {:#?}",
+        bootinfo.physical_memory_offset as *mut ()
+    );
+
     gdt::init();
     interrupts::init();
     log::info!("Interrupt handlers initialized");
@@ -54,8 +66,8 @@ fn system_init(bootinfo: &'static mut Bootinfo) {
 #[no_mangle]
 pub extern "C" fn kmain(bootinfo: &'static mut Bootinfo) -> ! {
     system_init(bootinfo);
-
     log::info!("Initialization sequence complete.");
+
     loop {
         x86_64::instructions::hlt();
     }

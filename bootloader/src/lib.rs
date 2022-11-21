@@ -14,6 +14,7 @@
 
 extern crate alloc as alloc_api;
 
+pub mod arch;
 pub(crate) mod mem;
 pub mod sys;
 
@@ -25,3 +26,5 @@ pub const KERNEL_STATIC_MEMORY: MemoryType = MemoryType::custom(bootinfo::KERNEL
 pub const KERNEL_STACK_MEMORY: MemoryType = MemoryType::custom(bootinfo::KERNEL_STACK);
 /// UEFI memory type used to represent the kernel's code memory region.
 pub const KERNEL_CODE_MEMORY: MemoryType = MemoryType::custom(bootinfo::KERNEL_CODE);
+/// Paging memory used to store PageTables for the physical memory mappings.
+pub const PAGING_MEMORY: MemoryType = MemoryType::custom(bootinfo::PAGING);
