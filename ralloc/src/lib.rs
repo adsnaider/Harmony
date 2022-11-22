@@ -64,10 +64,6 @@ pub unsafe trait MemoryRegionAllocator: Allocator + Sized {
 pub(crate) mod test_utils {
     use super::*;
 
-    pub fn init_logging() {
-        let _ = env_logger::builder().is_test(true).try_init();
-    }
-
     #[derive(Debug)]
     pub struct Arena {
         chunk: MemoryRegion,

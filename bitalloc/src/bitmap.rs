@@ -19,6 +19,12 @@ impl<'a, U: UnsignedNumeric> Bitmap<'a, U> {
         Self { buffer }
     }
 
+    /// Constructs a new bitmap with all values being one (true).
+    pub fn ones(buffer: &'a mut [U]) -> Self {
+        buffer.fill(U::MAX);
+        Self { buffer }
+    }
+
     /// Get the value at index `i`.
     pub fn get(&self, i: usize) -> bool {
         let byte_addr = i / U::BITS;
@@ -47,7 +53,7 @@ impl<'a, U: UnsignedNumeric> Bitmap<'a, U> {
             .iter()
             .enumerate()
             .find(|&(_, &x)| x != U::ZERO)?;
-        let offset = elem.trailing_zeros() as usize;
+        let offset = elem.trailing_zeros();
         Some(idx * U::BITS + offset)
     }
 
@@ -58,7 +64,7 @@ impl<'a, U: UnsignedNumeric> Bitmap<'a, U> {
             .iter()
             .enumerate()
             .find(|&(_, &x)| x != U::MAX)?;
-        let offset = elem.trailing_ones() as usize;
+        let offset = elem.trailing_ones();
         Some(idx * U::BITS + offset)
     }
     /// Truncates the bitmap and returns the leftover storage.

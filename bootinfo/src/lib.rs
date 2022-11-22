@@ -34,7 +34,7 @@ pub struct Bootinfo {
 /// Additionally, the bootloader doesn't setup any kind of memory protection for stack overflow or
 /// unused memory. It's up to the OS to set this up.
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct MemoryMap<'a> {
     /// Region describing 1 or more set of contiguous pages in memory.
     pub regions: &'a mut [MemoryRegion],

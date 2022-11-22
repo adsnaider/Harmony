@@ -1,6 +1,8 @@
 //! Kernel entry and executable. Ideally, this is just a thin wrapper over all of the kernel's
 //! components.
 #![no_std]
+#![feature(allocator_api)]
+#![feature(default_alloc_error_handler)]
 #![feature(abi_x86_interrupt)]
 #![deny(absolute_paths_not_starting_with_crate)]
 #![warn(missing_copy_implementations)]
@@ -12,12 +14,19 @@
 pub mod display;
 pub mod gdt;
 pub mod interrupts;
+pub mod memory;
 pub(crate) mod singleton;
+
+#[macro_use]
+extern crate alloc;
+
+use alloc::boxed::Box;
 
 use bootinfo::{Bootinfo, MemoryRegion};
 use display::Display;
 use framed::console::{BitmapFont, Console};
 use framed::{Frame, Pixel};
+use x86_64::VirtAddr;
 
 #[cfg(target_os = "none")]
 #[panic_handler]
@@ -55,6 +64,26 @@ fn system_init(bootinfo: &'static mut Bootinfo) {
         "Physical memory offset is {:#?}",
         bootinfo.physical_memory_offset as *mut ()
     );
+
+    // SAFETY: The physical memory offset is correct, well-aligned, and canonical, and the memory
+    // map is correct from the bootloader.
+    unsafe {
+        memory::init(
+            VirtAddr::new_unsafe(bootinfo.physical_memory_offset as u64),
+            core::mem::take(&mut bootinfo.memory_map),
+        );
+    }
+
+    let boxed_value = Box::new(25);
+    log::info!("We are boxing! {boxed_value:?}");
+    let vec_value = vec![1, 2, 3, 4, 5, 6];
+    log::info!("And we are vecing: {vec_value:?}");
+    let huge_vec = vec![0u64; 100000];
+    for x in huge_vec.iter() {
+        // SAFETY: Pointer is valid as we construct it from reference.
+        unsafe { core::ptr::read_volatile(x as *const u64) };
+    }
+    log::info!("Allocated a huge vector!");
 
     gdt::init();
     interrupts::init();

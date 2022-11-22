@@ -11,6 +11,8 @@ crate-type = ["staticlib"]
 [dependencies]
 bootinfo = { path = "../bootinfo" }
 framed = { path = "../framed" }
+ralloc = { path = "../ralloc" }
+bitalloc = { path = "../bitalloc" }
 log = "0.4"
 spin = "0.9"
 x86_64 = "0.14"

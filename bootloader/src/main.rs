@@ -20,7 +20,7 @@ use uefi::table::boot::MemoryType;
 use x86_64::structures::paging::{Mapper, Page, PageSize, PageTableFlags, PhysFrame, Size4KiB};
 use x86_64::{PhysAddr, VirtAddr};
 
-/// Enough for 128TB physical memory section.
+/// Enough for 16TB physical memory section.
 const PHYSICAL_MEMORY_OFFSET: usize = 0xFFFF_F000_0000_0000;
 /// Number of pages used for statics passed by bootloader.
 const KERNEL_STATICS_PAGE_COUNT: usize = 16;

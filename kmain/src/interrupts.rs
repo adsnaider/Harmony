@@ -6,7 +6,7 @@ use pc_keyboard::{DecodedKey, HandleControl, Keyboard, ScancodeSet1};
 use pic8259::ChainedPics;
 use spin::Mutex;
 use x86_64::instructions::port::Port;
-use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
+use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 
 use crate::{gdt, println, try_print};
 
@@ -28,6 +28,7 @@ fn init_idt() {
             let mut idt = InterruptDescriptorTable::new();
             idt.breakpoint.set_handler_fn(breakpoint_handler);
             idt.general_protection_fault.set_handler_fn(general_protection_fault_handler);
+            idt.page_fault.set_handler_fn(page_fault_handler);
             // SAFETY: Stack index provided is valid and only used for the double fault handler.
             unsafe {
                 idt.double_fault
@@ -108,6 +109,13 @@ extern "x86-interrupt" fn general_protection_fault_handler(
     error_code: u64,
 ) {
     panic!("EXCEPTION: GENERAL PROTECTION - {error_code}\n{stack_frame:#?}");
+}
+
+extern "x86-interrupt" fn page_fault_handler(
+    stack_frame: InterruptStackFrame,
+    error_code: PageFaultErrorCode,
+) {
+    panic!("EXCEPTION: PAGE FAULT - {error_code:?}\n{stack_frame:#?}");
 }
 
 extern "x86-interrupt" fn double_fault_handler(

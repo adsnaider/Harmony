@@ -64,7 +64,7 @@ pub enum BitSpecificError {
 
 impl<'a, T: Indexable> Bitalloc<'a, T> {
     /// Builds the bitmap allocator and returns any leftover storage.
-    pub fn new(store: &'a mut [u64], count: usize) -> (Self, &'a mut [u64]) {
+    pub fn empty(store: &'a mut [u64], count: usize) -> (Self, &'a mut [u64]) {
         if count > store.len() * 64 {
             panic!("Storage provided not large enough.");
         }
@@ -80,20 +80,36 @@ impl<'a, T: Indexable> Bitalloc<'a, T> {
         )
     }
 
+    /// Builds the bitmap allocator and returns any leftover storage.
+    pub fn full(store: &'a mut [u64], count: usize) -> (Self, &'a mut [u64]) {
+        if count > store.len() * 64 {
+            panic!("Storage provided not large enough.");
+        }
+        let (bitmap, leftover) = Bitmap::ones(store).truncate(count);
+
+        (
+            Self {
+                store: bitmap,
+                count,
+                _phantom: PhantomData,
+            },
+            leftover,
+        )
+    }
     /// Constructs a new bitmap allocator with the specified availability. It also returns unneeded
     /// storage.
-    pub fn new_with_availability<'b, I, Q>(
+    pub fn new_available<I, Q>(
         store: &'a mut [u64],
         count: usize,
-        unavailable: I,
+        available: I,
     ) -> (Self, &'a mut [u64])
     where
         Q: Borrow<T>,
         I: IntoIterator<Item = Q>,
     {
-        let (mut this, leftover) = Self::new(store, count);
-        for unavail in unavailable.into_iter() {
-            this.store.set(unavail.borrow().index());
+        let (mut this, leftover) = Self::full(store, count);
+        for avail in available.into_iter() {
+            this.store.unset(avail.borrow().index());
         }
         (this, leftover)
     }
@@ -165,7 +181,7 @@ mod tests {
     fn simple() {
         let mut storage = vec![0u64; 1024];
         let mut current_allocations = HashSet::new();
-        let (mut bitalloc, leftover) = Bitalloc::new(&mut storage, 2500);
+        let (mut bitalloc, leftover) = Bitalloc::empty(&mut storage, 2500);
         // 2500 / 64 = 39.xx
         assert_eq!(leftover.len(), 1024 - 40);
 
@@ -208,7 +224,7 @@ mod tests {
     #[test]
     fn test_specific_allocations() {
         let mut storage = vec![0u64; 1];
-        let (mut bitalloc, _) = Bitalloc::new(&mut storage, 64);
+        let (mut bitalloc, _) = Bitalloc::empty(&mut storage, 64);
 
         bitalloc
             .allocate_specific(&Something::from_index(26))
@@ -253,15 +269,13 @@ mod tests {
     #[test]
     fn test_with_start_conditions() {
         let mut storage = vec![0u64; 1];
-        let (mut bitalloc, _) = Bitalloc::new_with_availability(
+        let (mut bitalloc, _) = Bitalloc::new_available(
             &mut storage,
             64,
-            vec![
-                Something::from_index(1),
-                Something::from_index(2),
-                Something::from_index(3),
-                Something::from_index(27),
-            ],
+            Some(Something::from_index(0))
+                .into_iter()
+                .chain((4..27).map(|i| Something::from_index(i)))
+                .chain((28..64).map(|i| Something::from_index(i))),
         );
 
         assert_eq!(

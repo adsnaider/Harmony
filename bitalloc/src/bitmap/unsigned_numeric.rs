@@ -43,11 +43,11 @@ impl UnsignedNumeric for u8 {
     const MAX: Self = u8::MAX;
 
     fn trailing_zeros(&self) -> usize {
-        (*self as u8).trailing_zeros() as usize
+        (*self).trailing_zeros() as usize
     }
 
     fn trailing_ones(&self) -> usize {
-        (*self as u8).trailing_ones() as usize
+        (*self).trailing_ones() as usize
     }
 }
 impl UnsignedNumeric for u16 {
@@ -57,11 +57,11 @@ impl UnsignedNumeric for u16 {
     const MAX: Self = u16::MAX;
 
     fn trailing_zeros(&self) -> usize {
-        (*self as u16).trailing_zeros() as usize
+        (*self).trailing_zeros() as usize
     }
 
     fn trailing_ones(&self) -> usize {
-        (*self as u16).trailing_ones() as usize
+        (*self).trailing_ones() as usize
     }
 }
 impl UnsignedNumeric for u32 {
@@ -71,11 +71,11 @@ impl UnsignedNumeric for u32 {
     const MAX: Self = u32::MAX;
 
     fn trailing_zeros(&self) -> usize {
-        (*self as u32).trailing_zeros() as usize
+        (*self).trailing_zeros() as usize
     }
 
     fn trailing_ones(&self) -> usize {
-        (*self as u32).trailing_ones() as usize
+        (*self).trailing_ones() as usize
     }
 }
 impl UnsignedNumeric for u64 {
@@ -85,11 +85,11 @@ impl UnsignedNumeric for u64 {
     const MAX: Self = u64::MAX;
 
     fn trailing_zeros(&self) -> usize {
-        (*self as u64).trailing_zeros() as usize
+        (*self).trailing_zeros() as usize
     }
 
     fn trailing_ones(&self) -> usize {
-        (*self as u64).trailing_ones() as usize
+        (*self).trailing_ones() as usize
     }
 }
 impl UnsignedNumeric for u128 {
@@ -99,10 +99,10 @@ impl UnsignedNumeric for u128 {
     const MAX: Self = u128::MAX;
 
     fn trailing_zeros(&self) -> usize {
-        (*self as u128).trailing_zeros() as usize
+        (*self).trailing_zeros() as usize
     }
 
     fn trailing_ones(&self) -> usize {
-        (*self as u128).trailing_ones() as usize
+        (*self).trailing_ones() as usize
     }
 }

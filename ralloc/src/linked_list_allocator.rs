@@ -44,6 +44,12 @@ pub struct LinkedListAllocator {
     coverage: MemoryRegion,
 }
 
+// SAFETY: The head and tail pointers are unique. There is no shared mutable
+// state, so the LinkedListAllocator is Send.
+unsafe impl Send for LinkedListAllocator {}
+// Note that the allocator is NOT sync. This is because the allocation APIs use
+// a shared reference and we perform internal mutations when called.
+
 impl LinkedListAllocator {
     /// Creates an iterator over the free list.
     ///
@@ -224,10 +230,6 @@ impl LinkedListAllocator {
     /// If `node` is either sentinel node.
     unsafe fn coalesce(&self, mut node: NonNull<Node>) -> NonNull<Node> {
         // SAFETY: No references exist and `node` is valid.
-        unsafe {
-            log::debug!("Coallescing node {:#?}", node.as_ref());
-        }
-        // SAFETY: No references exist and `node` is valid.
         let prev = unsafe { node.as_ref().prev().unwrap() };
         // SAFETY: No references exist and prev is distinct from `node` since the list is
         // well-structured.
@@ -262,10 +264,6 @@ impl LinkedListAllocator {
             }
         }
 
-        // SAFETY: `node` is valid because we've updated it and no references exist into the list.
-        unsafe {
-            log::debug!("Final node is {:#?}", node.as_ref());
-        }
         node
     }
 }
@@ -312,7 +310,6 @@ impl Iterator for Iter<'_> {
 // * Allocated pointers may be passed to the `grow`, `shrink`, and `deallocate` methods safely.
 unsafe impl Allocator for LinkedListAllocator {
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-        log::info!("Requesting allocation for {:?}", layout);
         // SAFETY: We iterate and don't have any mutable references during the iteration. The list
         // is maintained. The list is well-structured.
         let (mut node, split) = unsafe { self.iter() }
@@ -323,20 +320,14 @@ unsafe impl Allocator for LinkedListAllocator {
                     SplitNodeResult::Hijack | SplitNodeResult::Partition(_)
                 )
             })
-            .ok_or(AllocError {})
-            .inspect_err(|_| log::error!("Allocation error"))?;
+            .ok_or(AllocError {})?;
 
         // SAFETY: We don't have any more references into the list and iteration is done.
         let node = unsafe { node.as_mut() };
 
-        log::info!("Found suitable node: {:#?}", node);
-
         match split {
-            SplitNodeResult::Hijack => {
-                log::debug!("Hijacking node.")
-            }
+            SplitNodeResult::Hijack => {}
             SplitNodeResult::Partition(at) => {
-                log::debug!("Partition node at {}", at);
                 let remainder = node.shrink_to(at).unwrap();
                 // SAFETY: We've shrunk the previous node, so the region is completely managed by
                 // the new Node. This works because the list is well-structured.
@@ -375,12 +366,7 @@ unsafe impl Allocator for LinkedListAllocator {
         ))
     }
 
-    unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-        log::info!(
-            "Deallocation of {:p} with layout: {:?}",
-            ptr.as_ptr(),
-            layout
-        );
+    unsafe fn deallocate(&self, ptr: NonNull<u8>, _layout: Layout) {
         // SAFETY: For a `ptr` to be allocated, there must have been a `node` right behind it (with
         // no padding), since otherwise, the allocation would have been a misfit. No references
         // exist into the list at this point.
@@ -388,8 +374,6 @@ unsafe impl Allocator for LinkedListAllocator {
         // manipulation is a bit wonky when it comes to pointer offsets, so this may not be
         // allowed.
         let node = unsafe { &mut *(ptr.as_ptr().sub(core::mem::size_of::<Node>()) as *mut Node) };
-
-        log::info!("Deallocating node {:#?}", node);
 
         let mut prev = None;
         // SAFETY: The only mutable reference alive is `node`. Notice that `node` can't be in the
@@ -404,7 +388,6 @@ unsafe impl Allocator for LinkedListAllocator {
             // SAFETY: prev hasn't been dereferenced. Must be distnct from `node` since `node`
             // wasn't on the list to begin with. Additionally, the list is well-structured.
             unsafe {
-                log::debug!("Linking node after {:#?}", prev.as_ref(),);
                 Self::insert_after(prev.as_mut(), node);
                 // Note: List is still well-structured.
             }
@@ -431,17 +414,14 @@ unsafe impl Allocator for LinkedListAllocator {
 unsafe impl MemoryRegionAllocator for LinkedListAllocator {
     unsafe fn from_region(memory_region: MemoryRegion) -> Option<Self> {
         // SAFETY: We are passed ownership of the memory region.
-        let (pre, node, leftover) = unsafe { memory_region.reinterpret_aligned()? };
-        log::debug!("Wrote head sentinel. Wasted {} bytes", pre.len());
+        let (_pre, node, leftover) = unsafe { memory_region.reinterpret_aligned()? };
         let head = node.write(Node::sentinel());
         // SAFETY: We still have ownership of `leftover`.
-        let (pre, node, leftover) = unsafe { leftover.reinterpret_aligned()? };
+        let (_pre, node, leftover) = unsafe { leftover.reinterpret_aligned()? };
         let tail = node.write(Node::sentinel());
-        log::debug!("Wrote tail sentinel. Wasted {} bytes", pre.len());
 
         // SAFETY: We stil have ownership of leftover.
-        let (pre, node) = unsafe { Node::claim_region(leftover)? };
-        log::debug!("Wrote intial buffer node. Wasted {} bytes", pre.len());
+        let (_pre, node) = unsafe { Node::claim_region(leftover)? };
 
         Node::link(head, node);
         Node::link(node, tail);
@@ -507,11 +487,10 @@ unsafe impl MemoryRegionAllocator for LinkedListAllocator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::{init_logging, Arena};
+    use crate::test_utils::Arena;
 
     #[test]
     fn one_alloc() {
-        init_logging();
         let arena = Arena::new(4096);
         let alloc = unsafe { LinkedListAllocator::from_region(arena.region()) }.unwrap();
 
@@ -521,7 +500,6 @@ mod tests {
 
     #[test]
     fn multiple_alloc() {
-        init_logging();
         let arena = Arena::new(4096);
         let alloc = unsafe { LinkedListAllocator::from_region(arena.region()) }.unwrap();
 
@@ -539,7 +517,6 @@ mod tests {
 
     #[test]
     fn vec_growing_alloc() {
-        init_logging();
         let arena = Arena::new(4096);
         let alloc = unsafe { LinkedListAllocator::from_region(arena.region()) }.unwrap();
 
@@ -556,7 +533,6 @@ mod tests {
 
     #[test]
     fn multiple_alloc_and_frees() {
-        init_logging();
         let arena = Arena::new(4096);
         let alloc = unsafe { LinkedListAllocator::from_region(arena.region()) }.unwrap();
 
