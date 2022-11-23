@@ -78,6 +78,12 @@ run: boot_image
 		-drive format=raw,file=fat:rw:$(IMAGE_ROOT) \
 		$(QEMUFLAGS)
 
+run_with_gdb: boot_image
+	qemu-system-$(ARCH) \
+		-drive if=pflash,format=raw,readonly,file=/usr/share/ovmf/OVMF.fd \
+		-drive format=raw,file=fat:rw:$(IMAGE_ROOT) \
+		-s -S $(QEMUFLAGS)
+
 clean:
 	rm -rf build/
 	cargo clean

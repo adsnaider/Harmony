@@ -59,11 +59,14 @@ pub unsafe fn kernel_handoff(
     bootinfo: &'static mut Bootinfo,
     stack: &'static mut [u8],
 ) -> ! {
+    const _: () = {
+        assert!(STACK_TOP % 16 == 0);
+    };
     asm!(
         "mov rsp, {}",
         "push 0", // Return pointer. (no return).
         "jmp {}",
-        in(reg) stack.as_ptr_range().end as usize - 1,
+        in(reg) stack.as_ptr_range().end as usize,
         in(reg) entry,
         in("rdi") bootinfo as *mut Bootinfo as usize,
     );
