@@ -8,7 +8,8 @@ use spin::Mutex;
 use x86_64::instructions::port::Port;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 
-use crate::{gdt, println, try_print};
+use super::gdt;
+use crate::{println, try_print};
 
 const PIC1_OFFSET: u8 = 32;
 const PIC2_OFFSET: u8 = PIC1_OFFSET + 8;
@@ -57,7 +58,7 @@ pub fn init() {
 }
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
-    let _ = try_print!(".");
+    crate::sys::time::tick();
     // SAFETY: Notify timer interrupt vector.
     unsafe {
         PICS.lock().notify_end_of_interrupt(TIMER_INT);

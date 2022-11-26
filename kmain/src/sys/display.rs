@@ -110,7 +110,7 @@ impl log::Log for DisplayLogger {
 /// Prints the arguments to the console. May panic!.
 #[macro_export]
 macro_rules! print {
-    ($($arg:tt)*) => {$crate::display::_print(format_args!($($arg)*))};
+    ($($arg:tt)*) => {$crate::sys::_print(format_args!($($arg)*))};
 }
 
 /// Prints the arguments to the console and moves to the next line. May panic!.
@@ -123,7 +123,7 @@ macro_rules! println {
 /// Prints the arguments to the console. Returns an error on failure.
 #[macro_export]
 macro_rules! try_print {
-    ($($arg:tt)*) => {$crate::display::_try_print(format_args!($($arg)*))};
+    ($($arg:tt)*) => {$crate::sys::_try_print(format_args!($($arg)*))};
 }
 
 /// Prints the arguments to the console and moves to the next line. Returns an error on failure.
