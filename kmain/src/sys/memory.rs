@@ -5,7 +5,7 @@ use core::ptr::NonNull;
 
 use bitalloc::{Bitalloc, Indexable};
 use bootinfo::{MemoryMap, MemoryType};
-use ralloc::{LinkedListAllocator, MemoryRegion, MemoryRegionAllocator};
+use linked_list_allocator::Heap;
 use x86_64::structures::paging::{
     FrameAllocator, Mapper, OffsetPageTable, Page, PageSize, PageTable, PageTableFlags, PhysFrame,
     Size4KiB, Translate,
@@ -44,7 +44,7 @@ unsafe impl FrameAllocator<Size4KiB> for SystemFrameAllocator {
 
 static PAGE_MAPPER: Singleton<OffsetPageTable<'static>> = Singleton::uninit();
 static FRAME_ALLOCATOR: Singleton<SystemFrameAllocator> = Singleton::uninit();
-static MEMORY_ALLOCATOR: Singleton<LinkedListAllocator> = Singleton::uninit();
+static MEMORY_ALLOCATOR: Singleton<Heap> = Singleton::uninit();
 
 #[allow(clippy::undocumented_unsafe_blocks)]
 // SAFETY: Address is well-aligned and canonical.
@@ -95,21 +95,23 @@ unsafe impl Allocator for MemoryManager {
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
         let mut allocator = MEMORY_ALLOCATOR.lock();
         loop {
-            match allocator.allocate(layout) {
-                Ok(ptr) => return Ok(ptr),
+            match allocator.allocate_first_fit(layout) {
+                // SAFETY: `ptr` should not be null and size should be at least `layout.size()`.
+                Ok(ptr) => unsafe {
+                    return Ok(NonNull::new_unchecked(core::ptr::slice_from_raw_parts_mut(
+                        ptr.as_ptr(),
+                        layout.size(),
+                    )));
+                },
                 Err(_) => {
                     let mut frame_allocator = FRAME_ALLOCATOR.lock();
                     let mut page_mapper = PAGE_MAPPER.lock();
-                    let frame = frame_allocator
-                        .allocate_frame()
-                        .ok_or(AllocError {})
-                        .unwrap();
-                    let heap_range = allocator.coverage();
+                    let frame = frame_allocator.allocate_frame().ok_or(AllocError {})?;
                     // SAFETY: The heap page is well aligned since we always allocate multiple of page
                     // sizes to extend the allocator.
                     let next_heap_page = unsafe {
                         Page::from_start_address_unchecked(VirtAddr::new_unsafe(
-                            heap_range.end() as u64
+                            allocator.top() as u64
                         ))
                     };
 
@@ -133,7 +135,7 @@ unsafe impl Allocator for MemoryManager {
                             .or(Err(AllocError))?
                             .flush();
 
-                        allocator.extend(4096).or(Err(AllocError)).unwrap();
+                        allocator.extend(4096);
                     }
                 }
             }
@@ -268,12 +270,6 @@ where
     }
 
     // SAFETY: The memory has been allocated and will only be used by the allocator.
-    let allocator = unsafe {
-        LinkedListAllocator::from_region(MemoryRegion::from_addr_and_size(
-            HEAP_START.as_mut_ptr(),
-            4096,
-        ))
-        .expect("Couldn't initialize the linked list allocator.")
-    };
+    let allocator = unsafe { Heap::new(HEAP_START.as_mut_ptr(), 4096) };
     MEMORY_ALLOCATOR.initialize(allocator);
 }
