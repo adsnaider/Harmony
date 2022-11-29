@@ -12,6 +12,7 @@
 #![warn(unsafe_op_in_unsafe_fn)]
 #![warn(clippy::undocumented_unsafe_blocks)]
 
+pub mod ksync;
 pub(crate) mod singleton;
 pub mod sys;
 
@@ -22,6 +23,7 @@ use core::time::Duration;
 
 use bootinfo::Bootinfo;
 
+use crate::ksync::executor::Executor;
 use crate::sys::time::sleep_sync;
 
 #[cfg(target_os = "none")]
@@ -41,8 +43,13 @@ pub extern "C" fn kmain(bootinfo: &'static mut Bootinfo) -> ! {
     }
     log::info!("Initialization sequence complete.");
 
-    loop {
-        print!(".");
-        sleep_sync(Duration::from_secs(1));
-    }
+    let mut runtime = Executor::new();
+    runtime.spawn(async {
+        loop {
+            print!(".");
+            sleep_sync(Duration::from_secs(1));
+        }
+    });
+
+    runtime.start();
 }

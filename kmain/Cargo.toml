@@ -19,3 +19,13 @@ x86_64 = "0.14"
 lazy_static = { version = "1.4", features = ["spin_no_std"] }
 pic8259 = "0.10.2"
 pc-keyboard = "0.5"
+
+[dependencies.crossbeam]
+version = "0.8"
+default-features = false
+features = ["alloc"]
+
+[dependencies.futures]
+version = "0.3"
+default-features = false
+features = ["alloc"]
