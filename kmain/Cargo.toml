@@ -14,12 +14,15 @@ framed = { path = "../framed" }
 bitalloc = { path = "../bitalloc" }
 linked_list_allocator = "0.10"
 log = "0.4"
-spin = "0.9"
 x86_64 = "0.14"
-lazy_static = { version = "1.4", features = ["spin_no_std"] }
 pic8259 = "0.10.2"
 pc-keyboard = "0.5"
 critical-section = { version = "1.1", features = ["restore-state-bool"] }
+
+[dependencies.once_cell]
+version = "1.16"
+default-features = false
+features = ["critical-section"]
 
 [dependencies.crossbeam]
 version = "0.8"

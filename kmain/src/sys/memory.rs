@@ -5,6 +5,7 @@ use core::ptr::NonNull;
 
 use bitalloc::{Bitalloc, Indexable};
 use bootinfo::{MemoryMap, MemoryType};
+use critical_section::CriticalSection;
 use linked_list_allocator::Heap;
 use x86_64::structures::paging::{
     FrameAllocator, Mapper, OffsetPageTable, Page, PageSize, PageTable, PageTableFlags, PhysFrame,
@@ -79,72 +80,80 @@ fn is_region_usable(region: &bootinfo::MemoryRegion) -> bool {
 ///
 /// If called more than once.
 pub unsafe fn init(physical_memory_offset: VirtAddr, mut memory_map: MemoryMap<'_>) {
-    init_frame_allocator(physical_memory_offset, &mut memory_map);
-    log::info!("Initialized frame allocator.");
+    critical_section::with(|cs| {
+        init_frame_allocator(physical_memory_offset, &mut memory_map, cs);
+        log::info!("Initialized frame allocator.");
 
-    init_page_map(physical_memory_offset);
-    log::info!("Page mapper initialized");
+        init_page_map(physical_memory_offset, cs);
+        log::info!("Page mapper initialized");
 
-    init_allocator(&mut *PAGE_MAPPER.lock(), &mut *FRAME_ALLOCATOR.lock());
-    log::info!("Allocator initialized");
+        init_allocator(
+            &mut *PAGE_MAPPER.lock(cs),
+            &mut *FRAME_ALLOCATOR.lock(cs),
+            cs,
+        );
+        log::info!("Allocator initialized");
+    })
 }
 
 // SAFETY: We implement the allocator the linked list allocator and the frame allocator
 // to map pages as needed.
 unsafe impl Allocator for MemoryManager {
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-        let mut allocator = MEMORY_ALLOCATOR.lock();
-        loop {
-            match allocator.allocate_first_fit(layout) {
-                // SAFETY: `ptr` should not be null and size should be at least `layout.size()`.
-                Ok(ptr) => unsafe {
-                    return Ok(NonNull::new_unchecked(core::ptr::slice_from_raw_parts_mut(
-                        ptr.as_ptr(),
-                        layout.size(),
-                    )));
-                },
-                Err(_) => {
-                    let mut frame_allocator = FRAME_ALLOCATOR.lock();
-                    let mut page_mapper = PAGE_MAPPER.lock();
-                    let frame = frame_allocator.allocate_frame().ok_or(AllocError {})?;
-                    // SAFETY: The heap page is well aligned since we always allocate multiple of page
-                    // sizes to extend the allocator.
-                    let next_heap_page = unsafe {
-                        Page::from_start_address_unchecked(VirtAddr::new_unsafe(
-                            allocator.top() as u64
-                        ))
-                    };
+        critical_section::with(|cs| {
+            let mut allocator = MEMORY_ALLOCATOR.lock(cs);
+            loop {
+                match allocator.allocate_first_fit(layout) {
+                    // SAFETY: `ptr` should not be null and size should be at least `layout.size()`.
+                    Ok(ptr) => unsafe {
+                        return Ok(NonNull::new_unchecked(core::ptr::slice_from_raw_parts_mut(
+                            ptr.as_ptr(),
+                            layout.size(),
+                        )));
+                    },
+                    Err(_) => {
+                        let mut frame_allocator = FRAME_ALLOCATOR.lock(cs);
+                        let mut page_mapper = PAGE_MAPPER.lock(cs);
+                        let frame = frame_allocator.allocate_frame().ok_or(AllocError {})?;
+                        // SAFETY: The heap page is well aligned since we always allocate multiple of page
+                        // sizes to extend the allocator.
+                        let next_heap_page = unsafe {
+                            Page::from_start_address_unchecked(VirtAddr::new_unsafe(
+                                allocator.top() as u64,
+                            ))
+                        };
 
-                    if next_heap_page.start_address() >= HEAP_MAX {
-                        return Err(AllocError);
-                    }
+                        if next_heap_page.start_address() >= HEAP_MAX {
+                            return Err(AllocError);
+                        }
 
-                    // SAFETY: We artificially set the limits of the virtual memory to prevent
-                    // virtual memory collisions and the physical frame has just been allocated.
-                    // See `virtual_memory_segmentation.md` for more information.
-                    unsafe {
-                        page_mapper
-                            .map_to(
-                                next_heap_page,
-                                frame,
-                                PageTableFlags::PRESENT
-                                    | PageTableFlags::WRITABLE
-                                    | PageTableFlags::NO_EXECUTE,
-                                &mut *frame_allocator,
-                            )
-                            .or(Err(AllocError))?
-                            .flush();
+                        // SAFETY: We artificially set the limits of the virtual memory to prevent
+                        // virtual memory collisions and the physical frame has just been allocated.
+                        // See `virtual_memory_segmentation.md` for more information.
+                        unsafe {
+                            page_mapper
+                                .map_to(
+                                    next_heap_page,
+                                    frame,
+                                    PageTableFlags::PRESENT
+                                        | PageTableFlags::WRITABLE
+                                        | PageTableFlags::NO_EXECUTE,
+                                    &mut *frame_allocator,
+                                )
+                                .or(Err(AllocError))?
+                                .flush();
 
-                        allocator.extend(4096);
+                            allocator.extend(4096);
+                        }
                     }
                 }
             }
-        }
+        })
     }
 
     unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
         // SAFETY: Function precondition.
-        unsafe { MEMORY_ALLOCATOR.lock().deallocate(ptr, layout) }
+        critical_section::with(|cs| unsafe { MEMORY_ALLOCATOR.lock(cs).deallocate(ptr, layout) })
     }
 }
 
@@ -164,7 +173,7 @@ unsafe impl GlobalAlloc for MemoryManager {
     }
 }
 
-fn init_frame_allocator(pmo: VirtAddr, memory_map: &mut MemoryMap<'_>) {
+fn init_frame_allocator(pmo: VirtAddr, memory_map: &mut MemoryMap<'_>, cs: CriticalSection) {
     // UEFI makes no guarantees that the memory map is sorted in ascending order so we have to
     // get the last frame by iterating through all of them.
     let nframes = memory_map.regions.iter().fold(0usize, |last, reg| {
@@ -216,11 +225,11 @@ fn init_frame_allocator(pmo: VirtAddr, memory_map: &mut MemoryMap<'_>) {
                     })
                 }),
         );
-        FRAME_ALLOCATOR.initialize(SystemFrameAllocator(bitalloc));
+        FRAME_ALLOCATOR.initialize(SystemFrameAllocator(bitalloc), cs);
     }
 }
 
-fn init_page_map(pmo: VirtAddr) {
+fn init_page_map(pmo: VirtAddr, cs: CriticalSection) {
     let l4_table = {
         let (frame, _) = x86_64::registers::control::Cr3::read();
         let virt = pmo + frame.start_address().as_u64();
@@ -238,10 +247,10 @@ fn init_page_map(pmo: VirtAddr) {
     assert!(page_map.translate_addr(pmo + 0xABCDu64) == Some(PhysAddr::new(0xABCD)));
     assert!(page_map.translate_addr(pmo + 0xABAB_0000u64) == Some(PhysAddr::new(0xABAB_0000)));
 
-    PAGE_MAPPER.initialize(page_map);
+    PAGE_MAPPER.initialize(page_map, cs);
 }
 
-fn init_allocator<M, F>(page_map: &mut M, frame_allocator: &mut F)
+fn init_allocator<M, F>(page_map: &mut M, frame_allocator: &mut F, cs: CriticalSection)
 where
     M: Mapper<Size4KiB> + Translate,
     F: FrameAllocator<Size4KiB>,
@@ -271,5 +280,5 @@ where
 
     // SAFETY: The memory has been allocated and will only be used by the allocator.
     let allocator = unsafe { Heap::new(HEAP_START.as_mut_ptr(), 4096) };
-    MEMORY_ALLOCATOR.initialize(allocator);
+    MEMORY_ALLOCATOR.initialize(allocator, cs);
 }

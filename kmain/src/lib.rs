@@ -2,6 +2,7 @@
 //! components.
 #![no_std]
 #![feature(allocator_api)]
+#![feature(const_fn_floating_point_arithmetic)]
 #![feature(negative_impls)]
 #![feature(default_alloc_error_handler)]
 #![feature(abi_x86_interrupt)]
@@ -30,7 +31,7 @@ use crate::sys::time::sleep_sync;
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     // Can't do much about errors at this point.
-    let _ = try_println!("{}", info);
+    let _ = println!("{}", info);
     loop {}
 }
 

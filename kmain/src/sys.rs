@@ -16,7 +16,7 @@ mod memory;
 
 pub mod time;
 
-pub use display::{_print, _try_print};
+pub use display::_print;
 
 use self::display::Display;
 
@@ -29,7 +29,7 @@ use self::display::Display;
 ///
 /// The information in `bootinfo` must be accurate.
 pub(super) unsafe fn init(bootinfo: &'static mut Bootinfo) {
-    critical_section::with(|_token| {
+    critical_section::with(|cs| {
         // SAFETY: Bootloader passed the framebuffer correctly.
         let mut display = unsafe { Display::new(bootinfo.framebuffer) };
 
@@ -77,10 +77,10 @@ pub(super) unsafe fn init(bootinfo: &'static mut Bootinfo) {
         }
         log::info!("Allocated a huge vector!");
 
-        time::init(drivers::take_pit().unwrap());
+        time::init(drivers::take_pit(cs).unwrap());
 
         gdt::init();
-        interrupts::init();
+        interrupts::init(cs);
         log::info!("Interrupt handlers initialized");
     });
     x86_64::instructions::interrupts::enable();

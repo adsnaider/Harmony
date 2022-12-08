@@ -10,11 +10,16 @@ use crate::singleton::Singleton;
 static TICKS: AtomicU64 = AtomicU64::new(0);
 static TIMER: Singleton<PitTimer> = Singleton::uninit();
 
+const PIT_RESET_VALUE: u16 = 5966;
+const PIT_FREQ: f32 = PitTimer::freq(PIT_RESET_VALUE);
+
 /// Initializes the time module.
 pub(super) fn init(pit: Pit8253) {
     // Initialize timer to almost 200hz
-    let timer = pit.into_timer(5966);
-    TIMER.initialize(timer);
+    critical_section::with(|cs| {
+        let timer = pit.into_timer(PIT_RESET_VALUE);
+        TIMER.initialize(timer, cs);
+    })
 }
 
 /// Increments the internal tick counter.
@@ -54,6 +59,6 @@ impl Instant {
             return Duration::ZERO;
         }
         let diff = now.tick - self.tick;
-        Duration::from_secs_f32(diff as f32 / TIMER.lock().freq())
+        Duration::from_secs_f32(diff as f32 / PIT_FREQ)
     }
 }

@@ -91,7 +91,7 @@ impl PitTimer {
     }
 
     /// Get's the frequency associated with the timer interrupts in Hz.
-    pub fn freq(&self) -> f32 {
-        OSCILATING_FREQ / self.reset_value as f32
+    pub const fn freq(reset_value: u16) -> f32 {
+        OSCILATING_FREQ / reset_value as f32
     }
 }

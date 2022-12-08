@@ -12,13 +12,15 @@ static CONSOLE: Singleton<Console<Display>> = Singleton::uninit();
 /// The global logger.
 static LOGGER: DisplayLogger = DisplayLogger {};
 
-/// Initializes the console and logger. It's reasonable to use the print!, try_print!,
-/// println!, try_println!, and log::* macros after this call.
+/// Initializes the console and logger. It's reasonable to use the print!,
+/// println! and log::* macros after this call.
 pub(super) fn init(console: Console<Display>) {
-    CONSOLE.initialize(console);
-    if let Err(e) = log::set_logger(&LOGGER).map(|()| log::set_max_level(LevelFilter::Info)) {
-        crate::println!("Couldn't initialize logging services: {e}");
-    }
+    critical_section::with(|cs| {
+        CONSOLE.initialize(console, cs);
+        if let Err(e) = log::set_logger(&LOGGER).map(|()| log::set_max_level(LevelFilter::Info)) {
+            crate::println!("Couldn't initialize logging services: {e}");
+        }
+    })
 }
 
 /// The display struct implements the `Frame` trait from the framebuffer pointer.
@@ -120,49 +122,13 @@ macro_rules! println {
     ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
 }
 
-/// Prints the arguments to the console. Returns an error on failure.
-#[macro_export]
-macro_rules! try_print {
-    ($($arg:tt)*) => {$crate::sys::_try_print(format_args!($($arg)*))};
-}
-
-/// Prints the arguments to the console and moves to the next line. Returns an error on failure.
-#[macro_export]
-macro_rules! try_println {
-    () => ($crate::try_print!("\n"));
-    ($($arg:tt)*) => ($crate::try_print!("{}\n", format_args!($($arg)*)));
-}
-
 /// Prints the arguments to the screen, panicking if unable to.
 #[doc(hidden)]
 pub fn _print(args: core::fmt::Arguments) {
     use core::fmt::Write;
-    CONSOLE.lock().write_fmt(args).unwrap();
-}
-
-/// Returned when the try_print! macros fail to print to the screen.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum PrintError {
-    /// Couldn't print due to a borrowing error (in use)
-    LockError,
-    /// General fmt error.
-    PrintError,
-    /// Console hasn't been initialized.
-    UninitError,
-}
-
-/// Tries to print the args using the default printer.
-///
-/// # Errors
-///
-/// * If the console is currently in use.
-/// * If the console wasn't able to print the arguments.
-#[doc(hidden)]
-pub fn _try_print(args: core::fmt::Arguments) -> Result<(), PrintError> {
-    use core::fmt::Write;
-    CONSOLE
-        .try_lock()
-        .ok_or(PrintError::LockError)?
-        .write_fmt(args)
-        .map_err(|_| PrintError::PrintError)
+    // TODO: As with allocation, we should ideally find a way to guarantee that interrupts
+    // are not using this code so that interrupts don't have to be disabled.
+    critical_section::with(|cs| {
+        CONSOLE.lock(cs).write_fmt(args).unwrap();
+    })
 }
