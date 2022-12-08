@@ -5,7 +5,6 @@ use alloc::sync::Arc;
 use core::future::Future;
 
 use crossbeam::queue::SegQueue;
-use x86_64::instructions::interrupts::without_interrupts;
 
 mod task;
 use self::task::{Task, TaskId};
@@ -32,7 +31,7 @@ impl Executor {
         F: Future<Output = ()> + Send + 'static,
     {
         let task = Task::new(task);
-        without_interrupts(|| {
+        critical_section::with(|_cs| {
             let tid = task.id();
             self.ready.push(tid);
             assert!(

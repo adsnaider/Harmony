@@ -1,7 +1,6 @@
 //! Implementaion of the 8253 PIT.
 #![allow(dead_code)]
 
-use x86_64::instructions::interrupts::without_interrupts;
 use x86_64::instructions::port::Port;
 
 /// Frequency of the internal oscillator in Hz.
@@ -50,7 +49,7 @@ impl PitTimer {
     /// We currently don't allow a `reset_value` of 0.
     fn init(reset_value: u16) -> Self {
         let mut this = Self { reset_value };
-        without_interrupts(|| unsafe {
+        critical_section::with(|_cs| unsafe {
             // Set PIT to channel 0, mode 3 in low/high byte.
             MODE_PORT.write(0b00110110);
             this.reset(reset_value);
@@ -65,7 +64,7 @@ impl PitTimer {
             reset_value != 0,
             "Reset value of 0 is currently not supported."
         );
-        without_interrupts(|| unsafe {
+        critical_section::with(|_cs| unsafe {
             // Low byte
             CHANNEL_0_PORT.write((reset_value & 0xFF) as u8);
             // High byte
@@ -75,7 +74,7 @@ impl PitTimer {
 
     /// Read's the PIT's current count.
     pub fn read_count(&self) -> u16 {
-        without_interrupts(|| {
+        critical_section::with(|_cs| {
             let mut count: u16;
             unsafe {
                 MODE_PORT.write(0b00000000);

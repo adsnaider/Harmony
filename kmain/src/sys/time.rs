@@ -3,8 +3,6 @@
 use core::sync::atomic::{AtomicU64, Ordering};
 use core::time::Duration;
 
-use x86_64::instructions::interrupts::without_interrupts;
-
 use super::drivers::pit8253::PitTimer;
 use super::drivers::Pit8253;
 use crate::singleton::Singleton;
@@ -14,11 +12,9 @@ static TIMER: Singleton<PitTimer> = Singleton::uninit();
 
 /// Initializes the time module.
 pub(super) fn init(pit: Pit8253) {
-    without_interrupts(|| {
-        // Initialize timer to almost 200hz
-        let timer = pit.into_timer(5966);
-        TIMER.initialize(timer);
-    });
+    // Initialize timer to almost 200hz
+    let timer = pit.into_timer(5966);
+    TIMER.initialize(timer);
 }
 
 /// Increments the internal tick counter.
