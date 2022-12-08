@@ -22,7 +22,7 @@ impl Task {
     {
         static CURRENT_ID: AtomicU64 = AtomicU64::new(0);
         Self {
-            id: CURRENT_ID.load(Ordering::Relaxed),
+            id: CURRENT_ID.fetch_add(1, Ordering::Relaxed),
             task: Box::pin(task),
         }
     }
