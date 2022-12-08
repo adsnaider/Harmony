@@ -12,13 +12,13 @@ pub type TaskId = u64;
 
 pub struct Task {
     id: TaskId,
-    task: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
+    task: Pin<Box<dyn Future<Output = ()> + 'static>>,
 }
 
 impl Task {
     pub fn new<F>(task: F) -> Self
     where
-        F: Future<Output = ()> + Send + 'static,
+        F: Future<Output = ()> + 'static,
     {
         static CURRENT_ID: AtomicU64 = AtomicU64::new(0);
         Self {

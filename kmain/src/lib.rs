@@ -20,12 +20,9 @@ pub mod sys;
 #[macro_use]
 extern crate alloc;
 
-use core::time::Duration;
-
 use bootinfo::Bootinfo;
 
 use crate::ksync::executor::Executor;
-use crate::sys::time::sleep_sync;
 
 #[cfg(target_os = "none")]
 #[panic_handler]
@@ -41,18 +38,11 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 #[no_mangle]
 pub extern "C" fn kmain(bootinfo: &'static mut Bootinfo) -> ! {
     // SAFETY: The bootinfo is directly provided by the bootloader.
-    unsafe {
-        sys::init(bootinfo);
-    }
+    let tasks = unsafe { sys::init(bootinfo) };
     log::info!("Initialization sequence complete.");
 
     let mut runtime = Executor::new();
-    runtime.spawn(async {
-        loop {
-            print!(".");
-            sleep_sync(Duration::from_secs(1));
-        }
-    });
+    runtime.spawn(tasks);
 
     runtime.start();
 }

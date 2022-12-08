@@ -28,7 +28,7 @@ impl Executor {
     /// Spawns a new task.
     pub fn spawn<F>(&mut self, task: F)
     where
-        F: Future<Output = ()> + Send + 'static,
+        F: Future<Output = ()> + 'static,
     {
         let task = Task::new(task);
         critical_section::with(|_cs| {

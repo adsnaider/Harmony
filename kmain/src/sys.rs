@@ -16,9 +16,13 @@ mod memory;
 
 pub mod time;
 
+use core::future::Future;
+
 pub use display::{_print, _try_print};
 
 use self::display::Display;
+use crate::sys::interrupts::async_interrupt::{BoundedBufferInterrupt, InterruptWakerCore};
+use crate::sys::interrupts::TIMER_INTERRUPT_CORE;
 
 /// System intialization routine.
 ///
@@ -28,8 +32,8 @@ use self::display::Display;
 /// # Safety
 ///
 /// The information in `bootinfo` must be accurate.
-pub(super) unsafe fn init(bootinfo: &'static mut Bootinfo) {
-    critical_section::with(|cs| {
+pub(super) unsafe fn init(bootinfo: &'static mut Bootinfo) -> impl Future<Output = ()> + 'static {
+    let tasks = critical_section::with(|cs| {
         // SAFETY: Bootloader passed the framebuffer correctly.
         let mut display = unsafe { Display::new(bootinfo.framebuffer) };
 
@@ -77,13 +81,27 @@ pub(super) unsafe fn init(bootinfo: &'static mut Bootinfo) {
         }
         log::info!("Allocated a huge vector!");
 
-        time::init(drivers::take_pit(cs).unwrap());
+        TIMER_INTERRUPT_CORE
+            .set(BoundedBufferInterrupt::new(128))
+            .unwrap_or_else(|_| panic!("Someone initialized the timer future :O"));
+        let tick_task = time::init(
+            drivers::take_pit(cs).unwrap(),
+            interrupts::TIMER_INTERRUPT_CORE
+                .get()
+                .unwrap()
+                .take_future()
+                .expect("Someone stole the timer future :O"),
+        );
 
         gdt::init();
         interrupts::init(cs);
         log::info!("Interrupt handlers initialized");
+        async {
+            tick_task.await;
+        }
     });
     x86_64::instructions::interrupts::enable();
+    tasks
 }
 
 struct SingleThreadCS();
