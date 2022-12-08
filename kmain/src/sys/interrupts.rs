@@ -3,7 +3,7 @@
 use core::cell::RefCell;
 
 use critical_section::{CriticalSection, Mutex};
-use once_cell::sync::{Lazy, OnceCell};
+use once_cell::sync::Lazy;
 use pc_keyboard::layouts::Us104Key;
 use pc_keyboard::{DecodedKey, HandleControl, Keyboard, ScancodeSet1};
 use pic8259::ChainedPics;
@@ -12,7 +12,7 @@ use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, Pag
 
 pub mod async_interrupt;
 
-use self::async_interrupt::{BoundedBufferInterrupt, InterruptWakerCore};
+use self::async_interrupt::{InterruptCounterCore, InterruptWakerCore};
 use super::gdt;
 
 const PIC1_OFFSET: u8 = 32;
@@ -26,7 +26,7 @@ static PICS: Mutex<RefCell<ChainedPics>> = Mutex::new(
 const TIMER_INT: u8 = PIC1_OFFSET;
 const KEYBOARD_INT: u8 = PIC1_OFFSET + 1;
 
-pub(super) static TIMER_INTERRUPT_CORE: OnceCell<BoundedBufferInterrupt<()>> = OnceCell::new();
+pub(super) static TIMER_INTERRUPT_CORE: InterruptCounterCore = InterruptCounterCore::new();
 
 /// Initializes the interrupt descriptor table.
 fn init_idt() {
@@ -65,9 +65,7 @@ pub fn init(cs: CriticalSection) {
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
     // SAFETY: An interrupt cannot be interrupted. This is reasonable in single threaded code.
     let cs = unsafe { CriticalSection::new() };
-    if let Some(core) = TIMER_INTERRUPT_CORE.get() {
-        core.update_and_wake((), cs);
-    }
+    TIMER_INTERRUPT_CORE.update_and_wake((), cs);
     // SAFETY: Notify timer interrupt vector.
     unsafe {
         PICS.borrow_ref_mut(cs).notify_end_of_interrupt(TIMER_INT);

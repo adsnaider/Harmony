@@ -1,8 +1,11 @@
 //! Utilities for connecting interrupts with asynchronous code (futures).
 
+#![allow(dead_code)]
+
 use core::cell::UnsafeCell;
 use core::future::Future;
 use core::pin::Pin;
+use core::sync::atomic::{AtomicUsize, Ordering};
 use core::task::{Context, Poll, Waker};
 
 use atomic_refcell::AtomicRefCell;
@@ -128,6 +131,63 @@ impl<T> InterruptWakerCore for BoundedBufferInterrupt<T> {
 
     fn take_next_value(&self) -> Option<Self::Output> {
         self.buffer.pop()
+    }
+
+    fn wake(&self, cs: CriticalSection) {
+        // SAFETY: Mutex guarantees uninterrupted access. Aliasing is guaranteed because
+        // waker isn't reborrowed down the stack.
+        if let Some(waker) = unsafe { &*self.waker.borrow(cs).get() } {
+            waker.wake_by_ref();
+        }
+    }
+}
+
+/// An implementation of `InterruptCore` that simply counts the number of interrupts it's received.
+pub struct InterruptCounterCore {
+    counter: AtomicUsize,
+    waker: Mutex<UnsafeCell<Option<Waker>>>,
+    future_handle: AtomicRefCell<Option<UniqueHandle>>,
+}
+
+impl InterruptCounterCore {
+    /// Constrct the `InterruptCounterCore`.
+    pub const fn new() -> Self {
+        Self {
+            counter: AtomicUsize::new(0),
+            waker: Mutex::new(UnsafeCell::new(None)),
+            future_handle: AtomicRefCell::new(Some(UniqueHandle {})),
+        }
+    }
+}
+
+impl InterruptWakerCore for InterruptCounterCore {
+    type InterruptInput = ();
+    type Output = usize;
+
+    fn take_future(&self) -> Option<InterruptFuture<Self>> {
+        self.future_handle.borrow_mut().take()?;
+        Some(InterruptFuture::new(self))
+    }
+
+    fn update(&self, _input: ()) {
+        self.counter.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn take_next_value(&self) -> Option<Self::Output> {
+        let count = self.counter.swap(0, Ordering::Relaxed);
+        if count > 0 {
+            Some(count)
+        } else {
+            None
+        }
+    }
+
+    fn set_waker(&self, waker: Waker, cs: CriticalSection) {
+        // SAFETY: Mutex guarantees uninterrupted access. Aliasing is guaranteed because
+        // waker isn't reborrowed down the stack.
+        unsafe {
+            *self.waker.borrow(cs).get() = Some(waker);
+        }
     }
 
     fn wake(&self, cs: CriticalSection) {

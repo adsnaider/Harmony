@@ -21,7 +21,7 @@ use core::future::Future;
 pub use display::{_print, _try_print};
 
 use self::display::Display;
-use crate::sys::interrupts::async_interrupt::{BoundedBufferInterrupt, InterruptWakerCore};
+use crate::sys::interrupts::async_interrupt::InterruptWakerCore;
 use crate::sys::interrupts::TIMER_INTERRUPT_CORE;
 
 /// System intialization routine.
@@ -81,14 +81,9 @@ pub(super) unsafe fn init(bootinfo: &'static mut Bootinfo) -> impl Future<Output
         }
         log::info!("Allocated a huge vector!");
 
-        TIMER_INTERRUPT_CORE
-            .set(BoundedBufferInterrupt::new(128))
-            .unwrap_or_else(|_| panic!("Someone initialized the timer future :O"));
         let tick_task = time::init(
             drivers::take_pit(cs).unwrap(),
-            interrupts::TIMER_INTERRUPT_CORE
-                .get()
-                .unwrap()
+            TIMER_INTERRUPT_CORE
                 .take_future()
                 .expect("Someone stole the timer future :O"),
         );

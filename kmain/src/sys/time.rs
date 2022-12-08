@@ -9,7 +9,7 @@ use futures::Future;
 
 use super::drivers::pit8253::PitTimer;
 use super::drivers::Pit8253;
-use super::interrupts::async_interrupt::{BoundedBufferInterrupt, InterruptFuture};
+use super::interrupts::async_interrupt::{InterruptCounterCore, InterruptFuture};
 use crate::singleton::Singleton;
 
 static TICKS: AtomicU64 = AtomicU64::new(0);
@@ -27,7 +27,7 @@ const PIT_FREQ: f32 = PitTimer::freq(PIT_RESET_VALUE);
 /// * `timer_future`: The `InterruptFuture` associated with the timer interrupt handler.
 pub(super) fn init(
     pit: Pit8253,
-    timer_future: InterruptFuture<'static, BoundedBufferInterrupt<()>>,
+    timer_future: InterruptFuture<'static, InterruptCounterCore>,
 ) -> impl Future<Output = ()> + 'static {
     critical_section::with(|cs| {
         let timer = pit.into_timer(PIT_RESET_VALUE);
@@ -38,10 +38,10 @@ pub(super) fn init(
 }
 
 /// Asynchronous function that continuously updates the internal tick counter.
-async fn tick(mut timer_future: InterruptFuture<'static, BoundedBufferInterrupt<()>>) {
+async fn tick(mut timer_future: InterruptFuture<'static, InterruptCounterCore>) {
     loop {
-        timer_future.next().await;
-        TICKS.fetch_add(1, Ordering::Relaxed);
+        let ticks = timer_future.next().await;
+        TICKS.fetch_add(ticks as u64, Ordering::Relaxed);
         while let Some(waker) = timer::PENDING_TIMERS.pop() {
             waker.wake();
         }
