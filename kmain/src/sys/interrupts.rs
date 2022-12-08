@@ -11,7 +11,6 @@ use x86_64::instructions::port::Port;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 
 use super::gdt;
-use crate::println;
 
 const PIC1_OFFSET: u8 = 32;
 const PIC2_OFFSET: u8 = PIC1_OFFSET + 8;
@@ -89,17 +88,17 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
             if let Some(key) = keyboard.process_keyevent(event) {
                 match key {
                     DecodedKey::Unicode(character) => {
-                        let _ = print!("{}", character);
+                        let _ = try_print!("{}", character);
                     }
                     DecodedKey::RawKey(key) => {
-                        let _ = print!("{:?}", key);
+                        let _ = try_print!("{:?}", key);
                     }
                 }
             }
         }
         Ok(None) => {}
         Err(e) => {
-            let _ = print!("Keyboard error: {e:?}");
+            let _ = try_print!("Keyboard error: {e:?}");
         }
     }
 
@@ -111,7 +110,7 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
 }
 
 extern "x86-interrupt" fn breakpoint_handler(stack_frame: InterruptStackFrame) {
-    println!("EXCEPTION BREAKPOINT:\n{stack_frame:#?}");
+    try_println!("EXCEPTION BREAKPOINT:\n{stack_frame:#?}");
 }
 
 extern "x86-interrupt" fn general_protection_fault_handler(

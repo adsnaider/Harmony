@@ -31,7 +31,7 @@ use crate::sys::time::sleep_sync;
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     // Can't do much about errors at this point.
-    let _ = println!("{}", info);
+    let _ = try_println!("{}", info);
     loop {
         x86_64::instructions::hlt();
     }

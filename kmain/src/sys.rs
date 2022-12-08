@@ -16,7 +16,7 @@ mod memory;
 
 pub mod time;
 
-pub use display::_print;
+pub use display::{_print, _try_print};
 
 use self::display::Display;
 

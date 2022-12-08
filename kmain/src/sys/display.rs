@@ -1,26 +1,23 @@
 //! System display and console.
 
+use atomic_refcell::{AtomicRefCell, BorrowMutError};
 use bootinfo::Framebuffer;
 use framed::console::Console;
 use framed::{Frame, Pixel};
 use log::{self, Level, LevelFilter, Metadata, Record};
 
-use crate::singleton::Singleton;
-
 /// The main console for the kernel.
-static CONSOLE: Singleton<Console<Display>> = Singleton::uninit();
+static CONSOLE: AtomicRefCell<Option<Console<Display>>> = AtomicRefCell::new(None);
 /// The global logger.
 static LOGGER: DisplayLogger = DisplayLogger {};
 
 /// Initializes the console and logger. It's reasonable to use the print!,
 /// println! and log::* macros after this call.
 pub(super) fn init(console: Console<Display>) {
-    critical_section::with(|cs| {
-        CONSOLE.initialize(console, cs);
-        if let Err(e) = log::set_logger(&LOGGER).map(|()| log::set_max_level(LevelFilter::Info)) {
-            crate::println!("Couldn't initialize logging services: {e}");
-        }
-    })
+    *CONSOLE.borrow_mut() = Some(console);
+    if let Err(e) = log::set_logger(&LOGGER).map(|()| log::set_max_level(LevelFilter::Info)) {
+        crate::println!("Couldn't initialize logging services: {e}");
+    }
 }
 
 /// The display struct implements the `Frame` trait from the framebuffer pointer.
@@ -33,6 +30,8 @@ pub struct Display {
 // SAFETY: Precondition for creating the display prevents multiple frame buffers from existing in
 // the system.
 unsafe impl Send for Display {}
+/// SAFETY: Only 1 framebuffer exists and we require a mutable reference to write to the display.
+unsafe impl Sync for Display {}
 
 impl Display {
     /// Create a new display with the framebuffer.
@@ -126,9 +125,38 @@ macro_rules! println {
 #[doc(hidden)]
 pub fn _print(args: core::fmt::Arguments) {
     use core::fmt::Write;
-    // TODO: As with allocation, we should ideally find a way to guarantee that interrupts
-    // are not using this code so that interrupts don't have to be disabled.
-    critical_section::with(|cs| {
-        CONSOLE.lock(cs).write_fmt(args).unwrap();
-    })
+    CONSOLE
+        .borrow_mut()
+        .as_mut()
+        .unwrap()
+        .write_fmt(args)
+        .unwrap();
+}
+
+/// Prints the arguments to the console. May panic!.
+#[macro_export]
+macro_rules! try_print {
+    ($($arg:tt)*) => {$crate::sys::_print(format_args!($($arg)*))};
+}
+
+/// Prints the arguments to the console and moves to the next line. May panic!.
+#[macro_export]
+macro_rules! try_println {
+    () => ($crate::try_print!("\n"));
+    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+}
+
+/// Tries to prints the arguments to the screen if the console isn't currently in use.
+///
+/// May still panic if the console hasn't been initialized.
+#[doc(hidden)]
+pub fn _try_print(args: core::fmt::Arguments) -> Result<(), BorrowMutError> {
+    use core::fmt::Write;
+    CONSOLE
+        .try_borrow_mut()?
+        .as_mut()
+        .unwrap()
+        .write_fmt(args)
+        .unwrap();
+    Ok(())
 }
