@@ -32,7 +32,9 @@ use crate::sys::time::sleep_sync;
 fn panic(info: &core::panic::PanicInfo) -> ! {
     // Can't do much about errors at this point.
     let _ = println!("{}", info);
-    loop {}
+    loop {
+        x86_64::instructions::hlt();
+    }
 }
 
 /// Kernel's starting point.
