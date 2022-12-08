@@ -1,5 +1,7 @@
 //! Time utilities (clock, sleep, etc.).
 
+mod timer;
+
 use core::sync::atomic::{AtomicU64, Ordering};
 use core::time::Duration;
 
@@ -40,8 +42,8 @@ async fn tick(mut timer_future: InterruptFuture<'static, BoundedBufferInterrupt<
     loop {
         timer_future.next().await;
         TICKS.fetch_add(1, Ordering::Relaxed);
-        if TICKS.load(Ordering::Relaxed) % 200 == 0 {
-            print!(".");
+        while let Some(waker) = timer::PENDING_TIMERS.pop() {
+            waker.wake();
         }
     }
 }
@@ -53,6 +55,11 @@ pub fn sleep_sync(duration: Duration) {
     while start.elapsed() < duration {
         x86_64::instructions::hlt();
     }
+}
+
+/// Asynchronous sleep for the specified duration.
+pub async fn sleep(duration: Duration) {
+    timer::Timer::new(duration).await;
 }
 
 /// Represents a point in time during execution.

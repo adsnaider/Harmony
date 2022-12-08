@@ -20,9 +20,12 @@ pub mod sys;
 #[macro_use]
 extern crate alloc;
 
+use core::time::Duration;
+
 use bootinfo::Bootinfo;
 
 use crate::ksync::executor::Executor;
+use crate::sys::time::sleep;
 
 #[cfg(target_os = "none")]
 #[panic_handler]
@@ -43,6 +46,12 @@ pub extern "C" fn kmain(bootinfo: &'static mut Bootinfo) -> ! {
 
     let mut runtime = Executor::new();
     runtime.spawn(tasks);
+    runtime.spawn(async {
+        loop {
+            sleep(Duration::from_secs(1)).await;
+            print!(".");
+        }
+    });
 
     runtime.start();
 }
