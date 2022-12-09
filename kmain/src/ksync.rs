@@ -5,3 +5,4 @@
 //! required to start awaiting on I/O.
 
 pub mod executor;
+pub mod mpsc;
