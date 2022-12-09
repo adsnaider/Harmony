@@ -48,8 +48,8 @@ env:
 	mkdir -p $(IMAGE_ROOT)/EFI/BOOT
 
 check:
-	cd $(BOOTLOADER) && cargo clippy
-	cd $(KMAIN) && cargo clippy
+	cd $(BOOTLOADER) && cargo check
+	cd $(KMAIN) && cargo check
 
 $(CARGO_EFI):
 	# We cd to run the command because we want to use the .cargo/config.toml
