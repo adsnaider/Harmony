@@ -3,16 +3,14 @@
 use core::cell::RefCell;
 
 use critical_section::{CriticalSection, Mutex};
-use once_cell::sync::Lazy;
-use pc_keyboard::layouts::Us104Key;
-use pc_keyboard::{DecodedKey, HandleControl, Keyboard, ScancodeSet1};
+use once_cell::sync::{Lazy, OnceCell};
 use pic8259::ChainedPics;
 use x86_64::instructions::port::Port;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 
 pub mod async_interrupt;
 
-use self::async_interrupt::{InterruptCounterCore, InterruptWakerCore};
+use self::async_interrupt::{BoundedBufferInterrupt, InterruptCounterCore, InterruptWakerCore};
 use super::gdt;
 
 const PIC1_OFFSET: u8 = 32;
@@ -27,6 +25,7 @@ const TIMER_INT: u8 = PIC1_OFFSET;
 const KEYBOARD_INT: u8 = PIC1_OFFSET + 1;
 
 pub(super) static TIMER_INTERRUPT_CORE: InterruptCounterCore = InterruptCounterCore::new();
+pub(super) static KEYBOARD_INTERRUPT_CORE: OnceCell<BoundedBufferInterrupt<u8>> = OnceCell::new();
 
 /// Initializes the interrupt descriptor table.
 fn init_idt() {
@@ -75,36 +74,11 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
     // SAFETY: An interrupt cannot be interrupted. This is reasonable in single threaded code.
     let cs = unsafe { CriticalSection::new() };
-    static KEYBOARD: Lazy<Mutex<RefCell<Keyboard<Us104Key, ScancodeSet1>>>> = Lazy::new(|| {
-        Mutex::new(RefCell::new(Keyboard::new(
-            Us104Key,
-            ScancodeSet1,
-            HandleControl::Ignore,
-        )))
-    });
-
-    let mut port = Port::new(0x60);
-    // SAFETY: I/O read shouldn't have side effects.
-    let scancode: u8 = unsafe { port.read() };
-
-    let mut keyboard = KEYBOARD.borrow_ref_mut(cs);
-    match keyboard.add_byte(scancode) {
-        Ok(Some(event)) => {
-            if let Some(key) = keyboard.process_keyevent(event) {
-                match key {
-                    DecodedKey::Unicode(character) => {
-                        let _ = try_print!("{}", character);
-                    }
-                    DecodedKey::RawKey(key) => {
-                        let _ = try_print!("{:?}", key);
-                    }
-                }
-            }
-        }
-        Ok(None) => {}
-        Err(e) => {
-            let _ = try_print!("Keyboard error: {e:?}");
-        }
+    if let Some(core) = KEYBOARD_INTERRUPT_CORE.get() {
+        let mut port = Port::new(0x60);
+        // SAFETY: I/O read shouldn't have side effects.
+        let scancode: u8 = unsafe { port.read() };
+        core.update_and_wake(scancode, cs);
     }
 
     // SAFETY: Notify keyboard interrupt vector.

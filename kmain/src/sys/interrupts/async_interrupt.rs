@@ -50,6 +50,7 @@ pub trait InterruptWakerCore: Sized {
 }
 
 /// An future type which is associated with an instance of an `InterruptCore`.
+#[derive(Debug)]
 pub struct InterruptFuture<'a, T: InterruptWakerCore> {
     core: &'a T,
 }
@@ -83,10 +84,12 @@ impl<O, T: InterruptWakerCore<Output = O>> Future for InterruptFuture<'_, T> {
     }
 }
 
+#[derive(Debug)]
 struct UniqueHandle {}
 
 /// An implementation of an `InterruptCore` that uses an atomic bounded buffer to directly pass
 /// an interrupt input to the future.
+#[derive(Debug)]
 pub struct BoundedBufferInterrupt<T> {
     buffer: ArrayQueue<T>,
     waker: Mutex<UnsafeCell<Option<Waker>>>,
@@ -136,8 +139,8 @@ impl<T> InterruptWakerCore for BoundedBufferInterrupt<T> {
     fn wake(&self, cs: CriticalSection) {
         // SAFETY: Mutex guarantees uninterrupted access. Aliasing is guaranteed because
         // waker isn't reborrowed down the stack.
-        if let Some(waker) = unsafe { &*self.waker.borrow(cs).get() } {
-            waker.wake_by_ref();
+        if let Some(waker) = unsafe { &mut *self.waker.borrow(cs).get() }.take() {
+            waker.wake();
         }
     }
 }
@@ -193,8 +196,8 @@ impl InterruptWakerCore for InterruptCounterCore {
     fn wake(&self, cs: CriticalSection) {
         // SAFETY: Mutex guarantees uninterrupted access. Aliasing is guaranteed because
         // waker isn't reborrowed down the stack.
-        if let Some(waker) = unsafe { &*self.waker.borrow(cs).get() } {
-            waker.wake_by_ref();
+        if let Some(waker) = unsafe { &mut *self.waker.borrow(cs).get() }.take() {
+            waker.wake();
         }
     }
 }

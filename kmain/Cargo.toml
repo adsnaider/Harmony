@@ -33,4 +33,4 @@ features = ["alloc"]
 [dependencies.futures]
 version = "0.3"
 default-features = false
-features = ["alloc"]
+features = ["async-await"]

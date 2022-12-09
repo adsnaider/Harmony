@@ -5,6 +5,7 @@ use alloc::boxed::Box;
 use bootinfo::{Bootinfo, MemoryRegion};
 use framed::console::{BitmapFont, Console};
 use framed::{Frame, Pixel};
+use futures::join;
 use x86_64::VirtAddr;
 
 #[macro_use]
@@ -14,6 +15,7 @@ mod gdt;
 mod interrupts;
 mod memory;
 
+pub mod io;
 pub mod time;
 
 use core::future::Future;
@@ -21,8 +23,8 @@ use core::future::Future;
 pub use display::{_print, _try_print};
 
 use self::display::Display;
-use crate::sys::interrupts::async_interrupt::InterruptWakerCore;
-use crate::sys::interrupts::TIMER_INTERRUPT_CORE;
+use crate::sys::interrupts::async_interrupt::{BoundedBufferInterrupt, InterruptWakerCore};
+use crate::sys::interrupts::{KEYBOARD_INTERRUPT_CORE, TIMER_INTERRUPT_CORE};
 
 /// System intialization routine.
 ///
@@ -87,12 +89,24 @@ pub(super) unsafe fn init(bootinfo: &'static mut Bootinfo) -> impl Future<Output
                 .take_future()
                 .expect("Someone stole the timer future :O"),
         );
+        KEYBOARD_INTERRUPT_CORE
+            .set(BoundedBufferInterrupt::new(128))
+            .unwrap_or_else(|_| {
+                panic!("Someone already initialized the keyboard interrupt core :O")
+            });
+        let io_task = io::init(
+            KEYBOARD_INTERRUPT_CORE
+                .get()
+                .unwrap()
+                .take_future()
+                .expect("Someone stole the keyboard future :O"),
+        );
 
         gdt::init();
         interrupts::init(cs);
         log::info!("Interrupt handlers initialized");
         async {
-            tick_task.await;
+            join!(tick_task, io_task);
         }
     });
     x86_64::instructions::interrupts::enable();

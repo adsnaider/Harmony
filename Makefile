@@ -84,6 +84,9 @@ run_with_gdb: boot_image
 		-drive format=raw,file=fat:rw:$(IMAGE_ROOT) \
 		-s -S $(QEMUFLAGS)
 
+gdb: $(KERNEL)
+	gdb $(KERNEL)
+
 clean:
 	rm -rf build/
 	cargo clean
