@@ -5,7 +5,6 @@ use core::fmt::Write;
 use bootinfo::{Framebuffer, PixelBitmask, PixelFormat};
 use log::{Metadata, Record};
 use uefi::proto::console::gop::GraphicsOutput;
-use uefi::ResultExt;
 
 use crate::sys::SYSTEM_TABLE;
 
@@ -16,7 +15,7 @@ pub fn get_framebuffer() -> Framebuffer {
             .get()
             .boot_services()
             .locate_protocol()
-            .expect_success("Can't open the graphics output protocol.")
+            .expect("Can't open the graphics output protocol.")
             .get()
     };
 

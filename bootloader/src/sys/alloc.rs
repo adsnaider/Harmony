@@ -47,14 +47,13 @@ pub unsafe fn get_pages<'a>(
             .boot_services()
             .allocate_pages(
                 match address {
-                    Some(addr) => AllocateType::Address(addr),
+                    Some(addr) => AllocateType::Address(addr as u64),
                     None => AllocateType::AnyPages,
                 },
                 memory_type,
                 count,
             )
             .map_err(|_| PageAllocError {})?
-            .log()
     };
 
     #[cfg(debug_assertions)]
@@ -168,7 +167,7 @@ unsafe impl GlobalAlloc for UefiAlloc {
             .boot_services()
             .allocate_pool(MemoryType::LOADER_DATA, layout.size())
         {
-            Ok(ptr) => ptr.log(),
+            Ok(ptr) => ptr,
             Err(error) => {
                 log::error!(
                     "Couldn't allocate pool for {:?}. Got error: {:?}",

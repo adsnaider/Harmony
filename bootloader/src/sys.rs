@@ -22,7 +22,7 @@ use bootinfo::{MemoryMap, MemoryRegion};
 use uefi::data_types::Align;
 use uefi::table::boot::{MemoryDescriptor, MemoryMapSize, MemoryType};
 use uefi::table::{Boot, Runtime, SystemTable};
-use uefi::{Handle, ResultExt};
+use uefi::Handle;
 
 use self::alloc::Arena;
 use crate::mem::aligned_to_high;
@@ -131,7 +131,7 @@ pub fn get_memory_map() -> impl ExactSizeIterator<Item = &'static MemoryDescript
         let address = table
             .boot_services()
             .allocate_pool(MemoryType::LOADER_DATA, size)
-            .expect_success("Couldn't allocate data for memory map.");
+            .expect("Couldn't allocate data for memory map.");
         let address = unsafe { aligned_to_high(address, MemoryDescriptor::alignment()) };
 
         unsafe {
@@ -143,7 +143,7 @@ pub fn get_memory_map() -> impl ExactSizeIterator<Item = &'static MemoryDescript
     table
         .boot_services()
         .memory_map(memory_map_buf)
-        .expect_success("Not enough memory to get memory map.")
+        .expect("Not enough memory to get memory map.")
         .1
 }
 
@@ -166,7 +166,7 @@ pub fn exit_uefi_services(
         let address = table
             .boot_services()
             .allocate_pool(MemoryType::LOADER_DATA, size)
-            .expect_success("Couldn't allocate data for memory map.");
+            .expect("Couldn't allocate data for memory map.");
         let address = unsafe { aligned_to_high(address, MemoryDescriptor::alignment()) };
 
         unsafe {
@@ -178,7 +178,7 @@ pub fn exit_uefi_services(
     // Boot services disabled from this point on.
     let (runtime, descriptors) = unsafe { (*SYSTEM_TABLE.table.get()).take().unwrap() }
         .exit_boot_services(handle, memory_map_buf)
-        .expect_success("Couldn't exit boot services.");
+        .expect("Couldn't exit boot services.");
 
     let regions: &'static mut [MaybeUninit<MemoryRegion>] =
         statics.allocate_uninit_slice(descriptors.len());
