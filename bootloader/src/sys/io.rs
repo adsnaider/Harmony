@@ -10,14 +10,9 @@ use crate::sys::SYSTEM_TABLE;
 
 /// Retrieves the framebuffer. The framebuffer can be used after exiting boot services.
 pub fn get_framebuffer() -> Framebuffer {
-    let gop: &mut GraphicsOutput = unsafe {
-        &mut *SYSTEM_TABLE
-            .get()
-            .boot_services()
-            .locate_protocol()
-            .expect("Can't open the graphics output protocol.")
-            .get()
-    };
+    let mut gop = SYSTEM_TABLE
+        .open_protocol::<GraphicsOutput>()
+        .expect("Unable to open GraphicsOutput protocol");
 
     let framebuffer = gop.frame_buffer().as_mut_ptr();
     let mode = gop.current_mode_info();

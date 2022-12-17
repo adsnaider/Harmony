@@ -15,14 +15,9 @@ pub struct Error {}
 
 /// Reads the content of the file in `path` into a `Vec<u8>`
 pub fn read(path: &str) -> Result<Vec<u8>, Error> {
-    let fs: &mut SimpleFileSystem = unsafe {
-        &mut *SYSTEM_TABLE
-            .get()
-            .boot_services()
-            .locate_protocol()
-            .expect("Can't open filesystem.")
-            .get()
-    };
+    let mut fs = SYSTEM_TABLE
+        .open_protocol::<SimpleFileSystem>()
+        .expect("Unable to open SimpleFileSystem protocol");
 
     let mut walker = fs.open_volume().expect("Can't open volume.");
     let mut it = path.split('/').peekable();

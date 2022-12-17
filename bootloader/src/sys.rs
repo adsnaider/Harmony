@@ -20,7 +20,8 @@ use core::mem::MaybeUninit;
 
 use bootinfo::{MemoryMap, MemoryRegion};
 use uefi::data_types::Align;
-use uefi::table::boot::{MemoryDescriptor, MemoryMapSize, MemoryType};
+use uefi::proto::Protocol;
+use uefi::table::boot::{MemoryDescriptor, MemoryMapSize, MemoryType, ScopedProtocol};
 use uefi::table::{Boot, Runtime, SystemTable};
 use uefi::Handle;
 
@@ -94,6 +95,13 @@ impl GlobalTable {
     unsafe fn is_set(&self) -> bool {
         // SAFETY: Precondition.
         unsafe { (*self.table.get()).is_some() }
+    }
+
+    fn open_protocol<P: Protocol>(&self) -> Result<ScopedProtocol<P>, uefi::Error> {
+        let table = unsafe { self.get() };
+        table
+            .boot_services()
+            .open_protocol_exclusive(table.boot_services().get_handle_for_protocol::<P>()?)
     }
 }
 
