@@ -15,14 +15,15 @@ pub mod alloc;
 pub mod fs;
 pub mod io;
 
-use core::cell::UnsafeCell;
+use core::cell::{Ref, RefCell, RefMut};
 use core::mem::MaybeUninit;
 
 use bootinfo::{MemoryMap, MemoryRegion};
 use uefi::data_types::Align;
-use uefi::table::boot::{MemoryDescriptor, MemoryMapSize, MemoryType};
+use uefi::proto::Protocol;
+use uefi::table::boot::{MemoryDescriptor, MemoryMapSize, MemoryType, ScopedProtocol};
 use uefi::table::{Boot, Runtime, SystemTable};
-use uefi::{Handle, ResultExt};
+use uefi::Handle;
 
 use self::alloc::Arena;
 use crate::mem::aligned_to_high;
@@ -31,7 +32,7 @@ use crate::{KERNEL_CODE_MEMORY, KERNEL_STACK_MEMORY, KERNEL_STATIC_MEMORY, PAGIN
 /// GlobalTable holds a reference to the UEFI system table.
 pub(crate) struct GlobalTable {
     /// Reference to the system table.
-    table: UnsafeCell<Option<SystemTable<Boot>>>,
+    table: RefCell<Option<SystemTable<Boot>>>,
 }
 // SAFETY: Not safe, but UEFI has no multi-threading support.
 unsafe impl Sync for GlobalTable {}
@@ -41,83 +42,66 @@ unsafe impl Sync for GlobalTable {}
 ///
 /// For instance, the logging system, can access stdout(), and the framebuffer can access gop().
 pub(crate) static SYSTEM_TABLE: GlobalTable = GlobalTable {
-    table: UnsafeCell::new(None),
+    table: RefCell::new(None),
 };
 
 impl GlobalTable {
     /// Get a reference to the system table if setup. Otherwise, panic.
-    ///
-    /// # Safety
-    ///
-    /// Aliasing rules apply.
-    pub unsafe fn get(&self) -> &SystemTable<Boot> {
-        // SAFETY: Precondition.
-        unsafe {
-            (*self.table.get())
+    pub fn get(&self) -> Ref<SystemTable<Boot>> {
+        Ref::map(self.table.borrow(), |table| {
+            table
                 .as_ref()
                 .expect("System table hasn't been initialized. Forget to call `init()`?")
-        }
+        })
     }
 
     /// Get a mutable reference to the system table if setup. Otherwise, panic.
-    ///
-    /// # Safety
-    ///
-    /// Aliasing rules apply.
     #[allow(clippy::mut_from_ref)]
-    pub unsafe fn get_mut(&self) -> &mut SystemTable<Boot> {
-        // SAFETY: Precondition.
-        unsafe {
-            (*self.table.get())
+    pub fn get_mut(&self) -> RefMut<SystemTable<Boot>> {
+        RefMut::map(self.table.borrow_mut(), |table| {
+            table
                 .as_mut()
                 .expect("System table hasn't been initialized. Forget to call `init()`?")
-        }
+        })
     }
 
     /// Sets the system table from the appropriate value.
-    ///
-    /// # Safety:
-    ///
-    /// Aliasing rules apply. In particular, there shouldn't be living references to the previous
-    /// system table.
-    unsafe fn set(&self, table: SystemTable<Boot>) {
-        // SAFETY: Precondition.
-        unsafe { *self.table.get() = Some(table) }
+    fn set(&self, table: SystemTable<Boot>) {
+        *self.table.borrow_mut() = Some(table);
     }
 
     /// Returns whether there's a table set.
-    ///
-    /// # Safety:
-    ///
-    /// This will borrow the table immutably. There can't be mutable references to the system
-    /// table.
-    unsafe fn is_set(&self) -> bool {
-        // SAFETY: Precondition.
-        unsafe { (*self.table.get()).is_some() }
+    fn is_set(&self) -> bool {
+        self.table.borrow().is_some()
+    }
+
+    fn open_protocol<'a, P: Protocol>(
+        t: &'a Ref<'_, SystemTable<Boot>>,
+    ) -> Result<ScopedProtocol<'a, P>, uefi::Error> {
+        t.boot_services()
+            .open_protocol_exclusive(t.boot_services().get_handle_for_protocol::<P>()?)
     }
 }
 
 /// Initializes the UEFI system. After this call, it's possible to use allocation services and
 /// logging.
 pub fn init(system_table: SystemTable<Boot>) {
-    unsafe {
-        if SYSTEM_TABLE.is_set() {
-            panic!("Attempt to call sys::init() twice.");
-        }
-        SYSTEM_TABLE.set(system_table);
+    if SYSTEM_TABLE.is_set() {
+        panic!("Attempt to call sys::init() twice.");
     }
+    SYSTEM_TABLE.set(system_table);
 
     io::init();
 }
 
 /// Returns true if the UEFI system has been initialized with a call to `init()`.
 pub fn is_init() -> bool {
-    unsafe { SYSTEM_TABLE.is_set() }
+    SYSTEM_TABLE.is_set()
 }
 
 /// Retrieves the memory map.
 pub fn get_memory_map() -> impl ExactSizeIterator<Item = &'static MemoryDescriptor> + Clone {
-    let table = unsafe { SYSTEM_TABLE.get() };
+    let table = SYSTEM_TABLE.get();
 
     let memory_map_buf = {
         // Extra buffer since the size might change.
@@ -131,7 +115,7 @@ pub fn get_memory_map() -> impl ExactSizeIterator<Item = &'static MemoryDescript
         let address = table
             .boot_services()
             .allocate_pool(MemoryType::LOADER_DATA, size)
-            .expect_success("Couldn't allocate data for memory map.");
+            .expect("Couldn't allocate data for memory map.");
         let address = unsafe { aligned_to_high(address, MemoryDescriptor::alignment()) };
 
         unsafe {
@@ -143,7 +127,7 @@ pub fn get_memory_map() -> impl ExactSizeIterator<Item = &'static MemoryDescript
     table
         .boot_services()
         .memory_map(memory_map_buf)
-        .expect_success("Not enough memory to get memory map.")
+        .expect("Not enough memory to get memory map.")
         .1
 }
 
@@ -153,7 +137,7 @@ pub fn exit_uefi_services(
     handle: Handle,
     statics: &mut Arena<'static>,
 ) -> (SystemTable<Runtime>, MemoryMap<'static>) {
-    let table = unsafe { SYSTEM_TABLE.get() };
+    let table = SYSTEM_TABLE.table.borrow_mut().take().unwrap();
     let memory_map_buf = {
         // Extra buffer since the size might change.
         let MemoryMapSize {
@@ -166,7 +150,7 @@ pub fn exit_uefi_services(
         let address = table
             .boot_services()
             .allocate_pool(MemoryType::LOADER_DATA, size)
-            .expect_success("Couldn't allocate data for memory map.");
+            .expect("Couldn't allocate data for memory map.");
         let address = unsafe { aligned_to_high(address, MemoryDescriptor::alignment()) };
 
         unsafe {
@@ -176,9 +160,9 @@ pub fn exit_uefi_services(
         }
     };
     // Boot services disabled from this point on.
-    let (runtime, descriptors) = unsafe { (*SYSTEM_TABLE.table.get()).take().unwrap() }
+    let (runtime, descriptors) = table
         .exit_boot_services(handle, memory_map_buf)
-        .expect_success("Couldn't exit boot services.");
+        .expect("Couldn't exit boot services.");
 
     let regions: &'static mut [MaybeUninit<MemoryRegion>] =
         statics.allocate_uninit_slice(descriptors.len());

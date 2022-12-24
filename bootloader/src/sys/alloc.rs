@@ -41,20 +41,19 @@ pub unsafe fn get_pages<'a>(
     memory_type: MemoryType,
 ) -> Result<&'a mut [u8], PageAllocError> {
     // SAFETY: The system is the only one with access to the system table.
-    let pages = unsafe {
+    let pages = {
         SYSTEM_TABLE
             .get()
             .boot_services()
             .allocate_pages(
                 match address {
-                    Some(addr) => AllocateType::Address(addr),
+                    Some(addr) => AllocateType::Address(addr as u64),
                     None => AllocateType::AnyPages,
                 },
                 memory_type,
                 count,
             )
             .map_err(|_| PageAllocError {})?
-            .log()
     };
 
     #[cfg(debug_assertions)]
@@ -164,11 +163,11 @@ unsafe impl GlobalAlloc for UefiAlloc {
         }
 
         // SAFETY: The system is the only one with access to the system table.
-        match unsafe { SYSTEM_TABLE.get() }
+        match { SYSTEM_TABLE.get() }
             .boot_services()
             .allocate_pool(MemoryType::LOADER_DATA, layout.size())
         {
-            Ok(ptr) => ptr.log(),
+            Ok(ptr) => ptr,
             Err(error) => {
                 log::error!(
                     "Couldn't allocate pool for {:?}. Got error: {:?}",
@@ -182,7 +181,7 @@ unsafe impl GlobalAlloc for UefiAlloc {
 
     unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
         // SAFETY: The system is the only one with access to the system table.
-        if let Err(e) = unsafe { SYSTEM_TABLE.get() }.boot_services().free_pool(ptr) {
+        if let Err(e) = { SYSTEM_TABLE.get() }.boot_services().free_pool(ptr) {
             log::error!(
                 "Couldn't free pool at address {:p}. Got error: {:?}",
                 ptr,
