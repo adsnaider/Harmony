@@ -15,7 +15,8 @@ pub mod alloc;
 pub mod fs;
 pub mod io;
 
-use core::cell::{Ref, RefCell, RefMut};
+use core::cell::{Ref, RefCell};
+use core::fmt::Write;
 use core::mem::MaybeUninit;
 
 use bootinfo::{MemoryMap, MemoryRegion};
@@ -55,16 +56,6 @@ impl GlobalTable {
         })
     }
 
-    /// Get a mutable reference to the system table if setup. Otherwise, panic.
-    #[allow(clippy::mut_from_ref)]
-    pub fn get_mut(&self) -> RefMut<SystemTable<Boot>> {
-        RefMut::map(self.table.borrow_mut(), |table| {
-            table
-                .as_mut()
-                .expect("System table hasn't been initialized. Forget to call `init()`?")
-        })
-    }
-
     /// Sets the system table from the appropriate value.
     fn set(&self, table: SystemTable<Boot>) {
         *self.table.borrow_mut() = Some(table);
@@ -81,6 +72,29 @@ impl GlobalTable {
         t.boot_services()
             .open_protocol_exclusive(t.boot_services().get_handle_for_protocol::<P>()?)
     }
+
+    fn print(&self, args: core::fmt::Arguments) -> Result<(), core::fmt::Error> {
+        // SAFETY: Unclear if this is safe but at least we only borrow the stdout handle
+        // here, meaning that no two writers will ever be active at the same time.
+        unsafe { &mut *self.table.as_ptr() }
+            .as_mut()
+            .unwrap()
+            .stdout()
+            .write_fmt(args)
+    }
+}
+
+/// Prints the arguments to the console.
+#[macro_export]
+macro_rules! print {
+    ($($arg:tt)*) => {$crate::sys::SYSTEM_TABLE.print(format_args!($($arg)*))};
+}
+
+/// Prints the arguments to the console and moves to the next line.
+#[macro_export]
+macro_rules! println {
+    () => ($crate::print!("\n"));
+    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
 }
 
 /// Initializes the UEFI system. After this call, it's possible to use allocation services and
