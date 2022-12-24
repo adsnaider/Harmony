@@ -15,14 +15,11 @@ pub struct Error {}
 
 /// Reads the content of the file in `path` into a `Vec<u8>`
 pub fn read(path: &str) -> Result<Vec<u8>, Error> {
-    let mut walker = {
-        let table = SYSTEM_TABLE.get();
-        let mut fs = GlobalTable::open_protocol::<SimpleFileSystem>(&table)
-            .expect("Unable to open SimpleFileSystem protocol");
+    let table = SYSTEM_TABLE.get();
+    let mut fs = GlobalTable::open_protocol::<SimpleFileSystem>(&table)
+        .expect("Unable to open SimpleFileSystem protocol");
 
-        let walker = fs.open_volume().expect("Can't open volume.");
-        walker
-    };
+    let mut walker = fs.open_volume().expect("Can't open volume.");
 
     let mut it = path.split('/').peekable();
     while let Some(entry) = it.next() {
