@@ -6,16 +6,20 @@ use bootinfo::{Framebuffer, PixelBitmask, PixelFormat};
 use log::{Metadata, Record};
 use uefi::proto::console::gop::GraphicsOutput;
 
+use super::GlobalTable;
 use crate::sys::SYSTEM_TABLE;
 
 /// Retrieves the framebuffer. The framebuffer can be used after exiting boot services.
 pub fn get_framebuffer() -> Framebuffer {
-    let mut gop = SYSTEM_TABLE
-        .open_protocol::<GraphicsOutput>()
-        .expect("Unable to open GraphicsOutput protocol");
+    let (framebuffer, mode) = {
+        let table = SYSTEM_TABLE.get();
+        let mut gop = GlobalTable::open_protocol::<GraphicsOutput>(&table)
+            .expect("Unable to open GraphicsOutput protocol");
 
-    let framebuffer = gop.frame_buffer().as_mut_ptr();
-    let mode = gop.current_mode_info();
+        let framebuffer = gop.frame_buffer().as_mut_ptr();
+        let mode = gop.current_mode_info();
+        (framebuffer, mode)
+    };
 
     Framebuffer {
         address: framebuffer,
@@ -54,12 +58,14 @@ pub(super) fn init() {
 
 impl log::Log for UefiLogger {
     fn enabled(&self, _metadata: &Metadata) -> bool {
-        unsafe { SYSTEM_TABLE.is_set() }
+        {
+            SYSTEM_TABLE.is_set()
+        }
     }
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
-            unsafe {
+            {
                 writeln!(
                     SYSTEM_TABLE.get_mut().stdout(),
                     "{} - {}",

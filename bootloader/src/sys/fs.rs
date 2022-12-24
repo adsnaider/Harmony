@@ -7,7 +7,7 @@ use uefi::proto::media::file::{File, FileAttribute, FileInfo, FileType};
 use uefi::proto::media::fs::SimpleFileSystem;
 use uefi::CStr16;
 
-use crate::sys::SYSTEM_TABLE;
+use crate::sys::{GlobalTable, SYSTEM_TABLE};
 
 #[derive(Copy, Clone, Debug)]
 /// Filesystem errors.
@@ -15,11 +15,15 @@ pub struct Error {}
 
 /// Reads the content of the file in `path` into a `Vec<u8>`
 pub fn read(path: &str) -> Result<Vec<u8>, Error> {
-    let mut fs = SYSTEM_TABLE
-        .open_protocol::<SimpleFileSystem>()
-        .expect("Unable to open SimpleFileSystem protocol");
+    let mut walker = {
+        let table = SYSTEM_TABLE.get();
+        let mut fs = GlobalTable::open_protocol::<SimpleFileSystem>(&table)
+            .expect("Unable to open SimpleFileSystem protocol");
 
-    let mut walker = fs.open_volume().expect("Can't open volume.");
+        let walker = fs.open_volume().expect("Can't open volume.");
+        walker
+    };
+
     let mut it = path.split('/').peekable();
     while let Some(entry) = it.next() {
         let mut cstr_buffer = [0; 32];
