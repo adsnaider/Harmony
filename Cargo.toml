@@ -1,9 +1,10 @@
-[workspace]
-members = [
-  "bootinfo",
-  "bootloader",
-  "framed",
-  "kmain",
-  "bitalloc",
-  "ralloc",
-]
+[package]
+name = "athena"
+version = "0.1.0"
+edition = "2021"
+
+[build-dependencies]
+bootloader = "0.11"
+
+[dependencies]
+clap = { version = "4.1", features = ["derive"] }

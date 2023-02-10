@@ -1,10 +1,10 @@
 //! Kernel entry and executable. Ideally, this is just a thin wrapper over all of the kernel's
 //! components.
 #![no_std]
+#![no_main]
 #![feature(allocator_api)]
 #![feature(const_fn_floating_point_arithmetic)]
 #![feature(negative_impls)]
-#![feature(default_alloc_error_handler)]
 #![feature(abi_x86_interrupt)]
 #![deny(absolute_paths_not_starting_with_crate)]
 #![warn(missing_copy_implementations)]
@@ -22,12 +22,12 @@ extern crate alloc;
 
 use core::time::Duration;
 
-use bootinfo::Bootinfo;
+use bootloader_api::config::Mapping;
+use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 
 use crate::ksync::executor::Executor;
 use crate::sys::time::sleep;
 
-#[cfg(target_os = "none")]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     // Can't do much about errors at this point.
@@ -38,8 +38,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 }
 
 /// Kernel's starting point.
-#[no_mangle]
-pub extern "C" fn kmain(bootinfo: &'static mut Bootinfo) -> ! {
+fn kmain(bootinfo: &'static mut BootInfo) -> ! {
     // SAFETY: The bootinfo is directly provided by the bootloader.
     let tasks = unsafe { sys::init(bootinfo) };
     log::info!("Initialization sequence complete.");
@@ -55,3 +54,16 @@ pub extern "C" fn kmain(bootinfo: &'static mut Bootinfo) -> ! {
 
     runtime.start();
 }
+
+const CONFIG: BootloaderConfig = {
+    let mut config = BootloaderConfig::new_default();
+    config.kernel_stack_size = 4 * 1024 * 1024; // 4MiB
+    config.mappings.dynamic_range_start = Some(0xFFFF_8000_0000_0000);
+    config.mappings.dynamic_range_end = Some(0xFFFF_9000_0000_0000);
+    config.mappings.physical_memory = Some(Mapping::FixedAddress(0xFFFF_F000_0000_0000));
+    config.mappings.kernel_stack = Mapping::FixedAddress(0xFFFF_EFFF_FFBF_0000);
+    config.mappings.boot_info = Mapping::FixedAddress(0xFFFF_EFFF_FFFF_0000);
+    config.mappings.framebuffer = Mapping::FixedAddress(0xFFFF_A000_0000_0000);
+    config
+};
+entry_point!(kmain, config = &CONFIG);

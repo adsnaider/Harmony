@@ -1,13 +1,5 @@
 //! System management and functionality.
 
-use alloc::boxed::Box;
-
-use bootinfo::{Bootinfo, MemoryRegion};
-use framed::console::{BitmapFont, Console};
-use framed::{Frame, Pixel};
-use futures::join;
-use x86_64::VirtAddr;
-
 #[macro_use]
 mod display;
 mod drivers;
@@ -18,13 +10,22 @@ mod memory;
 pub mod io;
 pub mod time;
 
+use alloc::boxed::Box;
 use core::future::Future;
 
+use bootloader_api::info::{MemoryRegion, Optional};
+use bootloader_api::BootInfo;
 pub use display::{_print, _try_print};
+use framed::console::{BitmapFont, Console};
+use framed::{Frame, Pixel};
+use futures::join;
+use x86_64::VirtAddr;
 
 use self::display::Display;
 use crate::sys::interrupts::async_interrupt::{BoundedBufferInterrupt, InterruptWakerCore};
 use crate::sys::interrupts::{KEYBOARD_INTERRUPT_CORE, TIMER_INTERRUPT_CORE};
+
+const FONT: &[u8] = include_bytes!("../font.bdf");
 
 /// System intialization routine.
 ///
@@ -34,13 +35,17 @@ use crate::sys::interrupts::{KEYBOARD_INTERRUPT_CORE, TIMER_INTERRUPT_CORE};
 /// # Safety
 ///
 /// The information in `bootinfo` must be accurate.
-pub(super) unsafe fn init(bootinfo: &'static mut Bootinfo) -> impl Future<Output = ()> + 'static {
+pub(super) unsafe fn init(bootinfo: &mut BootInfo) -> impl Future<Output = ()> + 'static {
     let tasks = critical_section::with(|cs| {
         // SAFETY: Bootloader passed the framebuffer correctly.
-        let mut display = unsafe { Display::new(bootinfo.framebuffer) };
+        let framebuffer = core::mem::replace(&mut bootinfo.framebuffer, Optional::None)
+            .into_option()
+            .unwrap();
+        let framebuffer_addr = framebuffer.buffer() as *const [u8];
+        let mut display = unsafe { Display::new(framebuffer) };
 
         display.fill_with(Pixel::black());
-        let font = match BitmapFont::decode_from(bootinfo.font) {
+        let font = match BitmapFont::decode_from(FONT) {
             Ok(font) => font,
             Err(_) => {
                 display.fill_with(Pixel::red());
@@ -51,25 +56,21 @@ pub(super) unsafe fn init(bootinfo: &'static mut Bootinfo) -> impl Future<Output
         println!("Hello, Kernel!");
         log::info!("Hello, logging!");
 
-        log::debug!("Found bootinfo at {:#?}", bootinfo as *const Bootinfo);
-        log::debug!("Found framebuffer at {:#?}", bootinfo.framebuffer.address);
-        log::debug!("Found font at {:#?}", bootinfo.font as *const [u8]);
         log::debug!(
             "Memory map starts at {:#?}",
-            bootinfo.memory_map.regions as *const [MemoryRegion]
+            &*bootinfo.memory_regions as *const [MemoryRegion]
         );
-        log::debug!(
-            "Physical memory offset is {:#?}",
-            bootinfo.physical_memory_offset as *mut ()
-        );
+        let pmo = bootinfo
+            .physical_memory_offset
+            .into_option()
+            .expect("No memory offset found from bootloader.");
+        log::debug!("Physical memory offset is {:#?}", pmo as *const ());
+        log::debug!("Framebuffer mapped to {:#?}", framebuffer_addr);
 
         // SAFETY: The physical memory offset is correct, well-aligned, and canonical, and the memory
         // map is correct from the bootloader.
         unsafe {
-            memory::init(
-                VirtAddr::new_unsafe(bootinfo.physical_memory_offset as u64),
-                core::mem::take(&mut bootinfo.memory_map),
-            );
+            memory::init(VirtAddr::new_unsafe(pmo), &mut bootinfo.memory_regions);
         }
 
         let boxed_value = Box::new(25);

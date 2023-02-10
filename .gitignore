@@ -1,2 +1,4 @@
 target/
-.build/
+
+bitalloc/Cargo.lock
+framed/Cargo.lock
