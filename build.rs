@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
-    println!("cargo:rerun-if-changed=../kernel/src");
+    println!("cargo:rerun-if-changed=kernel/src");
     println!("cargo:rerun-if-env-changed=BUILD_PROFILE");
     println!("cargo:rerun-if-env-changed=KERNEL_LOG_LEVEL");
     // set by cargo, build scripts should use this directory for output files
@@ -14,21 +14,17 @@ fn main() {
         "release" => "release",
         _ => panic!("Unknwon profile: {}", profile),
     };
-    let target = format!("../kernel/target/x86_64-unknown-none/{dir}/kernel");
+    let target = format!("kernel/target/x86_64-unknown-none/{dir}/kernel");
     // set by cargo's artifact dependency feature, see
     // https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#artifact-dependencies
     let out = Command::new(cargo)
-        .current_dir("../kernel")
+        .current_dir("kernel/")
         .arg("build")
         .arg(format!("--profile={profile}"))
-        .output()
+        .status()
         .expect("Failed to build the kernel.");
-    if !out.status.success() {
-        panic!(
-            "Failed to compile kernel: {}\n\n=================================\n{}\n=================================\n",
-            out.status,
-            String::from_utf8(out.stderr).unwrap()
-        );
+    if !out.success() {
+        panic!("Failed to compile kernel: {}", out,);
     }
 
     let kernel = Path::new(&target);
