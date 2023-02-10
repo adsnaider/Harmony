@@ -31,3 +31,14 @@ From the top-level directory, run
 This will build the ISO image and save it to `athena.iso`. You can flash this
 image to a USB drive for instance and boot from it to see the OS running on
 actual hardware.
+
+
+### Configuration
+
+Configurations are passed to the builder through environment flags. Currently
+these are the possible configurations:
+
+* BUILD_PROFILE [`dev`|`release`] - Compilation profile for the kernel
+(Defaults to `dev`).
+* KERNEL_LOG_LEVEL [`debug`|`info`|`warn`|`error`] - controls the log level
+(Defaults to `info`).
