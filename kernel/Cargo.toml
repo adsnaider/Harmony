@@ -1,15 +1,12 @@
 [package]
-name = "kmain"
+name = "kernel"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[lib]
-crate-type = ["staticlib"]
-
 [dependencies]
-bootinfo = { path = "../bootinfo" }
+bootloader_api = "0.11"
 framed = { path = "../framed" }
 bitalloc = { path = "../bitalloc" }
 linked_list_allocator = "0.10"
@@ -21,7 +18,7 @@ critical-section = { version = "1.1", features = ["restore-state-bool"] }
 atomic_refcell = "0.1"
 
 [dependencies.once_cell]
-version = "1.16"
+version = "1.17"
 default-features = false
 features = ["critical-section"]
 

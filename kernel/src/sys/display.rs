@@ -1,21 +1,33 @@
 //! System display and console.
 
 use atomic_refcell::{AtomicRefCell, BorrowMutError};
-use bootinfo::Framebuffer;
+use bootloader_api::info::{FrameBuffer, PixelFormat};
 use framed::console::Console;
 use framed::{Frame, Pixel};
-use log::{self, Level, LevelFilter, Metadata, Record};
+use log::{self, LevelFilter, Metadata, Record};
+use once_cell::unsync::Lazy;
 
 /// The main console for the kernel.
 static CONSOLE: AtomicRefCell<Option<Console<Display>>> = AtomicRefCell::new(None);
 /// The global logger.
 static LOGGER: DisplayLogger = DisplayLogger {};
 
+const LOG_LEVEL: Lazy<LevelFilter> = Lazy::new(|| {
+    let level = option_env!("KERNEL_LOG_LEVEL").unwrap_or("info");
+    match level {
+        "debug" => LevelFilter::Debug,
+        "info" => LevelFilter::Info,
+        "warn" => LevelFilter::Warn,
+        "error" => LevelFilter::Error,
+        other => panic!("Unknown LOG LEVEL: {other}"),
+    }
+});
+
 /// Initializes the console and logger. It's reasonable to use the print!,
 /// println! and log::* macros after this call.
 pub(super) fn init(console: Console<Display>) {
     *CONSOLE.borrow_mut() = Some(console);
-    if let Err(e) = log::set_logger(&LOGGER).map(|()| log::set_max_level(LevelFilter::Info)) {
+    if let Err(e) = log::set_logger(&LOGGER).map(|()| log::set_max_level(*LOG_LEVEL)) {
         crate::println!("Couldn't initialize logging services: {e}");
     }
 }
@@ -24,7 +36,7 @@ pub(super) fn init(console: Console<Display>) {
 #[allow(missing_copy_implementations)]
 #[derive(Debug)]
 pub struct Display {
-    framebuffer: Framebuffer,
+    framebuffer: FrameBuffer,
 }
 
 // SAFETY: Precondition for creating the display prevents multiple frame buffers from existing in
@@ -41,7 +53,7 @@ impl Display {
     /// * The framebuffer must be correct.
     /// * There should only be one framebuffer (i.e. the memory in the framebuffer is now owned
     /// by the display).
-    pub unsafe fn new(framebuffer: Framebuffer) -> Self {
+    pub unsafe fn new(framebuffer: FrameBuffer) -> Self {
         Self { framebuffer }
     }
 }
@@ -50,31 +62,31 @@ impl Display {
 // (precondition).
 unsafe impl Frame for Display {
     unsafe fn set_pixel_unchecked(&mut self, row: usize, col: usize, pixel: Pixel) {
-        match self.framebuffer.pixel_format {
-            bootinfo::PixelFormat::Rgb => {
+        match self.framebuffer.info().pixel_format {
+            PixelFormat::Rgb => {
                 // Each pixel has 4 bytes.
                 const PIXEL_SIZE: usize = 4;
-                let offset = row * self.framebuffer.stride * PIXEL_SIZE + col * PIXEL_SIZE;
+                let offset = row * self.framebuffer.info().stride * PIXEL_SIZE + col * PIXEL_SIZE;
                 let color: u32 =
                     ((pixel.blue as u32) << 16) + ((pixel.green as u32) << 8) + (pixel.red as u32);
                 // SAFETY: The framebuffer structure is correct (precondition).
                 unsafe {
                     core::ptr::write_volatile(
-                        self.framebuffer.address.add(offset) as *mut u32,
+                        self.framebuffer.buffer_mut().as_mut_ptr().add(offset) as *mut u32,
                         color,
                     )
                 };
             }
-            bootinfo::PixelFormat::Bgr => {
+            PixelFormat::Bgr => {
                 // Each pixel has 4 bytes.
                 const PIXEL_SIZE: usize = 4;
-                let offset = row * self.framebuffer.stride * PIXEL_SIZE + col * PIXEL_SIZE;
+                let offset = row * self.framebuffer.info().stride * PIXEL_SIZE + col * PIXEL_SIZE;
                 let color: u32 =
                     ((pixel.red as u32) << 16) + ((pixel.green as u32) << 8) + (pixel.blue as u32);
                 // SAFETY: The framebuffer structure is correct (precondition).
                 unsafe {
                     core::ptr::write_volatile(
-                        self.framebuffer.address.add(offset) as *mut u32,
+                        self.framebuffer.buffer_mut().as_mut_ptr().add(offset) as *mut u32,
                         color,
                     )
                 };
@@ -84,11 +96,11 @@ unsafe impl Frame for Display {
     }
 
     fn width(&self) -> usize {
-        self.framebuffer.resolution.0
+        self.framebuffer.info().width
     }
 
     fn height(&self) -> usize {
-        self.framebuffer.resolution.1
+        self.framebuffer.info().height
     }
 }
 
@@ -96,7 +108,7 @@ struct DisplayLogger;
 
 impl log::Log for DisplayLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        metadata.level() <= Level::Info
+        metadata.level() <= *LOG_LEVEL
     }
 
     fn log(&self, record: &Record) {

@@ -1,9 +1,0 @@
-[workspace]
-members = [
-  "bootinfo",
-  "bootloader",
-  "framed",
-  "kmain",
-  "bitalloc",
-  "ralloc",
-]
