@@ -1,10 +1,11 @@
 [package]
-name = "athena"
+name = "builder"
 version = "0.1.0"
 edition = "2021"
 
 [build-dependencies]
 bootloader = "0.11"
+kernel = { path = "../kernel", artifact = "bin", target = "x86_64-unknown-none" }
 
 [dependencies]
 clap = { version = "4.1", features = ["derive"] }

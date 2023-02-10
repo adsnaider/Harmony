@@ -16,17 +16,19 @@ tools to build and emulate the OS.
 
 ### Emulation with QEMU
 
-From the top-level directory, run
+Building the final image and running it is all controlled in the `builder` crate.
 
-`cargo run -- -k uefi emulate`
+From the `builder/` directory, do
+
+`cargo run -- -k uefi emulate` or `cargo run --release -- -k uefi emulate`
 
 This should launch qemu and you should be able to see the OS running.
 
 ### Building an ISO image
 
-From the top-level directory, run
+From the `builder/` directory, do
 
-`cargo run -- -k uefi build athena.iso`
+`cargo run -- -k uefi build athena.iso` or `cargo run --release -- -k uefi build athena.iso`
 
 This will build the ISO image and save it to `athena.iso`. You can flash this
 image to a USB drive for instance and boot from it to see the OS running on
@@ -38,7 +40,7 @@ actual hardware.
 Configurations are passed to the builder through environment flags. Currently
 these are the possible configurations:
 
-* BUILD_PROFILE [`dev`|`release`] - Compilation profile for the kernel
-(Defaults to `dev`).
 * KERNEL_LOG_LEVEL [`debug`|`info`|`warn`|`error`] - controls the log level
 (Defaults to `info`).
+
+The only hardware architecture that is currently supported is x86_64.

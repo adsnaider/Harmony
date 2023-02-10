@@ -20,9 +20,9 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Check code format
-      run: cargo fmt --check
+      run: cd builder/ && cargo fmt --check
     - name: Build/Check
-      run: cargo check
+      run: cd builder/ && cargo check
     - name: Bitalloc Tests
       run: cd bitalloc && cargo test
     - name: Framed tests
