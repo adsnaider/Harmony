@@ -3,9 +3,9 @@
 #[macro_use]
 mod display;
 mod drivers;
-mod gdt;
+pub(crate) mod gdt;
 mod interrupts;
-mod memory;
+pub(crate) mod memory;
 
 pub mod io;
 pub mod time;
@@ -106,6 +106,8 @@ pub(super) unsafe fn init(bootinfo: &mut BootInfo) -> impl Future<Output = ()> +
         gdt::init();
         interrupts::init(cs);
         log::info!("Interrupt handlers initialized");
+
+        crate::proc::init();
         async {
             join!(tick_task, io_task);
         }

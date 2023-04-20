@@ -35,6 +35,8 @@ fn init_idt() {
         idt.general_protection_fault
             .set_handler_fn(general_protection_fault_handler);
         idt.page_fault.set_handler_fn(page_fault_handler);
+        idt.stack_segment_fault
+            .set_handler_fn(stack_segment_fault_handler);
         // SAFETY: Stack index provided is valid and only used for the double fault handler.
         unsafe {
             idt.double_fault
@@ -45,6 +47,9 @@ fn init_idt() {
         // PIC interrupts
         idt[TIMER_INT as usize].set_handler_fn(timer_interrupt_handler);
         idt[KEYBOARD_INT as usize].set_handler_fn(keyboard_interrupt_handler);
+        idt[0x80]
+            .set_handler_fn(syscall_int_handler)
+            .set_privilege_level(x86_64::PrivilegeLevel::Ring3);
         idt
     });
     IDT.load();
@@ -92,11 +97,18 @@ extern "x86-interrupt" fn breakpoint_handler(stack_frame: InterruptStackFrame) {
     try_println!("EXCEPTION BREAKPOINT:\n{stack_frame:#?}");
 }
 
+extern "x86-interrupt" fn stack_segment_fault_handler(
+    stack_frame: InterruptStackFrame,
+    error_code: u64,
+) {
+    panic!("EXCEPTION: STACK SEGMENT FAULT- {error_code:#X}\n{stack_frame:#?}");
+}
+
 extern "x86-interrupt" fn general_protection_fault_handler(
     stack_frame: InterruptStackFrame,
     error_code: u64,
 ) {
-    panic!("EXCEPTION: GENERAL PROTECTION - {error_code}\n{stack_frame:#?}");
+    panic!("EXCEPTION: GENERAL PROTECTION - {error_code:#X}\n{stack_frame:#?}");
 }
 
 extern "x86-interrupt" fn page_fault_handler(
@@ -111,4 +123,8 @@ extern "x86-interrupt" fn double_fault_handler(
     error_code: u64,
 ) -> ! {
     panic!("EXCEPTION: DOUBLE FAULT - {error_code}\n{stack_frame:#?}");
+}
+
+extern "x86-interrupt" fn syscall_int_handler(stack_frame: InterruptStackFrame) {
+    panic!("Syscall interrupt: {stack_frame:#?}");
 }

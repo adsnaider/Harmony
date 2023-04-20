@@ -6,6 +6,7 @@
 #![feature(const_fn_floating_point_arithmetic)]
 #![feature(negative_impls)]
 #![feature(abi_x86_interrupt)]
+#![feature(error_in_core)]
 #![deny(absolute_paths_not_starting_with_crate)]
 #![warn(missing_copy_implementations)]
 #![warn(missing_debug_implementations)]
@@ -14,19 +15,19 @@
 #![warn(clippy::undocumented_unsafe_blocks)]
 
 pub mod ksync;
+pub mod proc;
 pub(crate) mod singleton;
 pub mod sys;
+
+static INIT: &[u8] = include_bytes!("../programs/hello.bin");
 
 #[macro_use]
 extern crate alloc;
 
-use core::time::Duration;
-
 use bootloader_api::config::Mapping;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 
-use crate::ksync::executor::Executor;
-use crate::sys::time::sleep;
+use crate::proc::Process;
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
@@ -40,19 +41,13 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 /// Kernel's starting point.
 fn kmain(bootinfo: &'static mut BootInfo) -> ! {
     // SAFETY: The bootinfo is directly provided by the bootloader.
-    let tasks = unsafe { sys::init(bootinfo) };
+    let _tasks = unsafe { sys::init(bootinfo) };
     log::info!("Initialization sequence complete.");
 
-    let mut runtime = Executor::new();
-    runtime.spawn(tasks);
-    runtime.spawn(async {
-        loop {
-            sleep(Duration::from_secs(1)).await;
-            print!(".");
-        }
-    });
-
-    runtime.start();
+    let process = Process::load(INIT, 1).unwrap();
+    unsafe {
+        process.exec();
+    }
 }
 
 const CONFIG: BootloaderConfig = {

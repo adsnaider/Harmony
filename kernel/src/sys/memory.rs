@@ -15,7 +15,7 @@ use x86_64::{PhysAddr, VirtAddr};
 
 use crate::singleton::Singleton;
 
-struct Frame(PhysFrame<Size4KiB>);
+pub struct Frame(PhysFrame<Size4KiB>);
 
 // SAFETY: Each frame is uniquely indexed by it's starting address, normalized.
 unsafe impl Indexable for Frame {
@@ -33,7 +33,7 @@ unsafe impl Indexable for Frame {
     }
 }
 
-struct SystemFrameAllocator(Bitalloc<'static, Frame>);
+pub struct SystemFrameAllocator(Bitalloc<'static, Frame>);
 
 // SAFETY: We use a bitmap to make sure that all frames returned are unique
 // and available for use.
@@ -44,8 +44,37 @@ unsafe impl FrameAllocator<Size4KiB> for SystemFrameAllocator {
 }
 
 static PAGE_MAPPER: Singleton<OffsetPageTable<'static>> = Singleton::uninit();
-static FRAME_ALLOCATOR: Singleton<SystemFrameAllocator> = Singleton::uninit();
+pub static FRAME_ALLOCATOR: Singleton<SystemFrameAllocator> = Singleton::uninit();
 static MEMORY_ALLOCATOR: Singleton<Heap> = Singleton::uninit();
+
+// FIXME: Error handling + return a safe wrapper of OffsetPageTable that only allows modifying the
+// bottom half.
+/// Creates a shallow copy of the page l4 page table and returns it.
+///
+/// # Safety
+///
+/// This is meant to be used for creating contexts of user processes that can be loaded into memory.
+/// Since the kernel lives on the higher half of the virtual address space, it's only safe to change
+/// the bottom half of virtual page mapping.
+pub(crate) unsafe fn shallow_clone_page_table() -> (OffsetPageTable<'static>, PhysFrame) {
+    critical_section::with(|cs| {
+        let mut mapper = PAGE_MAPPER.lock(cs);
+        let mut frame_allocator = FRAME_ALLOCATOR.lock(cs);
+        let l4_table = mapper.level_4_table().clone();
+        let phys_offset = mapper.phys_offset();
+
+        let l4_frame = frame_allocator.allocate_frame().unwrap();
+        let l4_page = (phys_offset.as_u64() + l4_frame.start_address().as_u64()) as *mut PageTable;
+        unsafe {
+            l4_page.write(l4_table);
+        }
+
+        (
+            unsafe { OffsetPageTable::new(&mut *l4_page, phys_offset) },
+            l4_frame,
+        )
+    })
+}
 
 #[allow(clippy::undocumented_unsafe_blocks)]
 // SAFETY: Address is well-aligned and canonical.
