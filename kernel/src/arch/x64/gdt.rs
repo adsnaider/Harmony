@@ -1,4 +1,4 @@
-//! Initialization of the Global Descriptor Table.
+//! Global descriptor table.
 
 use once_cell::sync::Lazy;
 use x86_64::instructions::tables::load_tss;

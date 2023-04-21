@@ -1,4 +1,4 @@
-//! System memory utilities.
+//! Memory management.
 
 use core::alloc::{AllocError, Allocator, GlobalAlloc, Layout};
 use core::ptr::NonNull;
@@ -17,7 +17,6 @@ use crate::singleton::Singleton;
 
 struct Frame(PhysFrame<Size4KiB>);
 
-// SAFETY: Each frame is uniquely indexed by it's starting address, normalized.
 unsafe impl Indexable for Frame {
     fn index(&self) -> usize {
         (self.0.start_address().as_u64() / Size4KiB::SIZE) as usize
@@ -76,7 +75,8 @@ fn is_region_usable(region: &MemoryRegion) -> bool {
 /// # Panics
 ///
 /// If called more than once.
-pub unsafe fn init(physical_memory_offset: VirtAddr, memory_map: &mut MemoryRegions) {
+pub(super) unsafe fn init(physical_memory_offset: u64, memory_map: &mut MemoryRegions) {
+    let physical_memory_offset = VirtAddr::new(physical_memory_offset);
     critical_section::with(|cs| {
         init_frame_allocator(physical_memory_offset, memory_map, cs);
         log::info!("Initialized frame allocator.");
