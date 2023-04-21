@@ -13,6 +13,7 @@
 #![warn(unsafe_op_in_unsafe_fn)]
 #![warn(clippy::undocumented_unsafe_blocks)]
 
+pub mod arch;
 pub mod ksync;
 pub(crate) mod singleton;
 pub mod sys;
@@ -20,39 +21,24 @@ pub mod sys;
 #[macro_use]
 extern crate alloc;
 
-use core::time::Duration;
-
 use bootloader_api::config::Mapping;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
-
-use crate::ksync::executor::Executor;
-use crate::sys::time::sleep;
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     // Can't do much about errors at this point.
     let _ = try_println!("{}", info);
     loop {
-        x86_64::instructions::hlt();
+        arch::inst::hlt();
     }
 }
 
 /// Kernel's starting point.
 fn kmain(bootinfo: &'static mut BootInfo) -> ! {
     // SAFETY: The bootinfo is directly provided by the bootloader.
-    let tasks = unsafe { sys::init(bootinfo) };
+    unsafe { sys::init(bootinfo) }
     log::info!("Initialization sequence complete.");
-
-    let mut runtime = Executor::new();
-    runtime.spawn(tasks);
-    runtime.spawn(async {
-        loop {
-            sleep(Duration::from_secs(1)).await;
-            print!(".");
-        }
-    });
-
-    runtime.start();
+    todo!();
 }
 
 const CONFIG: BootloaderConfig = {
