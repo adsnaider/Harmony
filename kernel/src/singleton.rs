@@ -37,4 +37,14 @@ impl<T: Send> Singleton<T> {
     pub fn is_init(&self, cs: CriticalSection) -> bool {
         self.value.borrow_ref(cs).is_some()
     }
+
+    pub fn set(&self, value: T, cs: CriticalSection) {
+        let mut inner = self.value.borrow_ref_mut(cs);
+        *inner = Some(value);
+    }
+
+    pub fn locked<O>(&self, cs: CriticalSection, actor: impl FnOnce(&mut T) -> O) -> O {
+        let mut data = self.lock(cs);
+        actor(&mut *data)
+    }
 }
