@@ -13,7 +13,7 @@
 pub mod ksync;
 pub mod sys;
 
-#[macro_use]
+// #[macro_use]
 extern crate alloc;
 
 use bootloader_api::config::Mapping;
