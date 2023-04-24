@@ -552,7 +552,6 @@ dependencies = [
  "futures",
  "log",
  "once_cell",
- "pc-keyboard",
  "singleton",
  "thiserror-core",
  "x64",
@@ -669,12 +668,6 @@ name = "os_str_bytes"
 version = "6.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b7820b9daea5457c9f21c69448905d723fbd21136ccf521748f23fd49e723ee"
-
-[[package]]
-name = "pc-keyboard"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c6f2d937e3b8d63449b01401e2bae4041bc9dd1129c2e3e0d239407cf6635ac"
 
 [[package]]
 name = "pic8259"

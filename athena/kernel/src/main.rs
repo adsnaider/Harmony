@@ -10,9 +10,7 @@
 #![warn(unsafe_op_in_unsafe_fn)]
 #![warn(clippy::undocumented_unsafe_blocks)]
 
-// pub mod arch;
 pub mod ksync;
-// pub(crate) mod singleton;
 pub mod sys;
 
 #[macro_use]
