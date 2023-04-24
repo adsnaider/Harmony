@@ -3,6 +3,7 @@
 #![no_std]
 #![no_main]
 #![feature(allocator_api)]
+#![feature(error_in_core)]
 #![feature(const_fn_floating_point_arithmetic)]
 #![feature(negative_impls)]
 #![feature(abi_x86_interrupt)]

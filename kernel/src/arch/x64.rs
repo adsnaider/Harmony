@@ -2,6 +2,7 @@
 
 use bootloader_api::info::MemoryRegions;
 
+pub mod context;
 pub mod inst;
 pub mod int;
 pub mod mm;
@@ -20,6 +21,8 @@ pub unsafe fn init(physical_memory_offset: u64, memory_map: &mut MemoryRegions) 
         log::info!("Initialized the Global Decriptor Table");
         int::init(cs);
         log::info!("Initialized interrupts and handlers");
+
+        context::init();
 
         unsafe {
             timer::Pit8253::new().into_timer(5966);
