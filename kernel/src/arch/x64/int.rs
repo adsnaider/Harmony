@@ -5,6 +5,7 @@ use critical_section::{CriticalSection, Mutex};
 use once_cell::sync::Lazy;
 use pic8259::ChainedPics;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
+use x86_64::PrivilegeLevel;
 
 use super::gdt;
 use crate::try_println;
@@ -19,6 +20,8 @@ static PICS: Mutex<RefCell<ChainedPics>> = Mutex::new(
 
 const TIMER_INT: u8 = PIC1_OFFSET;
 const KEYBOARD_INT: u8 = PIC1_OFFSET + 1;
+
+const SYSCALL_INT: u8 = 0x80;
 
 /// Enable interrupts.
 pub fn enable() {
@@ -49,6 +52,10 @@ fn init_idt() {
                 .set_handler_fn(double_fault_handler)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
         }
+        // Syscall
+        idt[SYSCALL_INT as usize]
+            .set_handler_fn(syscall_interrupt_handler)
+            .set_privilege_level(PrivilegeLevel::Ring3);
 
         // PIC interrupts
         idt[TIMER_INT as usize].set_handler_fn(timer_interrupt_handler);
@@ -98,6 +105,10 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
         PICS.borrow_ref_mut(cs)
             .notify_end_of_interrupt(KEYBOARD_INT);
     }
+}
+
+extern "x86-interrupt" fn syscall_interrupt_handler(stack_frame: InterruptStackFrame) {
+    panic!("SYSCALL REQUEST:\n{stack_frame:#?}");
 }
 
 extern "x86-interrupt" fn breakpoint_handler(stack_frame: InterruptStackFrame) {

@@ -28,12 +28,23 @@ pub fn init() {
             let stack_start = VirtAddr::from_ptr(unsafe { &STACK });
             stack_start + STACK_SIZE // stack end.
         };
+        // Privilege stack table used on interrupts.
+        tss.privilege_stack_table[0] = {
+            const STACK_SIZE: usize = 4096 * 5;
+            static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
+
+            // SAFETY: Although it's a static mut, STACK is only used in this context.
+            let stack_start = VirtAddr::from_ptr(unsafe { &STACK });
+            stack_start + STACK_SIZE // stack end.
+        };
         tss
     });
     static GDT: Lazy<(GlobalDescriptorTable, Selectors)> = Lazy::new(|| {
         let mut gdt = GlobalDescriptorTable::new();
         let code_selector = gdt.add_entry(Descriptor::kernel_code_segment());
         let data_selector = gdt.add_entry(Descriptor::kernel_data_segment());
+        gdt.add_entry(Descriptor::user_code_segment());
+        gdt.add_entry(Descriptor::user_data_segment());
         let tss_selector = gdt.add_entry(Descriptor::tss_segment(&TSS));
         (
             gdt,

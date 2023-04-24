@@ -148,9 +148,9 @@ impl Context {
     pub fn load(program: &[u8]) -> Result<Self, LoadError> {
         let elf = Elf::parse(program)?;
         critical_section::with(|cs| {
-            let mut frame_allocator = FRAME_ALLOCATOR.lock(cs);
             let (mut page_map, l4_frame) =
                 unsafe { mm::make_new_page_table().ok_or(LoadError::OutOfFrames)? };
+            let mut frame_allocator = FRAME_ALLOCATOR.lock(cs);
             for ph in elf.program_headers.iter().filter(|ph| ph.p_type == PT_LOAD) {
                 let segment = Segment::new(program, ph);
                 segment.load(&mut *frame_allocator, &mut page_map)?;

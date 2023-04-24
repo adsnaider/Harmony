@@ -25,6 +25,8 @@ extern crate alloc;
 use bootloader_api::config::Mapping;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 
+static INIT: &[u8] = include_bytes!("../programs/hello.bin");
+
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     // Can't do much about errors at this point.
@@ -39,7 +41,11 @@ fn kmain(bootinfo: &'static mut BootInfo) -> ! {
     // SAFETY: The bootinfo is directly provided by the bootloader.
     unsafe { sys::init(bootinfo) }
     log::info!("Initialization sequence complete.");
-    todo!();
+
+    let process = arch::context::Context::load(INIT).unwrap();
+    unsafe {
+        process.switch();
+    }
 }
 
 const CONFIG: BootloaderConfig = {
