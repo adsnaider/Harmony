@@ -27,7 +27,10 @@ enum ImageKind {
 #[derive(Subcommand, Debug, Clone)]
 enum Commands {
     /// Use qemu to emulate the kernel.
-    Emulate,
+    Emulate {
+        #[arg(short, long, default_value_t = false)]
+        debug: bool,
+    },
     /// Build an ISO image
     Build {
         /// Where to place the built ISO.
@@ -42,7 +45,7 @@ fn main() {
     let bios_path = env!("BIOS_PATH");
 
     match args.command {
-        Commands::Emulate => {
+        Commands::Emulate { debug } => {
             let mut cmd = Command::new("qemu-system-x86_64");
             match args.kind {
                 ImageKind::Uefi => {
@@ -55,6 +58,9 @@ fn main() {
                     cmd.arg("-drive")
                         .arg(format!("format=raw,file={bios_path}"));
                 }
+            }
+            if debug {
+                cmd.arg("-S").arg("-s");
             }
             let mut child = cmd.spawn().unwrap();
             child.wait().unwrap();

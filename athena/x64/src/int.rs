@@ -1,16 +1,12 @@
-//! Interrupts initialization and handling.
-
+//! Interrupt table and handlers.
 use core::cell::RefCell;
 
 use critical_section::{CriticalSection, Mutex};
-use once_cell::sync::{Lazy, OnceCell};
+use once_cell::sync::Lazy;
 use pic8259::ChainedPics;
-use x86_64::instructions::port::Port;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
+use x86_64::PrivilegeLevel;
 
-pub mod async_interrupt;
-
-use self::async_interrupt::{BoundedBufferInterrupt, InterruptCounterCore, InterruptWakerCore};
 use super::gdt;
 
 const PIC1_OFFSET: u8 = 32;
@@ -24,8 +20,22 @@ static PICS: Mutex<RefCell<ChainedPics>> = Mutex::new(
 const TIMER_INT: u8 = PIC1_OFFSET;
 const KEYBOARD_INT: u8 = PIC1_OFFSET + 1;
 
-pub(super) static TIMER_INTERRUPT_CORE: InterruptCounterCore = InterruptCounterCore::new();
-pub(super) static KEYBOARD_INTERRUPT_CORE: OnceCell<BoundedBufferInterrupt<u8>> = OnceCell::new();
+const SYSCALL_INT: u8 = 0x80;
+
+/// Enable interrupts.
+pub fn enable() {
+    x86_64::instructions::interrupts::enable();
+}
+
+/// Disable interrupts.
+pub fn disable() {
+    x86_64::instructions::interrupts::disable();
+}
+
+/// Returns true if interrupts are currently enabled.
+pub fn are_enabled() -> bool {
+    x86_64::instructions::interrupts::are_enabled()
+}
 
 /// Initializes the interrupt descriptor table.
 fn init_idt() {
@@ -41,6 +51,10 @@ fn init_idt() {
                 .set_handler_fn(double_fault_handler)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
         }
+        // Syscall
+        idt[SYSCALL_INT as usize]
+            .set_handler_fn(syscall_interrupt_handler)
+            .set_privilege_level(PrivilegeLevel::Ring3);
 
         // PIC interrupts
         idt[TIMER_INT as usize].set_handler_fn(timer_interrupt_handler);
@@ -57,14 +71,15 @@ pub fn init(cs: CriticalSection) {
     unsafe {
         let mut pics = PICS.borrow_ref_mut(cs);
         pics.initialize();
-        pics.write_masks(0xFC, 0xFF);
+        pics.write_masks(0xFF, 0xFF);
     }
 }
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
     // SAFETY: An interrupt cannot be interrupted. This is reasonable in single threaded code.
     let cs = unsafe { CriticalSection::new() };
-    TIMER_INTERRUPT_CORE.update_and_wake((), cs);
+    // TIMER_INTERRUPT_CORE.update_and_wake((), cs);
+    // TODO
     // SAFETY: Notify timer interrupt vector.
     unsafe {
         PICS.borrow_ref_mut(cs).notify_end_of_interrupt(TIMER_INT);
@@ -74,12 +89,15 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
     // SAFETY: An interrupt cannot be interrupted. This is reasonable in single threaded code.
     let cs = unsafe { CriticalSection::new() };
+    /*
     if let Some(core) = KEYBOARD_INTERRUPT_CORE.get() {
         let mut port = Port::new(0x60);
         // SAFETY: I/O read shouldn't have side effects.
         let scancode: u8 = unsafe { port.read() };
         core.update_and_wake(scancode, cs);
     }
+    */
+    // TODO
 
     // SAFETY: Notify keyboard interrupt vector.
     unsafe {
@@ -88,8 +106,12 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
     }
 }
 
+extern "x86-interrupt" fn syscall_interrupt_handler(stack_frame: InterruptStackFrame) {
+    panic!("SYSCALL REQUEST:\n{stack_frame:#?}");
+}
+
 extern "x86-interrupt" fn breakpoint_handler(stack_frame: InterruptStackFrame) {
-    try_println!("EXCEPTION BREAKPOINT:\n{stack_frame:#?}");
+    log::info!("EXCEPTION BREAKPOINT:\n{stack_frame:#?}");
 }
 
 extern "x86-interrupt" fn general_protection_fault_handler(

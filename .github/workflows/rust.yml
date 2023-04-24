@@ -1,4 +1,4 @@
-name: Rust
+name: Rust CI
 
 on:
   push:
@@ -10,8 +10,17 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  fmt:
+    name: Check code format
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Check code format
+      working-directory: builder/
+      run: cargo fmt --check
 
+  build:
+    name: Check that code compiles
     runs-on: ubuntu-latest
 
     env:
@@ -19,13 +28,19 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Check code format
-      run: cd builder/ && cargo fmt --check
-    - name: Check code format
-      run: cd kernel && cargo fmt --check
-    - name: Build/Check
-      run: cd builder/ && cargo check
-    - name: Bitalloc Tests
-      run: cd bitalloc && cargo test
-    - name: Framed tests
-      run: cd framed && cargo test
+    - uses: ilammy/setup-nasm@v1
+    - name: cargo check
+      working-directory: builder/
+      run: cargo check
+
+  test:
+    name: Run unit tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: { dir: ["athena/bitalloc", "athena/singleton", "athena/framed"] }
+    
+    steps:
+    - uses: actions/checkout@v3
+    - name: Run the tests
+      working-directory: ${{ matrix.dir }}
+      run: cargo test

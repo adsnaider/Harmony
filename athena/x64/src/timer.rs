@@ -1,5 +1,5 @@
+#![allow(unused)]
 //! Implementaion of the 8253 PIT.
-#![allow(dead_code)]
 
 use x86_64::instructions::port::Port;
 

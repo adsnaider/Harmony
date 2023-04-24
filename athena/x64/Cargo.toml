@@ -1,0 +1,27 @@
+[package]
+name = "x64"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bootloader_api = "0.11"
+critical-section = "1.1"
+x86_64 = "0.14"
+linked_list_allocator = "0.10"
+bitalloc = { path = "../bitalloc" }
+log = "0.4"
+pic8259 = "0.10.2"
+thiserror = { version = "1.0", package = "thiserror-core", default-features = false }
+singleton = { path = "../singleton" }
+
+[dependencies.goblin]
+version = "0.6"
+default-features = false
+features = ["elf32", "elf64", "endian_fd"]
+
+[dependencies.once_cell]
+version = "1.17"
+default-features = false
+features = ["critical-section"]

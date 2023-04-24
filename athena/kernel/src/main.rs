@@ -2,10 +2,7 @@
 //! components.
 #![no_std]
 #![no_main]
-#![feature(allocator_api)]
-#![feature(const_fn_floating_point_arithmetic)]
-#![feature(negative_impls)]
-#![feature(abi_x86_interrupt)]
+#![feature(error_in_core)]
 #![deny(absolute_paths_not_starting_with_crate)]
 #![warn(missing_copy_implementations)]
 #![warn(missing_debug_implementations)]
@@ -14,45 +11,35 @@
 #![warn(clippy::undocumented_unsafe_blocks)]
 
 pub mod ksync;
-pub(crate) mod singleton;
 pub mod sys;
 
-#[macro_use]
+// #[macro_use]
 extern crate alloc;
-
-use core::time::Duration;
 
 use bootloader_api::config::Mapping;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 
-use crate::ksync::executor::Executor;
-use crate::sys::time::sleep;
+static INIT: &[u8] = include_bytes!("../programs/hello.bin");
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     // Can't do much about errors at this point.
     let _ = try_println!("{}", info);
     loop {
-        x86_64::instructions::hlt();
+        arch::inst::hlt();
     }
 }
 
 /// Kernel's starting point.
 fn kmain(bootinfo: &'static mut BootInfo) -> ! {
     // SAFETY: The bootinfo is directly provided by the bootloader.
-    let tasks = unsafe { sys::init(bootinfo) };
+    unsafe { sys::init(bootinfo) }
     log::info!("Initialization sequence complete.");
 
-    let mut runtime = Executor::new();
-    runtime.spawn(tasks);
-    runtime.spawn(async {
-        loop {
-            sleep(Duration::from_secs(1)).await;
-            print!(".");
-        }
-    });
-
-    runtime.start();
+    let process = arch::context::Context::load(INIT).unwrap();
+    unsafe {
+        process.switch();
+    }
 }
 
 const CONFIG: BootloaderConfig = {
@@ -67,3 +54,21 @@ const CONFIG: BootloaderConfig = {
     config
 };
 entry_point!(kmain, config = &CONFIG);
+
+struct SingleThreadCS();
+critical_section::set_impl!(SingleThreadCS);
+/// SAFETY: While the OS kernel is running in a single thread, then disabling interrupts is a safe
+/// to guarantee a critical section's conditions.
+unsafe impl critical_section::Impl for SingleThreadCS {
+    unsafe fn acquire() -> critical_section::RawRestoreState {
+        let interrupts_enabled = arch::int::are_enabled();
+        arch::int::disable();
+        interrupts_enabled
+    }
+
+    unsafe fn release(interrupts_were_enabled: critical_section::RawRestoreState) {
+        if interrupts_were_enabled {
+            arch::int::enable();
+        }
+    }
+}

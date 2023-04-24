@@ -51,7 +51,7 @@ impl Executor {
                     .expect("Task ID {task_id} missing task in b-tree");
                 let _ = task.poll(&self.ready);
             }
-            x86_64::instructions::hlt();
+            arch::inst::hlt();
         }
     }
 }
