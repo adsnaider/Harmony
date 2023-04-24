@@ -10,7 +10,6 @@ use framed::console::{BitmapFont, Console};
 use framed::{Frame, Pixel};
 
 use self::display::Display;
-use crate::arch;
 
 const FONT: &[u8] = include_bytes!("../font.bdf");
 

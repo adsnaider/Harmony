@@ -8,15 +8,15 @@ edition = "2021"
 [dependencies]
 bootloader_api = "0.11"
 framed = { path = "../framed" }
-bitalloc = { path = "../bitalloc" }
-linked_list_allocator = "0.10"
 log = "0.4"
-x86_64 = "0.14"
-pic8259 = "0.10.2"
 pc-keyboard = "0.5"
 critical-section = { version = "1.1", features = ["restore-state-bool"] }
 atomic_refcell = "0.1"
 thiserror = { version = "1.0", package = "thiserror-core", default-features = false }
+singleton = { path = "../singleton" }
+
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+arch = { path = "../x64", package = "x64" }
 
 [dependencies.once_cell]
 version = "1.17"
@@ -33,7 +33,3 @@ version = "0.3"
 default-features = false
 features = ["async-await"]
 
-[dependencies.goblin]
-version = "0.6"
-default-features = false
-features = ["elf32", "elf64", "endian_fd"]

@@ -545,20 +545,17 @@ name = "kernel"
 version = "0.1.0"
 dependencies = [
  "atomic_refcell",
- "bitalloc",
  "bootloader_api",
  "critical-section",
  "crossbeam",
  "framed",
  "futures",
- "goblin",
- "linked_list_allocator",
  "log",
  "once_cell",
  "pc-keyboard",
- "pic8259",
+ "singleton",
  "thiserror-core",
- "x86_64",
+ "x64",
 ]
 
 [[package]]
@@ -851,6 +848,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "singleton"
+version = "0.1.0"
+dependencies = [
+ "critical-section",
 ]
 
 [[package]]
@@ -1162,6 +1166,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05f360fc0b24296329c78fda852a1e9ae82de9cf7b27dae4b7f62f118f77b9ed"
 dependencies = [
  "tap",
+]
+
+[[package]]
+name = "x64"
+version = "0.1.0"
+dependencies = [
+ "bitalloc",
+ "bootloader_api",
+ "critical-section",
+ "goblin",
+ "linked_list_allocator",
+ "log",
+ "once_cell",
+ "pic8259",
+ "singleton",
+ "thiserror-core",
+ "x86_64",
 ]
 
 [[package]]
