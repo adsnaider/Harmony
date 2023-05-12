@@ -21,6 +21,7 @@ use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 
 static INIT: &[u8] = include_bytes!("../programs/hello.bin");
 
+#[cfg(target_os = "none")]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     // Can't do much about errors at this point.
