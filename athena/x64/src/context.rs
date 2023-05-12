@@ -2,12 +2,13 @@
 
 use core::arch::asm;
 
+pub mod privileged;
 pub mod userspace;
 
 /// A context is a general abstraction to a thread of execution.
 pub trait Context {
     /// Performs the context switch.
-    unsafe fn switch(&self) -> !;
+    fn switch(&self) -> !;
 }
 
 /// Initializes the hardware capabilities for context switching.

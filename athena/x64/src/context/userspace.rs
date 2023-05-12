@@ -186,7 +186,7 @@ impl UserContext {
 }
 
 impl Context for UserContext {
-    unsafe fn switch(&self) -> ! {
+    fn switch(&self) -> ! {
         let (_, flags) = Cr3::read();
         unsafe {
             Cr3::write(self.l4_frame, flags);

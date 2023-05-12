@@ -16,6 +16,8 @@ pub mod sys;
 // #[macro_use]
 extern crate alloc;
 
+use arch::context::privileged::KernelContext;
+use arch::context::Context;
 use bootloader_api::config::Mapping;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 
@@ -35,7 +37,11 @@ fn kmain(bootinfo: &'static mut BootInfo) -> ! {
     unsafe { sys::init(bootinfo) }
     log::info!("Initialization sequence complete.");
 
-    loop {}
+    let kt = KernelContext::kthread(|| {
+        println!("Yay it's working!");
+        loop {}
+    });
+    kt.switch();
 }
 
 const CONFIG: BootloaderConfig = {

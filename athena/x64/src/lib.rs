@@ -1,5 +1,6 @@
 //! x86-64-specifc code and constructs.
 #![no_std]
+#![feature(never_type)]
 #![feature(allocator_api)]
 #![feature(abi_x86_interrupt)]
 #![feature(error_in_core)]
@@ -12,6 +13,8 @@
 #![warn(clippy::undocumented_unsafe_blocks)]
 
 use bootloader_api::info::MemoryRegions;
+
+extern crate alloc;
 
 pub mod context;
 pub mod inst;
