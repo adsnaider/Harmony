@@ -1,4 +1,4 @@
-#g AthenaOS
+# AthenaOS
 
 Athena is an experimental, hobby OS written entirely in Rust.
 

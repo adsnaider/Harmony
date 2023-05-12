@@ -52,5 +52,5 @@ iso: bootimage
 			/tmp/iso
 		
 clean:
-	rm -rf .build/*
+	rm -rf $(ARTIFACTS)/*
 	cargo clean
