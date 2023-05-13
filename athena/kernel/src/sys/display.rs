@@ -158,6 +158,27 @@ macro_rules! try_println {
     ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
 }
 
+/// Prints a debug expression.
+#[macro_export]
+macro_rules! dbg {
+    () => {
+        $crate::println!("[{}:{}]", file!(), line!())
+    };
+    ($val:expr $(,)?) => {
+        // Use of `match` here is intentional because it affects the lifetimes
+        // of temporaries - https://stackoverflow.com/a/48732525/1063961
+        match $val {
+            tmp => {
+                $crate::println!("[{}:{}] {} = {:#?}",
+                    file!(), line!(), stringify!($val), &tmp);
+                tmp
+            }
+        }
+    };
+    ($($val:expr),+ $(,)?) => {
+        ($($crate::dbg!($val)),+,)
+    };
+}
 /// Tries to prints the arguments to the screen if the console isn't currently in use.
 ///
 /// May still panic if the console hasn't been initialized.
