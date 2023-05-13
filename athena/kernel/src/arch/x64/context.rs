@@ -9,6 +9,9 @@ pub mod userspace;
 pub trait Context {
     /// Performs the context switch.
     fn switch(&self) -> !;
+
+    /// Performs the context switch.
+    fn completed(&self) -> bool;
 }
 
 /// Initializes the hardware capabilities for context switching.

@@ -192,6 +192,10 @@ impl Context for UserContext {
             sysret(&self.regs);
         }
     }
+
+    fn completed(&self) -> bool {
+        todo!();
+    }
 }
 
 unsafe fn sysret(regs: &CpuRegs) -> ! {

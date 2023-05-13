@@ -16,13 +16,13 @@
 
 pub mod arch;
 pub mod ksync;
+pub mod sched;
 pub mod sys;
 
 // #[macro_use]
 extern crate alloc;
 
 use arch::context::privileged::KThread;
-use arch::context::Context;
 use bootloader_api::config::Mapping;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 
@@ -38,14 +38,27 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 
 /// Kernel's starting point.
 fn kmain(bootinfo: &'static mut BootInfo) -> ! {
+    crate::arch::int::disable();
     // SAFETY: The bootinfo is directly provided by the bootloader.
-    unsafe { sys::init(bootinfo) }
-    log::info!("Initialization sequence complete.");
-
-    let kt = KThread::new(|| {
-        println!("Yay it's working!");
+    critical_section::with(|cs| {
+        unsafe {
+            sys::init(bootinfo);
+        }
+        sched::init(cs);
     });
-    kt.switch();
+    log::info!("Initialization sequence complete");
+
+    sched::push(KThread::new(|| {
+        println!("Yay it's working!");
+    }));
+    sched::push(KThread::new(|| {
+        println!("This is also working");
+    }));
+
+    crate::arch::int::enable();
+    log::info!("Started interrupts");
+
+    sched::switch();
 }
 
 const CONFIG: BootloaderConfig = {

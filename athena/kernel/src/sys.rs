@@ -57,5 +57,4 @@ pub(super) unsafe fn init(bootinfo: &mut BootInfo) {
         // map is correct from the bootloader.
         unsafe { crate::arch::init(pmo, &mut bootinfo.memory_regions) }
     });
-    crate::arch::int::enable();
 }

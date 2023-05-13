@@ -2,11 +2,14 @@
 
 use alloc::boxed::Box;
 use core::arch::asm;
+use core::sync::atomic::AtomicBool;
+use core::sync::atomic::Ordering::Relaxed;
 
 use x86_64::structures::paging::{Page, PageSize, Size4KiB};
 
 use super::Context;
-use crate::arch::mm::alloc_page;
+use crate::arch::mm;
+use crate::sched;
 
 #[derive(Debug, Copy, Clone, Default)]
 #[repr(packed)]
@@ -43,7 +46,12 @@ impl Regs {
 pub struct KThread {
     stack_page: Page<Size4KiB>,
     regs: Regs,
+    dead: *const AtomicBool,
 }
+
+/// SAFETY: *const AtomicBool is Send and Sync.
+unsafe impl Send for KThread {}
+unsafe impl Sync for KThread {}
 
 impl KThread {
     /// Constructs a new context associated with the executor.
@@ -51,26 +59,37 @@ impl KThread {
     where
         F: FnOnce() + Send + 'static,
     {
-        extern "C" fn inner<F>(func: *mut F) -> !
+        extern "C" fn inner<F>(func: *mut F, dead: *const AtomicBool) -> !
         where
             F: FnOnce() + Send + 'static,
         {
             // SAFETY: We leaked it when we created the kthread.
-            let func = unsafe { Box::from_raw(func) };
-            func();
-            loop {
-                crate::arch::inst::hlt();
+            {
+                let func = unsafe { Box::from_raw(func) };
+                func();
             }
+            let dead = unsafe { &*dead };
+            dead.store(true, Relaxed);
+            sched::switch();
         }
-        let stack_page = alloc_page().unwrap();
+        let stack_page = mm::alloc_page().unwrap();
         let func = Box::into_raw(Box::new(func));
         let mut regs = Regs::new();
+        let dead = Box::into_raw(Box::new(AtomicBool::new(false)));
+        // System-V ABI pushes int-like arguements to registers.
         regs.rdi = func as u64;
+        regs.rsi = dead as u64;
         regs.rsp = stack_page.start_address().as_u64() + Size4KiB::SIZE;
         regs.rip = inner::<F> as u64;
-        Self { regs, stack_page }
+        Self {
+            regs,
+            stack_page,
+            dead,
+        }
     }
 }
+
+// TODO: Drop.
 
 impl Context for KThread {
     fn switch(&self) -> ! {
@@ -100,5 +119,10 @@ impl Context for KThread {
                 options(noreturn)
             )
         }
+    }
+
+    fn completed(&self) -> bool {
+        let dead = unsafe { &*self.dead };
+        dead.load(Relaxed)
     }
 }
