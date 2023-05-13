@@ -40,24 +40,27 @@ impl Regs {
 
 /// Kernel-based context.
 #[derive(Debug)]
-pub struct KernelContext {
+pub struct KThread {
     stack_page: Page<Size4KiB>,
     regs: Regs,
 }
 
-impl KernelContext {
+impl KThread {
     /// Constructs a new context associated with the executor.
-    pub fn kthread<F>(func: F) -> Self
+    pub fn new<F>(func: F) -> Self
     where
-        F: FnOnce() -> ! + Send + 'static,
+        F: FnOnce() + Send + 'static,
     {
         extern "C" fn inner<F>(func: *mut F) -> !
         where
-            F: FnOnce() -> ! + Send + 'static,
+            F: FnOnce() + Send + 'static,
         {
             // SAFETY: We leaked it when we created the kthread.
             let func = unsafe { Box::from_raw(func) };
             func();
+            loop {
+                crate::arch::inst::hlt();
+            }
         }
         let stack_page = alloc_page().unwrap();
         let func = Box::into_raw(Box::new(func));
@@ -69,7 +72,7 @@ impl KernelContext {
     }
 }
 
-impl Context for KernelContext {
+impl Context for KThread {
     fn switch(&self) -> ! {
         unsafe {
             asm!(

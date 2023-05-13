@@ -21,7 +21,7 @@ pub mod sys;
 // #[macro_use]
 extern crate alloc;
 
-use arch::context::privileged::KernelContext;
+use arch::context::privileged::KThread;
 use arch::context::Context;
 use bootloader_api::config::Mapping;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
@@ -42,9 +42,8 @@ fn kmain(bootinfo: &'static mut BootInfo) -> ! {
     unsafe { sys::init(bootinfo) }
     log::info!("Initialization sequence complete.");
 
-    let kt = KernelContext::kthread(|| {
+    let kt = KThread::new(|| {
         println!("Yay it's working!");
-        loop {}
     });
     kt.switch();
 }
