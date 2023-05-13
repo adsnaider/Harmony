@@ -7,7 +7,8 @@ use singleton::Singleton;
 use x86_64::structures::paging::{FrameAllocator, PageSize, PhysFrame, Size4KiB};
 use x86_64::{PhysAddr, VirtAddr};
 
-pub(crate) static FRAME_ALLOCATOR: Singleton<SystemFrameAllocator> = Singleton::uninit();
+/// The system-wide frame allocator.
+pub static FRAME_ALLOCATOR: Singleton<SystemFrameAllocator> = Singleton::uninit();
 
 struct Frame(PhysFrame<Size4KiB>);
 
@@ -26,7 +27,8 @@ unsafe impl Indexable for Frame {
     }
 }
 
-pub(crate) struct SystemFrameAllocator(Bitalloc<'static, Frame>);
+#[allow(missing_debug_implementations)]
+pub struct SystemFrameAllocator(Bitalloc<'static, Frame>);
 
 // SAFETY: We use a bitmap to make sure that all frames returned are unique
 // and available for use.

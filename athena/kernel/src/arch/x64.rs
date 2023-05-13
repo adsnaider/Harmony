@@ -1,17 +1,4 @@
 //! x86-64-specifc code and constructs.
-#![no_std]
-#![feature(never_type)]
-#![feature(allocator_api)]
-#![feature(abi_x86_interrupt)]
-#![feature(error_in_core)]
-#![feature(negative_impls)]
-#![feature(const_fn_floating_point_arithmetic)]
-#![deny(absolute_paths_not_starting_with_crate)]
-#![warn(missing_debug_implementations)]
-#![warn(missing_docs)]
-#![warn(unsafe_op_in_unsafe_fn)]
-#![warn(clippy::undocumented_unsafe_blocks)]
-
 use bootloader_api::info::MemoryRegions;
 
 extern crate alloc;

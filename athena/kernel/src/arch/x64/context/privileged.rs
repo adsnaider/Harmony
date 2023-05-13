@@ -6,7 +6,7 @@ use core::arch::asm;
 use x86_64::structures::paging::{Page, PageSize, Size4KiB};
 
 use super::Context;
-use crate::mm::alloc_page;
+use crate::arch::mm::alloc_page;
 
 #[derive(Debug, Copy, Clone, Default)]
 #[repr(packed)]

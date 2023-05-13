@@ -11,8 +11,7 @@ use x86_64::structures::paging::{
 use x86_64::VirtAddr;
 
 use super::Context;
-use crate::mm;
-use crate::mm::frames::FRAME_ALLOCATOR;
+use crate::arch::mm::{self, FRAME_ALLOCATOR};
 
 /// A runnable context that can be scheduled.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]

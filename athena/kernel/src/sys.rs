@@ -55,7 +55,7 @@ pub(super) unsafe fn init(bootinfo: &mut BootInfo) {
 
         // SAFETY: The physical memory offset is correct, well-aligned, and canonical, and the memory
         // map is correct from the bootloader.
-        unsafe { arch::init(pmo, &mut bootinfo.memory_regions) }
+        unsafe { crate::arch::init(pmo, &mut bootinfo.memory_regions) }
     });
-    arch::int::enable();
+    crate::arch::int::enable();
 }

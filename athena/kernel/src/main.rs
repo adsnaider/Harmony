@@ -3,13 +3,18 @@
 #![no_std]
 #![no_main]
 #![feature(error_in_core)]
+#![feature(never_type)]
+#![feature(allocator_api)]
+#![feature(abi_x86_interrupt)]
+#![feature(negative_impls)]
+#![feature(const_fn_floating_point_arithmetic)]
 #![deny(absolute_paths_not_starting_with_crate)]
-#![warn(missing_copy_implementations)]
 #![warn(missing_debug_implementations)]
 #![warn(missing_docs)]
 #![warn(unsafe_op_in_unsafe_fn)]
 #![warn(clippy::undocumented_unsafe_blocks)]
 
+pub mod arch;
 pub mod ksync;
 pub mod sys;
 

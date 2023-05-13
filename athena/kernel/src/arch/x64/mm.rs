@@ -1,19 +1,18 @@
 //! Memory management.
 
+use core::sync::atomic::AtomicU64;
 use core::sync::atomic::Ordering::Relaxed;
-use core::sync::atomic::{AtomicU64, AtomicUsize};
 
 use bootloader_api::info::MemoryRegions;
-use singleton::Singleton;
 use x86_64::structures::paging::{
     FrameAllocator, Mapper, OffsetPageTable, Page, PageTableFlags, PhysFrame,
 };
 use x86_64::VirtAddr;
 
-use self::frames::FRAME_ALLOCATOR;
+pub use self::frames::FRAME_ALLOCATOR;
 use self::paging::{PAGE_MAPPER, PHYSICAL_MEMORY_OFFSET};
 
-pub(crate) mod frames;
+mod frames;
 mod heap;
 mod paging;
 
