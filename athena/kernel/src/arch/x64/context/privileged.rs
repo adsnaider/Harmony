@@ -91,7 +91,8 @@ impl Context for KThread {
                 "mov r13, [rax + 8*13]",
                 "mov r14, [rax + 8*14]",
                 "mov r15, [rax + 8*15]",
-                // "mov rflags, [rax + 8*17]",
+                "push [rax + 8*17]", // rflags
+                "popf",
                 "push [rax + 8 * 16]",
                 "mov rax, [rax]",
                 "ret",
