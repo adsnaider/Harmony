@@ -5,7 +5,7 @@ mod display;
 
 use bootloader_api::info::{MemoryRegion, Optional};
 use bootloader_api::BootInfo;
-pub use display::{_print, _try_print};
+pub use display::_print;
 use framed::console::{BitmapFont, Console};
 use framed::{Frame, Pixel};
 

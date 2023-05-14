@@ -64,23 +64,21 @@ impl Scheduler {
     ///
     /// The function will restore the critical section state before perfoming the context switch.
     pub unsafe fn switch(&mut self, restore_state: RestoreState) -> ! {
-        loop {
-            if let Some(task) = self.readyq.pop_front() {
-                if task.completed() {
-                    continue;
-                }
-                if let Some(previous) = self.current.replace(task) {
-                    if !previous.completed() {
-                        self.readyq.push_back(previous);
-                    }
-                }
-                unsafe {
-                    critical_section::release(restore_state);
-                }
-                self.current.as_ref().unwrap().switch();
+        while let Some(task) = self.readyq.pop_front() {
+            if task.completed() {
+                continue;
             }
-            panic!("No tasks to run");
+            if let Some(previous) = self.current.replace(task) {
+                if !previous.completed() {
+                    self.readyq.push_back(previous);
+                }
+            }
+            unsafe {
+                critical_section::release(restore_state);
+            }
+            self.current.as_ref().unwrap().switch();
         }
+        panic!("No tasks to run");
     }
 }
 

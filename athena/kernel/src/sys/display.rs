@@ -1,6 +1,6 @@
 //! System display and console.
 
-use atomic_refcell::{AtomicRefCell, BorrowMutError};
+use atomic_refcell::AtomicRefCell;
 use bootloader_api::info::{FrameBuffer, PixelFormat};
 use framed::console::Console;
 use framed::{Frame, Pixel};
@@ -136,26 +136,15 @@ macro_rules! println {
 /// Prints the arguments to the screen, panicking if unable to.
 #[doc(hidden)]
 pub fn _print(args: core::fmt::Arguments) {
-    use core::fmt::Write;
-    CONSOLE
-        .borrow_mut()
-        .as_mut()
-        .unwrap()
-        .write_fmt(args)
-        .unwrap();
-}
-
-/// Prints the arguments to the console. May panic!.
-#[macro_export]
-macro_rules! try_print {
-    ($($arg:tt)*) => {$crate::sys::_print(format_args!($($arg)*))};
-}
-
-/// Prints the arguments to the console and moves to the next line. May panic!.
-#[macro_export]
-macro_rules! try_println {
-    () => ($crate::try_print!("\n"));
-    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+    critical_section::with(|_cs| {
+        use core::fmt::Write;
+        CONSOLE
+            .borrow_mut()
+            .as_mut()
+            .unwrap()
+            .write_fmt(args)
+            .unwrap();
+    });
 }
 
 /// Prints a debug expression.
@@ -178,18 +167,4 @@ macro_rules! dbg {
     ($($val:expr),+ $(,)?) => {
         ($($crate::dbg!($val)),+,)
     };
-}
-/// Tries to prints the arguments to the screen if the console isn't currently in use.
-///
-/// May still panic if the console hasn't been initialized.
-#[doc(hidden)]
-pub fn _try_print(args: core::fmt::Arguments) -> Result<(), BorrowMutError> {
-    use core::fmt::Write;
-    CONSOLE
-        .try_borrow_mut()?
-        .as_mut()
-        .unwrap()
-        .write_fmt(args)
-        .unwrap();
-    Ok(())
 }

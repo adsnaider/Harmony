@@ -30,7 +30,7 @@ use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     // Can't do much about errors at this point.
-    let _ = try_println!("{}", info);
+    println!("{}", info);
     loop {
         arch::inst::hlt();
     }
@@ -48,10 +48,10 @@ fn kmain(bootinfo: &'static mut BootInfo) -> ! {
     });
     log::info!("Initialization sequence complete");
 
-    sched::push(KThread::new(|| {
+    sched::push(KThread::new(|| loop {
         println!("Yay it's working!");
     }));
-    sched::push(KThread::new(|| {
+    sched::push(KThread::new(|| loop {
         println!("This is also working");
     }));
 

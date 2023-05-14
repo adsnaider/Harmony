@@ -13,6 +13,8 @@ use crate::sched;
 
 #[derive(Debug, Copy, Clone, Default)]
 #[repr(packed)]
+// TODO: Docs.
+#[allow(missing_docs)]
 pub struct Regs {
     pub rax: u64,
     pub rbx: u64,
@@ -59,7 +61,7 @@ impl KThread {
     where
         F: FnOnce() + Send + 'static,
     {
-        extern "C" fn inner<F>(func: *mut F, dead: *const AtomicBool) -> !
+        extern "sysv64" fn inner<F>(func: *mut F, dead: *const AtomicBool) -> !
         where
             F: FnOnce() + Send + 'static,
         {
