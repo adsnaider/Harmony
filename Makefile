@@ -20,7 +20,7 @@ BUILD_DIR = target/$(TARGET)/$(PROFILE_DIR)/
 
 KERNEL_BIN = $(BUILD_DIR)/kernel
 
-ARTIFACTS = .build
+ARTIFACTS = .build/
 
 .PHONY: build bootimage emulate clean 
 
