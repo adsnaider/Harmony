@@ -45,6 +45,8 @@ fn init_idt() {
         idt.general_protection_fault
             .set_handler_fn(general_protection_fault_handler);
         idt.page_fault.set_handler_fn(page_fault_handler);
+        idt.overflow.set_handler_fn(overflow_handler);
+        idt.divide_error.set_handler_fn(divide_error_handler);
         // SAFETY: Stack index provided is valid and only used for the double fault handler.
         unsafe {
             idt.double_fault
@@ -112,6 +114,13 @@ extern "x86-interrupt" fn syscall_interrupt_handler(stack_frame: InterruptStackF
 
 extern "x86-interrupt" fn breakpoint_handler(stack_frame: InterruptStackFrame) {
     log::info!("EXCEPTION BREAKPOINT:\n{stack_frame:#?}");
+}
+
+extern "x86-interrupt" fn overflow_handler(stack_frame: InterruptStackFrame) {
+    log::info!("EXCEPTION OVERFLOW:\n{stack_frame:#?}");
+}
+extern "x86-interrupt" fn divide_error_handler(stack_frame: InterruptStackFrame) {
+    log::info!("EXCEPTION DIVIDE ERROR:\n{stack_frame:#?}");
 }
 
 extern "x86-interrupt" fn general_protection_fault_handler(

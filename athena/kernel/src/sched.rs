@@ -1,110 +1,116 @@
 //! The kernel scheduler.
 
-use alloc::boxed::Box;
 use alloc::collections::VecDeque;
-use core::cell::UnsafeCell;
+use alloc::vec::Vec;
+use core::cell::{RefCell};
 use core::fmt::Debug;
 
-use critical_section::{CriticalSection, Mutex, RestoreState};
 
-use crate::arch::context::Context;
+
+use critical_section::{CriticalSection, Mutex};
+
+
+use once_cell::sync::OnceCell;
+
+use crate::arch::context::privileged::KThread;
 
 /// The kernel scheduler.
+#[derive(Debug)]
 pub struct Scheduler {
-    readyq: VecDeque<Box<dyn Context + Send>>,
-    current: Option<Box<dyn Context + Send>>,
+    readyq: Mutex<RefCell<VecDeque<KThread>>>,
+    blocked: Mutex<RefCell<Vec<KThread>>>,
+    current: Mutex<RefCell<Option<KThread>>>,
 }
 
-static SCHEDULER: Mutex<UnsafeCell<Option<Scheduler>>> = Mutex::new(UnsafeCell::new(None));
+static SCHEDULER: OnceCell<Scheduler> = OnceCell::new();
 
 /// Initializes the scheduler.
-pub fn init(cs: CriticalSection) {
-    unsafe {
-        let scheduler = SCHEDULER.borrow(cs);
-        *scheduler.get() = Some(Scheduler::new());
-    }
+pub fn init() {
+    SCHEDULER.set(Scheduler::new()).unwrap();
 }
 
 /// Pushes a new task to be scheduled.
-pub fn push<T: Context + Send + 'static>(task: T) {
-    critical_section::with(|cs| {
-        let scheduler = SCHEDULER.borrow(cs);
-        unsafe { (*scheduler.get()).as_mut().unwrap().push(task) }
-    })
+pub fn push(task: KThread) {
+    SCHEDULER.get().unwrap().push(task);
 }
 
-/// Schedules a new task.
-pub fn switch() -> ! {
-    unsafe {
-        let restore_state = critical_section::acquire();
-        let cs = CriticalSection::new();
-        let scheduler = SCHEDULER.borrow(cs);
-        (*scheduler.get()).as_mut().unwrap().switch(restore_state);
-    }
+/// Performs a context switch.
+pub fn switch() {
+    SCHEDULER.get().unwrap().switch();
 }
+
+/// Starts the scheduler.
+pub fn run() -> ! {
+    assert!(!crate::arch::int::are_enabled());
+    crate::arch::int::enable();
+    SCHEDULER.get().unwrap().run();
+}
+
+/// Marks the current context as completed.
+pub fn kill() -> ! {
+    todo!();
+}
+
 impl Scheduler {
     /// Creates an empty scheduler.
     pub fn new() -> Self {
         Self {
-            readyq: VecDeque::new(),
-            current: None,
+            readyq: Mutex::new(RefCell::new(VecDeque::new())),
+            current: Mutex::new(RefCell::new(None)),
+            blocked: Mutex::new(RefCell::new(Vec::new())),
         }
     }
 
     /// Pushes a new task to the scheduler.
-    pub fn push<T: Context + Send + 'static>(&mut self, task: T) {
-        let task = Box::new(task);
-        self.readyq.push_back(task);
+    pub fn push(&self, task: KThread) {
+        critical_section::with(|cs| {
+            self.readyq.borrow_ref_mut(cs).push_back(task);
+        });
     }
 
     /// Schedules the next task to run.
     ///
-    /// Note how this doesn't return. In order to reschedule to the next element,
-    /// it's necessary to call this method again.
-    ///
-    /// The function will restore the critical section state before perfoming the context switch.
-    pub unsafe fn switch(&mut self, restore_state: RestoreState) -> ! {
-        while let Some(task) = self.readyq.pop_front() {
-            if task.completed() {
-                continue;
-            }
-            if let Some(previous) = self.current.replace(task) {
-                if !previous.completed() {
-                    self.readyq.push_back(previous);
-                }
-            }
+    /// Upon a follow up switch, the function will return back to its caller.
+    pub fn switch(&self) {
+        // Manually disable interrupts as they'll have to be reenabled in the `switch` function.
+        assert!(crate::arch::int::are_enabled());
+        crate::arch::int::disable();
+        // SAFETY: Interrupts are disabled.
+        let cs = unsafe { CriticalSection::new() };
+        let mut readyq = self.readyq.borrow_ref_mut(cs);
+        let mut current = self.current.borrow_ref_mut(cs);
+        if let Some(next) = readyq.pop_front() {
+            let previous = current.replace(next).unwrap();
+            readyq.push_back(previous);
+            let previous: *mut KThread = readyq.back_mut().unwrap();
+            let next: *const KThread = current.as_ref().unwrap();
+            drop(readyq);
+            drop(current);
+            drop(cs);
+            // This function will restore interrupts
             unsafe {
-                critical_section::release(restore_state);
+                (*next).switch(previous);
             }
-            self.current.as_ref().unwrap().switch();
         }
-        panic!("No tasks to run");
     }
-}
 
-impl Debug for Scheduler {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        if f.alternate() {
-            write!(f, "Scheduler {{\n\treadyq: [\n")?;
-            for task in self.readyq.iter() {
-                write!(f, "\t\t{:?}\n", &*task as *const _)?;
-            }
-            write!(
-                f,
-                "],\n\tcurrent: {:?}\n}}",
-                self.current.as_ref().map(|b| &*b as *const _)
-            )?;
-        } else {
-            write!(f, "Scheduler {{ readyq: [")?;
-            for task in self.readyq.iter() {
-                write!(f, "{:?},", &*task as *const _)?;
-            }
-            write!(
-                f,
-                "], current: {:?} }}",
-                self.current.as_ref().map(|b| &*b as *const _)
-            )?;
+    /// Starts the scheduler.
+    pub fn run(&self) -> ! {
+        assert!(crate::arch::int::are_enabled());
+        crate::arch::int::disable();
+        let cs = unsafe { CriticalSection::new() };
+        let mut readyq = self.readyq.borrow_ref_mut(cs);
+        let mut current = self.current.borrow_ref_mut(cs);
+        let next = readyq.pop_front().unwrap();
+        let mut dummy = KThread::dummy();
+        assert!(current.replace(next).is_none());
+        let next: *const KThread = current.as_ref().unwrap();
+        drop(readyq);
+        drop(current);
+        drop(cs);
+        unsafe {
+            (*next).switch(&mut dummy);
         }
-        Ok(())
+        unreachable!();
     }
 }

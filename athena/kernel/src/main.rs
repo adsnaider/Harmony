@@ -2,6 +2,7 @@
 //! components.
 #![no_std]
 #![no_main]
+#![feature(naked_functions)]
 #![feature(error_in_core)]
 #![feature(never_type)]
 #![feature(allocator_api)]
@@ -40,25 +41,26 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 fn kmain(bootinfo: &'static mut BootInfo) -> ! {
     crate::arch::int::disable();
     // SAFETY: The bootinfo is directly provided by the bootloader.
-    critical_section::with(|cs| {
+    critical_section::with(|_cs| {
         unsafe {
             sys::init(bootinfo);
         }
-        sched::init(cs);
+        sched::init();
     });
     log::info!("Initialization sequence complete");
 
     sched::push(KThread::new(|| loop {
-        println!("Yay it's working!");
+        print!("Yay it's working!");
+        core::hint::black_box(for _ in 0..1000000 {});
+        sched::switch();
     }));
     sched::push(KThread::new(|| loop {
-        println!("This is also working");
+        print!("This is also working");
+        core::hint::black_box(for _ in 0..1000000 {});
+        sched::switch();
     }));
 
-    crate::arch::int::enable();
-    log::info!("Started interrupts");
-
-    sched::switch();
+    sched::run();
 }
 
 const CONFIG: BootloaderConfig = {
