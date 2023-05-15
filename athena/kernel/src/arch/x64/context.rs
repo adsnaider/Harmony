@@ -8,7 +8,7 @@ use x86_64::structures::paging::{Page, PageSize, Size4KiB};
 use crate::arch::mm;
 use crate::sched;
 
-pub mod privileged;
+// pub mod privileged;
 // pub mod userspace;
 
 /// Initializes the hardware capabilities for context switching.
@@ -276,7 +276,7 @@ impl KThread {
                 let func = unsafe { Box::from_raw(func) };
                 func();
             }
-            sched::kill();
+            sched::terminate();
         }
         let stack_page = mm::alloc_page().unwrap();
         let func = Box::into_raw(Box::new(f));

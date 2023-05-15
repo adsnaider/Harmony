@@ -43,8 +43,8 @@ pub fn run() -> ! {
 }
 
 /// Marks the current context as completed.
-pub fn kill() -> ! {
-    todo!();
+pub fn terminate() -> ! {
+    SCHEDULER.get().unwrap().terminate();
 }
 
 impl Scheduler {
@@ -118,6 +118,32 @@ impl Scheduler {
         // * When the switch comes back to us (on a further restore, we don't have any more references around).
         unsafe {
             Context::jump(next);
+        }
+    }
+
+    /// Terminates the currently running task and schedules the next one
+    pub fn terminate(&self) -> ! {
+        assert!(crate::arch::int::are_enabled());
+        loop {
+            crate::arch::int::disable();
+            let cs = unsafe { CriticalSection::new() };
+            let readyq = unsafe { &mut *self.readyq.borrow(cs).get() };
+            let current = unsafe { &mut *self.current.borrow(cs).get() };
+            if let Some(next) = readyq.pop_front() {
+                let old_ctx = current
+                    .replace(next)
+                    .expect("Called terminate before scheduler was running");
+                let next: *const Context = current.as_ref().unwrap();
+                drop(old_ctx);
+                drop(readyq);
+                drop(current);
+                unsafe {
+                    Context::jump(next);
+                }
+            } else {
+                crate::arch::int::enable();
+                crate::arch::inst::hlt();
+            }
         }
     }
 }

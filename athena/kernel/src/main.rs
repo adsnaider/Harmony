@@ -23,7 +23,6 @@ pub mod sys;
 // #[macro_use]
 extern crate alloc;
 
-use arch::context::privileged::KThread;
 use bootloader_api::config::Mapping;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 
@@ -51,15 +50,19 @@ fn kmain(bootinfo: &'static mut BootInfo) -> ! {
     });
     log::info!("Initialization sequence complete");
 
-    sched::push(Context::kthread(|| loop {
-        println!("Yay it's working!");
-        core::hint::black_box(for _ in 0..1000000 {});
-        sched::switch();
+    sched::push(Context::kthread(|| {
+        for i in 0..5 {
+            println!("Hi from task 1 - ({i})");
+            core::hint::black_box(for _ in 0..1000000 {});
+            sched::switch();
+        }
     }));
-    sched::push(Context::kthread(|| loop {
-        println!("This is also working");
-        core::hint::black_box(for _ in 0..1000000 {});
-        sched::switch();
+    sched::push(Context::kthread(|| {
+        for i in 0..5 {
+            println!("Hi from task 2 - ({i})");
+            core::hint::black_box(for _ in 0..1000000 {});
+            sched::switch();
+        }
     }));
 
     sched::run();
