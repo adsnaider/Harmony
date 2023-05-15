@@ -27,6 +27,8 @@ use arch::context::privileged::KThread;
 use bootloader_api::config::Mapping;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 
+use crate::arch::context::Context;
+
 #[cfg(target_os = "none")]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
@@ -49,13 +51,13 @@ fn kmain(bootinfo: &'static mut BootInfo) -> ! {
     });
     log::info!("Initialization sequence complete");
 
-    sched::push(KThread::new(|| loop {
-        print!("Yay it's working!");
+    sched::push(Context::kthread(|| loop {
+        println!("Yay it's working!");
         core::hint::black_box(for _ in 0..1000000 {});
         sched::switch();
     }));
-    sched::push(KThread::new(|| loop {
-        print!("This is also working");
+    sched::push(Context::kthread(|| loop {
+        println!("This is also working");
         core::hint::black_box(for _ in 0..1000000 {});
         sched::switch();
     }));

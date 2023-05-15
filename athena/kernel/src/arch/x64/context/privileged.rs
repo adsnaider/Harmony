@@ -3,11 +3,10 @@
 use alloc::boxed::Box;
 
 use x86_64::structures::paging::{Page, PageSize, Size4KiB};
-use x86_64::VirtAddr;
 
 use super::Regs;
 use crate::arch::mm;
-use crate::{dbg, sched};
+use crate::sched;
 
 /// Kernel-based context.
 #[derive(Debug)]
@@ -40,24 +39,8 @@ impl KThread {
         // System-V ABI pushes int-like arguements to registers.
         regs.scratch.rdi = func as u64;
         regs.preserved.rsp = stack_page.start_address().as_u64() + Size4KiB::SIZE;
-        dbg!(regs.preserved.rsp);
         regs.rip = inner::<F> as u64;
         Self { regs, stack_page }
-    }
-
-    pub fn dummy() -> Self {
-        KThread {
-            regs: Regs::new(),
-            stack_page: Page::from_start_address(VirtAddr::new(0)).unwrap(),
-        }
-    }
-
-    /// Switches execution to the `self` context while saving the current state in `current`.
-    ///
-    /// On a follow up `switch` to `current`, the function will simply return back to this point.
-    pub fn switch(&self, current: *mut Self) {
-        self.regs
-            .switch(unsafe { &mut (*current).regs as *mut Regs })
     }
 }
 

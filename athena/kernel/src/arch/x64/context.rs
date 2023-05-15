@@ -1,6 +1,12 @@
 //! A runnable context like a thread or process.
 
+use alloc::boxed::Box;
 use core::arch::asm;
+
+use x86_64::structures::paging::{Page, PageSize, Size4KiB};
+
+use crate::arch::mm;
+use crate::sched;
 
 pub mod privileged;
 // pub mod userspace;
@@ -49,6 +55,24 @@ struct Regs {
     pub rflags: u64,
 }
 
+/// A generic runnable context.
+#[derive(Debug)]
+#[repr(transparent)]
+pub struct Context(ContextVariant);
+
+#[derive(Debug)]
+enum ContextVariant {
+    /// Kernel thread.
+    KThread(KThread),
+}
+
+/// A kernel thread context.
+#[derive(Debug)]
+struct KThread {
+    regs: Regs,
+    stack_page: Page<Size4KiB>,
+}
+
 impl Regs {
     /// Construct a new
     pub fn new() -> Self {
@@ -63,7 +87,7 @@ impl Regs {
     ///
     /// This function will also set interrupts back on.
     #[naked]
-    pub extern "sysv64" fn switch(&self, current: *mut Regs) {
+    pub unsafe extern "sysv64" fn switch(restore: *const Self, store: *mut Self) {
         unsafe {
             asm!(
                 // Save current state
@@ -107,7 +131,165 @@ impl Regs {
             )
         }
     }
+
+    /// Performs a context switch, to the `self` without saving the state.
+    #[naked]
+    pub unsafe extern "sysv64" fn jump(restore: *const Self) -> ! {
+        unsafe {
+            asm!(
+                "mov rbx, [rdi]",
+                "mov rsp, [rdi + 8]",
+                "mov rbp, [rdi + 8*2]",
+                "mov r12, [rdi + 8*3]",
+                "mov r13, [rdi + 8*4]",
+                "mov r14, [rdi + 8*5]",
+                "mov r15, [rdi + 8*6]",
+                "mov rax, [rdi + 8*7]",
+                "mov rcx, [rdi + 8*8]",
+                "mov rdx, [rdi + 8*9]",
+                "mov rsi, [rdi + 8*10]",
+                "mov r8, [rdi + 8*12]",
+                "mov r9, [rdi + 8*13]",
+                "mov r10, [rdi + 8*14]",
+                "mov r11, [rdi + 8*15]",
+                // rflags
+                "push [rdi + 8*17]",
+                "popfq",
+                // Return pointer
+                "push [rdi + 8*16]", //rip
+                // Rdi
+                "mov rdi, [rdi + 8*11]",
+                "sti",
+                "ret",
+                options(noreturn)
+            )
+        }
+    }
 }
+
+impl Context {
+    /// Constructs a new kernel thread context.
+    pub fn kthread<F>(f: F) -> Self
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        Self(ContextVariant::kthread(f))
+    }
+    /// Performs a context switch.
+    ///
+    /// The `restore` context will be restored and the current context will be
+    /// stored to `store`.
+    ///
+    /// # Safety
+    ///
+    /// * The `restore` and `store` pointers must be valid `Context`s.
+    pub unsafe fn switch(restore: *const Self, store: *mut Self) {
+        // SAFETY: repr(transparent)
+        unsafe {
+            ContextVariant::switch(
+                restore as *const ContextVariant,
+                store as *mut ContextVariant,
+            )
+        }
+    }
+
+    /// Performs a context switch that doesn't restore.
+    ///
+    /// # Safety
+    ///
+    /// * The `restore` pointer must be a valid `Context.
+    pub unsafe fn jump(restore: *const Self) -> ! {
+        // SAFETY: repr(transparent)
+        unsafe {
+            ContextVariant::jump(restore as *const ContextVariant);
+        }
+    }
+}
+
+impl ContextVariant {
+    /// Constructs a new kernel thread context.
+    pub fn kthread<F>(f: F) -> Self
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        Self::KThread(KThread::new(f))
+    }
+    /// Performs a context switch.
+    ///
+    /// The `restore` context will be restored and the current context will be
+    /// stored to `store`.
+    ///
+    /// # Safety
+    ///
+    /// * The `restore` and `store` pointers must be valid `Context`s.
+    pub unsafe fn switch(restore: *const Self, store: *mut Self) {
+        let (restore, store) = {
+            let restore = unsafe { &*restore };
+            let store = unsafe { &mut *store };
+
+            let reg_restore = match restore {
+                Self::KThread(kt) => &kt.regs,
+            };
+            let reg_store = match store {
+                Self::KThread(kt) => &mut kt.regs,
+            };
+            (reg_restore, reg_store)
+        };
+        unsafe {
+            Regs::switch(restore, store);
+        }
+    }
+
+    /// Performs a context switch that doesn't restore.
+    ///
+    /// # Safety
+    ///
+    /// * The `restore` pointer must be a valid `Context.
+    pub unsafe fn jump(restore: *const Self) -> ! {
+        let restore = {
+            let restore = unsafe { &*restore };
+
+            let reg_restore = match restore {
+                Self::KThread(kt) => &kt.regs,
+            };
+
+            reg_restore
+        };
+        unsafe {
+            Regs::jump(restore);
+        }
+    }
+}
+
+impl KThread {
+    /// Constructs the kernel thread context.
+    pub fn new<F>(f: F) -> Self
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        extern "sysv64" fn inner<F>(func: *mut F) -> !
+        where
+            F: FnOnce() + Send + 'static,
+        {
+            // SAFETY: We leaked it when we created the kthread.
+            {
+                let func = unsafe { Box::from_raw(func) };
+                func();
+            }
+            sched::kill();
+        }
+        let stack_page = mm::alloc_page().unwrap();
+        let func = Box::into_raw(Box::new(f));
+        let mut regs = Regs::new();
+        // System-V ABI pushes int-like arguements to registers.
+        regs.scratch.rdi = func as u64;
+        regs.preserved.rsp = stack_page.start_address().as_u64() + Size4KiB::SIZE;
+        regs.rip = inner::<F> as u64;
+        Self { regs, stack_page }
+    }
+}
+
+// TODO: Drop.
 
 fn sce_enable() {
     unsafe {
