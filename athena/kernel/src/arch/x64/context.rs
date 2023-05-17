@@ -21,7 +21,6 @@ pub fn init() {
 #[repr(packed)]
 struct PreservedRegisters {
     pub rbx: u64,
-    pub rsp: u64,
     pub rbp: u64,
     pub r12: u64,
     pub r13: u64,
@@ -51,6 +50,7 @@ struct Regs {
     pub preserved: PreservedRegisters,
     pub scratch: ScratchRegisters,
 
+    pub rsp: u64,
     pub rip: u64,
     pub rflags: u64,
 }
@@ -95,36 +95,36 @@ impl Regs {
                 // Return pointer
                 "pop rax",
                 "mov [rsi + 8*16], rax",
+                "mov [rsi + 8*15], rsp",
                 "mov [rsi], rbx",
-                "mov [rsi + 8], rsp",
-                "mov [rsi + 8*2], rbp",
-                "mov [rsi + 8*3], r12",
-                "mov [rsi + 8*4], r13",
-                "mov [rsi + 8*5], r14",
-                "mov [rsi + 8*6], r15",
+                "mov [rsi + 8], rbp",
+                "mov [rsi + 8*2], r12",
+                "mov [rsi + 8*3], r13",
+                "mov [rsi + 8*4], r14",
+                "mov [rsi + 8*5], r15",
                 // Restore the registers
                 "mov rbx, [rdi]",
-                "mov rsp, [rdi + 8]",
-                "mov rbp, [rdi + 8*2]",
-                "mov r12, [rdi + 8*3]",
-                "mov r13, [rdi + 8*4]",
-                "mov r14, [rdi + 8*5]",
-                "mov r15, [rdi + 8*6]",
-                "mov rax, [rdi + 8*7]",
-                "mov rcx, [rdi + 8*8]",
-                "mov rdx, [rdi + 8*9]",
-                "mov rsi, [rdi + 8*10]",
-                "mov r8, [rdi + 8*12]",
-                "mov r9, [rdi + 8*13]",
-                "mov r10, [rdi + 8*14]",
-                "mov r11, [rdi + 8*15]",
+                "mov rbp, [rdi + 8]",
+                "mov r12, [rdi + 8*2]",
+                "mov r13, [rdi + 8*3]",
+                "mov r14, [rdi + 8*4]",
+                "mov r15, [rdi + 8*5]",
+                "mov rax, [rdi + 8*6]",
+                "mov rcx, [rdi + 8*7]",
+                "mov rdx, [rdi + 8*8]",
+                "mov rsi, [rdi + 8*9]",
+                "mov r8, [rdi + 8*11]",
+                "mov r9, [rdi + 8*12]",
+                "mov r10, [rdi + 8*13]",
+                "mov r11, [rdi + 8*14]",
+                "mov rsp, [rdi + 8*15]",
                 // rflags
                 "push [rdi + 8*17]",
                 "popfq",
                 // Return pointer
                 "push [rdi + 8*16]", //rip
                 // Rdi
-                "mov rdi, [rdi + 8*11]",
+                "mov rdi, [rdi + 8*10]",
                 "sti",
                 "ret",
                 options(noreturn)
@@ -138,27 +138,27 @@ impl Regs {
         unsafe {
             asm!(
                 "mov rbx, [rdi]",
-                "mov rsp, [rdi + 8]",
-                "mov rbp, [rdi + 8*2]",
-                "mov r12, [rdi + 8*3]",
-                "mov r13, [rdi + 8*4]",
-                "mov r14, [rdi + 8*5]",
-                "mov r15, [rdi + 8*6]",
-                "mov rax, [rdi + 8*7]",
-                "mov rcx, [rdi + 8*8]",
-                "mov rdx, [rdi + 8*9]",
-                "mov rsi, [rdi + 8*10]",
-                "mov r8, [rdi + 8*12]",
-                "mov r9, [rdi + 8*13]",
-                "mov r10, [rdi + 8*14]",
-                "mov r11, [rdi + 8*15]",
+                "mov rbp, [rdi + 8*1]",
+                "mov r12, [rdi + 8*2]",
+                "mov r13, [rdi + 8*3]",
+                "mov r14, [rdi + 8*4]",
+                "mov r15, [rdi + 8*5]",
+                "mov rax, [rdi + 8*6]",
+                "mov rcx, [rdi + 8*7]",
+                "mov rdx, [rdi + 8*8]",
+                "mov rsi, [rdi + 8*9]",
+                "mov r8, [rdi + 8*11]",
+                "mov r9, [rdi + 8*12]",
+                "mov r10, [rdi + 8*13]",
+                "mov r11, [rdi + 8*14]",
+                "mov rsp, [rdi + 8*15]",
                 // rflags
                 "push [rdi + 8*17]",
                 "popfq",
                 // Return pointer
                 "push [rdi + 8*16]", //rip
                 // Rdi
-                "mov rdi, [rdi + 8*11]",
+                "mov rdi, [rdi + 8*10]",
                 "sti",
                 "ret",
                 options(noreturn)
@@ -283,7 +283,7 @@ impl KThread {
         let mut regs = Regs::new();
         // System-V ABI pushes int-like arguements to registers.
         regs.scratch.rdi = func as u64;
-        regs.preserved.rsp = stack_page.start_address().as_u64() + Size4KiB::SIZE;
+        regs.rsp = stack_page.start_address().as_u64() + Size4KiB::SIZE;
         regs.rip = inner::<F> as u64;
         Self { regs, stack_page }
     }
