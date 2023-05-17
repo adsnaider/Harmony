@@ -118,7 +118,7 @@ impl Regs {
                 "mov r10, [rdi + 8*13]",
                 "mov r11, [rdi + 8*14]",
                 "mov rsp, [rdi + 8*15]",
-                // rflags
+                // rflags: TODO: Mask interrupts?
                 "push [rdi + 8*17]",
                 "popfq",
                 // Return pointer
@@ -152,7 +152,7 @@ impl Regs {
                 "mov r10, [rdi + 8*13]",
                 "mov r11, [rdi + 8*14]",
                 "mov rsp, [rdi + 8*15]",
-                // rflags
+                // rflags: TODO: Mask interrupts?
                 "push [rdi + 8*17]",
                 "popfq",
                 // Return pointer
@@ -285,6 +285,7 @@ impl KThread {
         regs.scratch.rdi = func as u64;
         regs.rsp = stack_page.start_address().as_u64() + Size4KiB::SIZE;
         regs.rip = inner::<F> as u64;
+        regs.rflags = 2;
         Self { regs, stack_page }
     }
 }
