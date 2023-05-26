@@ -75,6 +75,6 @@ pub fn init(cs: CriticalSection) {
     unsafe {
         let mut pics = PICS.borrow_ref_mut(cs);
         pics.initialize();
-        pics.write_masks(0xFF, 0xFF);
+        pics.write_masks(0xFC, 0xFF);
     }
 }

@@ -51,17 +51,15 @@ fn kmain(bootinfo: &'static mut BootInfo) -> ! {
     log::info!("Initialization sequence complete");
 
     sched::push(Context::kthread(|| {
-        for i in 0..5 {
+        for i in 0..20 {
             println!("Hi from task 1 - ({i})");
             core::hint::black_box(for _ in 0..1000000 {});
-            sched::switch();
         }
     }));
     sched::push(Context::kthread(|| {
-        for i in 0..5 {
+        for i in 0..20 {
             println!("Hi from task 2 - ({i})");
             core::hint::black_box(for _ in 0..1000000 {});
-            sched::switch();
         }
     }));
 

@@ -1,9 +1,63 @@
 use critical_section::CriticalSection;
+use x86_64::instructions::port::Port;
 use x86_64::structures::idt::{InterruptStackFrame, PageFaultErrorCode};
 
 use super::{KEYBOARD_INT, PICS, TIMER_INT};
 
-pub(super) extern "x86-interrupt" fn timer_interrupt(_stack_frame: InterruptStackFrame) {
+macro_rules! push_scratch {
+    () => {
+        r#"push r11
+        push r10
+        push r9
+        push r8
+        push rdi
+        push rsi
+        push rdx
+        push rcx
+        push rax
+        "#
+    };
+}
+
+macro_rules! pop_scratch {
+    () => {
+        r#"
+        pop rax
+        pop rcx
+        pop rdx
+        pop rsi
+        pop rdi
+        pop r8
+        pop r9
+        pop r10
+        pop r11
+        "#
+    };
+}
+
+macro_rules! interrupt {
+    ($name:ident, $handler:expr) => {
+        #[naked]
+        pub(super) extern "x86-interrupt" fn $name(_frame: InterruptStackFrame) {
+            extern "C" fn inner() {
+                $handler();
+            }
+            unsafe {
+                core::arch::asm!(
+                    push_scratch!(),
+                    "call {inner}",
+                    pop_scratch!(),
+                    "iretq",
+                    inner = sym inner,
+                    options(noreturn),
+                )
+            }
+        }
+    }
+}
+
+interrupt!(timer_interrupt, || {
+    use crate::sched;
     // SAFETY: An interrupt cannot be interrupted. This is reasonable in single threaded code.
     let cs = unsafe { CriticalSection::new() };
 
@@ -11,18 +65,26 @@ pub(super) extern "x86-interrupt" fn timer_interrupt(_stack_frame: InterruptStac
     unsafe {
         PICS.borrow_ref_mut(cs).notify_end_of_interrupt(TIMER_INT);
     }
-}
+    super::enable();
+    sched::switch();
+});
 
-pub(super) extern "x86-interrupt" fn keyboard_interrupt(_stack_frame: InterruptStackFrame) {
+interrupt!(keyboard_interrupt, || {
+    use crate::print;
     // SAFETY: An interrupt cannot be interrupted. This is reasonable in single threaded code.
     let cs = unsafe { CriticalSection::new() };
+
+    let mut port = Port::new(0x60);
+    let _scancode: u8 = unsafe { port.read() };
+    // print!("{}", scancode);
+    print!("k");
 
     // SAFETY: Notify keyboard interrupt vector.
     unsafe {
         PICS.borrow_ref_mut(cs)
             .notify_end_of_interrupt(KEYBOARD_INT);
     }
-}
+});
 
 pub(super) extern "x86-interrupt" fn syscall_interrupt(stack_frame: InterruptStackFrame) {
     panic!("SYSCALL REQUEST:\n{stack_frame:#?}");
