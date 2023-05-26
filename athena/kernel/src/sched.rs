@@ -37,8 +37,6 @@ pub fn switch() {
 
 /// Starts the scheduler.
 pub fn run() -> ! {
-    assert!(!crate::arch::int::are_enabled());
-    crate::arch::int::enable();
     SCHEDULER.get().unwrap().run();
 }
 
@@ -81,8 +79,6 @@ impl Scheduler {
             readyq.push_back(previous);
             let previous: *mut Context = readyq.back_mut().unwrap();
             let next: *const Context = current.as_ref().unwrap();
-            drop(readyq);
-            drop(current);
             // SAFETY: This is super awkward but hopefully safe.
             // * It's probably not cool to keep references that need to live after the switch, so we use raw pointers.
             // * The pointers only become references before the switch, not after.
@@ -100,22 +96,17 @@ impl Scheduler {
     /// This function can only be called once to initialize the scheduling model.
     /// Doing so will cause a crash.
     pub fn run(&self) -> ! {
-        assert!(crate::arch::int::are_enabled());
-        crate::arch::int::disable();
+        assert!(!crate::arch::int::are_enabled());
         let cs = unsafe { CriticalSection::new() };
         let readyq = unsafe { &mut *self.readyq.borrow(cs).get() };
         let current = unsafe { &mut *self.current.borrow(cs).get() };
         let next = readyq.pop_front().unwrap();
         assert!(current.replace(next).is_none());
         let next: *const Context = current.as_ref().unwrap();
-        drop(readyq);
-        drop(current);
 
         // SAFETY: This is super awkward but hopefully safe.
-        // * It's probably not cool to keep references that need to live after the switch, so we use raw pointers.
         // * The pointers only become references before the switch, not after.
         // * By the time we reenable interrupts and jump to the next context, we don't use the pointers anymore.
-        // * When the switch comes back to us (on a further restore, we don't have any more references around).
         unsafe {
             Context::jump(next);
         }
