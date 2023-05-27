@@ -3,13 +3,11 @@
 use alloc::boxed::Box;
 use core::arch::asm;
 
+use x86_64::registers::rflags::RFlags;
 use x86_64::structures::paging::{Page, PageSize, Size4KiB};
 
 use crate::arch::mm;
 use crate::sched;
-
-// pub mod privileged;
-// pub mod userspace;
 
 /// Initializes the hardware capabilities for context switching.
 pub fn init() {
@@ -79,19 +77,16 @@ impl Regs {
         Default::default()
     }
 
-    /// Performs a context switch, to the `self` state, saving the preserved registers in `previous`.
+    /// Performs a context switch, to the `restore` state, saving the preserved registers in `store`.
     ///
-    /// This has the effect of 1) switching execution context to the saved state in `self` and 2)
-    /// Saving the current state of execution to `current`, such that on a follow up switch, it will
+    /// This has the effect of 1) switching execution context to the saved state in `restore` and 2)
+    /// Saving the current state of execution to `store`, such that on a follow up switch, it will
     /// return back to the caller as if this function had been a no-op.
-    ///
-    /// This function will also set interrupts back on.
     #[naked]
     pub unsafe extern "sysv64" fn switch(restore: *const Self, store: *mut Self) {
         unsafe {
             asm!(
                 // Save current state
-
                 // Return pointer
                 "pop rax",
                 "mov [rsi + 8*16], rax",
@@ -102,37 +97,15 @@ impl Regs {
                 "mov [rsi + 8*3], r13",
                 "mov [rsi + 8*4], r14",
                 "mov [rsi + 8*5], r15",
-                // Restore the registers
-                "mov rbx, [rdi]",
-                "mov rbp, [rdi + 8]",
-                "mov r12, [rdi + 8*2]",
-                "mov r13, [rdi + 8*3]",
-                "mov r14, [rdi + 8*4]",
-                "mov r15, [rdi + 8*5]",
-                "mov rax, [rdi + 8*6]",
-                "mov rcx, [rdi + 8*7]",
-                "mov rdx, [rdi + 8*8]",
-                "mov rsi, [rdi + 8*9]",
-                "mov r8, [rdi + 8*11]",
-                "mov r9, [rdi + 8*12]",
-                "mov r10, [rdi + 8*13]",
-                "mov r11, [rdi + 8*14]",
-                "mov rsp, [rdi + 8*15]",
-                // rflags: TODO: Mask interrupts?
-                "push [rdi + 8*17]",
-                "popfq",
-                // Return pointer
-                "push [rdi + 8*16]", //rip
-                // Rdi
-                "mov rdi, [rdi + 8*10]",
-                "sti",
-                "ret",
+                "call {restore}",
+                "ud2",
+                restore = sym Self::jump,
                 options(noreturn)
             )
         }
     }
 
-    /// Performs a context switch, to the `self` without saving the state.
+    /// Performs a context switch, to the `restore` without saving the state.
     #[naked]
     pub unsafe extern "sysv64" fn jump(restore: *const Self) -> ! {
         unsafe {
@@ -152,14 +125,12 @@ impl Regs {
                 "mov r10, [rdi + 8*13]",
                 "mov r11, [rdi + 8*14]",
                 "mov rsp, [rdi + 8*15]",
-                // rflags: TODO: Mask interrupts?
-                "push [rdi + 8*17]",
-                "popfq",
                 // Return pointer
                 "push [rdi + 8*16]", //rip
-                // Rdi
+                // RFLAGS, this may reenable interrupts.
+                "push [rdi + 8*17]",
+                "popfq", // Rdi
                 "mov rdi, [rdi + 8*10]",
-                "sti",
                 "ret",
                 options(noreturn)
             )
@@ -175,6 +146,7 @@ impl Context {
     {
         Self(ContextVariant::kthread(f))
     }
+
     /// Performs a context switch.
     ///
     /// The `restore` context will be restored and the current context will be
@@ -214,6 +186,7 @@ impl ContextVariant {
     {
         Self::KThread(KThread::new(f))
     }
+
     /// Performs a context switch.
     ///
     /// The `restore` context will be restored and the current context will be
@@ -285,7 +258,7 @@ impl KThread {
         regs.scratch.rdi = func as u64;
         regs.rsp = stack_page.start_address().as_u64() + Size4KiB::SIZE;
         regs.rip = inner::<F> as u64;
-        regs.rflags = 2;
+        regs.rflags = RFlags::INTERRUPT_FLAG.bits() | 0b10;
         Self {
             regs,
             _stack_page: stack_page,

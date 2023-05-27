@@ -93,7 +93,9 @@ unsafe impl critical_section::Impl for SingleThreadCS {
 
     unsafe fn release(interrupts_were_enabled: critical_section::RawRestoreState) {
         if interrupts_were_enabled {
-            arch::int::enable();
+            unsafe {
+                arch::int::enable();
+            }
         }
     }
 }

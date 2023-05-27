@@ -67,8 +67,6 @@ impl Scheduler {
     ///
     /// Upon a follow up switch, the function will return back to its caller.
     pub fn switch(&self) {
-        // Manually disable interrupts as they'll have to be reenabled in the `switch` function.
-        assert!(crate::arch::int::are_enabled());
         crate::arch::int::disable();
         // SAFETY: Interrupts are disabled.
         let cs = unsafe { CriticalSection::new() };
@@ -82,7 +80,6 @@ impl Scheduler {
             // SAFETY: This is super awkward but hopefully safe.
             // * It's probably not cool to keep references that need to live after the switch, so we use raw pointers.
             // * The pointers only become references before the switch, not after.
-            // * By the time we reenable interrupts and jump to the next context, we don't use the pointers anymore.
             // * When the switch comes back to us (on a further restore, we don't have any more references around).
             unsafe {
                 // This function will restore interrupts
@@ -96,7 +93,6 @@ impl Scheduler {
     /// This function can only be called once to initialize the scheduling model.
     /// Doing so will cause a crash.
     pub fn run(&self) -> ! {
-        assert!(!crate::arch::int::are_enabled());
         let cs = unsafe { CriticalSection::new() };
         let readyq = unsafe { &mut *self.readyq.borrow(cs).get() };
         let current = unsafe { &mut *self.current.borrow(cs).get() };
@@ -106,7 +102,6 @@ impl Scheduler {
 
         // SAFETY: This is super awkward but hopefully safe.
         // * The pointers only become references before the switch, not after.
-        // * By the time we reenable interrupts and jump to the next context, we don't use the pointers anymore.
         unsafe {
             Context::jump(next);
         }
@@ -114,7 +109,6 @@ impl Scheduler {
 
     /// Terminates the currently running task and schedules the next one
     pub fn terminate(&self) -> ! {
-        assert!(crate::arch::int::are_enabled());
         loop {
             crate::arch::int::disable();
             let cs = unsafe { CriticalSection::new() };
@@ -132,7 +126,9 @@ impl Scheduler {
                     Context::jump(next);
                 }
             } else {
-                crate::arch::int::enable();
+                unsafe {
+                    crate::arch::int::enable();
+                }
                 crate::arch::inst::hlt();
             }
         }

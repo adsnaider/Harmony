@@ -65,7 +65,6 @@ interrupt!(timer_interrupt, || {
     unsafe {
         PICS.borrow_ref_mut(cs).notify_end_of_interrupt(TIMER_INT);
     }
-    super::enable();
     sched::switch();
 });
 

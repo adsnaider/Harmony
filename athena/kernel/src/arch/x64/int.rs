@@ -25,7 +25,7 @@ const KEYBOARD_INT: u8 = PIC1_OFFSET + 1;
 const SYSCALL_INT: u8 = 0x80;
 
 /// Enable interrupts.
-pub fn enable() {
+pub unsafe fn enable() {
     x86_64::instructions::interrupts::enable();
 }
 
