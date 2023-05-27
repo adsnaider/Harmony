@@ -32,6 +32,7 @@ static GLOBAL_ALLOCATOR: MemoryManager = MemoryManager {};
 // to map pages as needed.
 unsafe impl Allocator for MemoryManager {
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+        log::debug!("malloc request: {layout:?}");
         critical_section::with(|cs| {
             let mut allocator = MEMORY_ALLOCATOR.lock(cs);
             loop {

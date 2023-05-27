@@ -28,15 +28,16 @@ Additionally you can set `DEBUGGER=yes` to run qemu with a remote debugger.
 
 `DEBUGGER=yes make emulate`
 
-Once QEMU is launched, you can open gdb on a terminal
+Once QEMU is launched, you can open gdb on a terminal. The `.gdbinit` should
+set everything up automatically for you so that you can insert breakpoints
+and `c` to start debugging the program.
 
-Run `target remote localhost:1234` to connect to the instance. To include
-symbols, you should also add the the kernel binary as a relocatable library.
+In order for this to work, you need to include the following in your 
+`~/.gdbinit` 
 
-`add-symbol-file .build/kernel -o 0xFFFF800000000000`
-
-From here you can just `c` to continue execution of the program after setting
-up the breakpoints.
+```
+set auto-load safe-path \
+```
 
 ### Building an ISO image
 

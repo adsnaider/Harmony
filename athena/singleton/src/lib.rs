@@ -57,4 +57,12 @@ impl<T: Send> Singleton<T> {
         let mut data = self.lock(cs);
         actor(&mut *data)
     }
+
+    /// Locks the underlying data without the need of a critical section.
+    pub unsafe fn lock_unchecked<'a>(&'a self) -> impl DerefMut<Target = T> + 'a {
+        unsafe {
+            let cs = CriticalSection::new();
+            self.lock(cs)
+        }
+    }
 }

@@ -5,7 +5,7 @@ mod display;
 
 use bootloader_api::info::{MemoryRegion, Optional};
 use bootloader_api::BootInfo;
-pub use display::{_print, _try_print};
+pub use display::_print;
 use framed::console::{BitmapFont, Console};
 use framed::{Frame, Pixel};
 
@@ -55,7 +55,6 @@ pub(super) unsafe fn init(bootinfo: &mut BootInfo) {
 
         // SAFETY: The physical memory offset is correct, well-aligned, and canonical, and the memory
         // map is correct from the bootloader.
-        unsafe { arch::init(pmo, &mut bootinfo.memory_regions) }
+        unsafe { crate::arch::init(pmo, &mut bootinfo.memory_regions) }
     });
-    arch::int::enable();
 }

@@ -1,6 +1,5 @@
 use critical_section::CriticalSection;
 use singleton::Singleton;
-use x86_64::structures::paging::page_table::PageTableEntry;
 use x86_64::structures::paging::{OffsetPageTable, PageTable, Translate};
 use x86_64::{PhysAddr, VirtAddr};
 
@@ -30,14 +29,4 @@ pub fn init(pmo: VirtAddr, cs: CriticalSection) {
     assert!(page_map.translate_addr(pmo + 0xABAB_0000u64) == Some(PhysAddr::new(0xABAB_0000)));
 
     PAGE_MAPPER.initialize(page_map, cs);
-}
-
-/// Returns a new page table l4 that contains all the kernel entries.
-pub(super) fn dup_page_table() -> PageTable {
-    let mut l4_table = critical_section::with(|cs| PAGE_MAPPER.lock(cs).level_4_table().clone());
-    // clear the user-level entries.
-    for i in 0..128 {
-        l4_table[i] = PageTableEntry::new();
-    }
-    l4_table
 }

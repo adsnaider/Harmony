@@ -2,15 +2,22 @@
 //! components.
 #![no_std]
 #![no_main]
+#![feature(naked_functions)]
 #![feature(error_in_core)]
+#![feature(never_type)]
+#![feature(allocator_api)]
+#![feature(abi_x86_interrupt)]
+#![feature(negative_impls)]
+#![feature(const_fn_floating_point_arithmetic)]
 #![deny(absolute_paths_not_starting_with_crate)]
-#![warn(missing_copy_implementations)]
 #![warn(missing_debug_implementations)]
 #![warn(missing_docs)]
 #![warn(unsafe_op_in_unsafe_fn)]
 #![warn(clippy::undocumented_unsafe_blocks)]
 
+pub mod arch;
 pub mod ksync;
+pub mod sched;
 pub mod sys;
 
 // #[macro_use]
@@ -19,28 +26,45 @@ extern crate alloc;
 use bootloader_api::config::Mapping;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 
-static INIT: &[u8] = include_bytes!("../programs/hello.bin");
+use crate::arch::context::Context;
 
 #[cfg(target_os = "none")]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    // Can't do much about errors at this point.
-    let _ = try_println!("{}", info);
-    loop {
-        arch::inst::hlt();
-    }
+    critical_section::with(|_| {
+        println!("{}", info);
+        loop {
+            arch::inst::hlt();
+        }
+    })
 }
 
 /// Kernel's starting point.
 fn kmain(bootinfo: &'static mut BootInfo) -> ! {
+    crate::arch::int::disable();
     // SAFETY: The bootinfo is directly provided by the bootloader.
-    unsafe { sys::init(bootinfo) }
-    log::info!("Initialization sequence complete.");
+    critical_section::with(|_cs| {
+        unsafe {
+            sys::init(bootinfo);
+        }
+        sched::init();
+    });
+    log::info!("Initialization sequence complete");
 
-    let process = arch::context::Context::load(INIT).unwrap();
-    unsafe {
-        process.switch();
-    }
+    sched::push(Context::kthread(|| {
+        for i in 0..20 {
+            println!("Hi from task 1 - ({i})");
+            core::hint::black_box(for _ in 0..1000000 {});
+        }
+    }));
+    sched::push(Context::kthread(|| {
+        for i in 0..20 {
+            println!("Hi from task 2 - ({i})");
+            core::hint::black_box(for _ in 0..1000000 {});
+        }
+    }));
+
+    sched::run();
 }
 
 const CONFIG: BootloaderConfig = {
@@ -69,7 +93,9 @@ unsafe impl critical_section::Impl for SingleThreadCS {
 
     unsafe fn release(interrupts_were_enabled: critical_section::RawRestoreState) {
         if interrupts_were_enabled {
-            arch::int::enable();
+            unsafe {
+                arch::int::enable();
+            }
         }
     }
 }
