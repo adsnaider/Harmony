@@ -70,7 +70,7 @@ enum ContextVariant {
 #[derive(Debug)]
 struct KThread {
     regs: Regs,
-    stack_page: Page<Size4KiB>,
+    _stack_page: Page<Size4KiB>,
 }
 
 impl Regs {
@@ -286,7 +286,10 @@ impl KThread {
         regs.rsp = stack_page.start_address().as_u64() + Size4KiB::SIZE;
         regs.rip = inner::<F> as u64;
         regs.rflags = 2;
-        Self { regs, stack_page }
+        Self {
+            regs,
+            _stack_page: stack_page,
+        }
     }
 }
 

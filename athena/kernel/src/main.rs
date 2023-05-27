@@ -31,11 +31,12 @@ use crate::arch::context::Context;
 #[cfg(target_os = "none")]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    // Can't do much about errors at this point.
-    println!("{}", info);
-    loop {
-        arch::inst::hlt();
-    }
+    critical_section::with(|_| {
+        println!("{}", info);
+        loop {
+            arch::inst::hlt();
+        }
+    })
 }
 
 /// Kernel's starting point.

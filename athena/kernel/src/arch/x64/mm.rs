@@ -4,13 +4,11 @@ use core::sync::atomic::AtomicU64;
 use core::sync::atomic::Ordering::Relaxed;
 
 use bootloader_api::info::MemoryRegions;
-use x86_64::structures::paging::{
-    FrameAllocator, Mapper, OffsetPageTable, Page, PageTableFlags, PhysFrame,
-};
+use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags};
 use x86_64::VirtAddr;
 
 pub use self::frames::FRAME_ALLOCATOR;
-use self::paging::{PAGE_MAPPER, PHYSICAL_MEMORY_OFFSET};
+use self::paging::PAGE_MAPPER;
 
 mod frames;
 mod heap;
@@ -41,30 +39,6 @@ pub(super) unsafe fn init(physical_memory_offset: u64, memory_map: &mut MemoryRe
             cs,
         );
         log::info!("Allocator initialized");
-    })
-}
-
-/// Returns an offset page table that can be used with a new context.
-///
-/// The l4 page is returned as well and the lifetime of the page table is mapped to that
-///
-/// # Safety
-///
-/// Lifetime of the table is tied to the frame returned
-/// all shannanigans involved with modifying the virtual memory space.
-pub(super) unsafe fn make_new_page_table<'a>() -> Option<(OffsetPageTable<'a>, PhysFrame)> {
-    critical_section::with(|cs| {
-        let l4_table = paging::dup_page_table();
-        let l4_frame = FRAME_ALLOCATOR.locked(cs, |allocator| allocator.allocate_frame())?;
-
-        let l4_addr = PHYSICAL_MEMORY_OFFSET + l4_frame.start_address().as_u64();
-
-        unsafe {
-            core::ptr::write(l4_addr.as_mut_ptr(), l4_table);
-            let offset_table =
-                OffsetPageTable::new(&mut *l4_addr.as_mut_ptr(), PHYSICAL_MEMORY_OFFSET);
-            Some((offset_table, l4_frame))
-        }
     })
 }
 

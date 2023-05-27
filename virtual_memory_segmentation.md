@@ -8,8 +8,8 @@ mapped address.
 Within the top half, the kernel divides memory in the following way:
 
 * 0xFFFF'8000'0000'0000 - 0xFFFF'8800'0000'0000 (8TB) : Kernel text, data, and
-* 0xFFFF'8800'0000'0000 - 0xFFFF'9000'0000'0000 (8TB) : Kernel text, data, and
 bootloader statics.
+* 0xFFFF'8800'0000'0000 - 0xFFFF'9000'0000'0000 (8TB) : Free kernel pages.
 * 0xFFFF'9000'0000'0000 - 0xFFFF'A000'0000'0000 (16TB) : Kernel heap.
 * 0xFFFF'A000'0000'0000 - 0xFFFF'EFFF'FFBF'0000 (80TB) : MMIO
 * 0xFFFF'EFFF'FFBF'0000 - 0xFFFF'EFFF'FFFF'0000 (4MiB) : Kernel stack.

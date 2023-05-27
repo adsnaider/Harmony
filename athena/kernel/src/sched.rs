@@ -14,7 +14,7 @@ use crate::arch::context::Context;
 #[derive(Debug)]
 pub struct Scheduler {
     readyq: Mutex<UnsafeCell<VecDeque<Context>>>,
-    blocked: Mutex<UnsafeCell<Vec<Context>>>,
+    _blocked: Mutex<UnsafeCell<Vec<Context>>>,
     current: Mutex<UnsafeCell<Option<Context>>>,
 }
 
@@ -51,7 +51,7 @@ impl Scheduler {
         Self {
             readyq: Mutex::new(UnsafeCell::new(VecDeque::new())),
             current: Mutex::new(UnsafeCell::new(None)),
-            blocked: Mutex::new(UnsafeCell::new(Vec::new())),
+            _blocked: Mutex::new(UnsafeCell::new(Vec::new())),
         }
     }
 

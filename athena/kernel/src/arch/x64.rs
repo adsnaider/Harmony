@@ -1,8 +1,6 @@
 //! x86-64-specifc code and constructs.
 use bootloader_api::info::MemoryRegions;
 
-extern crate alloc;
-
 pub mod context;
 pub mod inst;
 pub mod int;
