@@ -96,7 +96,7 @@ impl Scheduler {
                     }
                 }
             });
-            assert!(crate::arch::int::are_enabled());
+            assert!(crate::arch::interrupts::are_enabled());
             crate::arch::inst::hlt();
         }
     }

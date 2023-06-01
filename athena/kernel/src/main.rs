@@ -41,7 +41,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 
 /// Kernel's starting point.
 fn kmain(bootinfo: &'static mut BootInfo) -> ! {
-    crate::arch::int::disable();
+    crate::arch::interrupts::disable();
     // SAFETY: The bootinfo is directly provided by the bootloader.
     critical_section::with(|_cs| {
         unsafe {
@@ -66,7 +66,7 @@ fn kmain(bootinfo: &'static mut BootInfo) -> ! {
 
     // SAFETY: No locks held, we disabled it at the start of the function.
     unsafe {
-        crate::arch::int::enable();
+        crate::arch::interrupts::enable();
     }
     sched::exit();
 }
@@ -90,15 +90,15 @@ critical_section::set_impl!(SingleThreadCS);
 /// to guarantee a critical section's conditions.
 unsafe impl critical_section::Impl for SingleThreadCS {
     unsafe fn acquire() -> critical_section::RawRestoreState {
-        let interrupts_enabled = arch::int::are_enabled();
-        arch::int::disable();
+        let interrupts_enabled = arch::interrupts::are_enabled();
+        arch::interrupts::disable();
         interrupts_enabled
     }
 
     unsafe fn release(interrupts_were_enabled: critical_section::RawRestoreState) {
         if interrupts_were_enabled {
             unsafe {
-                arch::int::enable();
+                arch::interrupts::enable();
             }
         }
     }

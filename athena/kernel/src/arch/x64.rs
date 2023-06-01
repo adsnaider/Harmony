@@ -3,7 +3,7 @@ use bootloader_api::info::MemoryRegions;
 
 pub mod context;
 pub mod inst;
-pub mod int;
+pub mod interrupts;
 pub mod mm;
 
 mod gdt;
@@ -18,7 +18,7 @@ pub unsafe fn init(physical_memory_offset: u64, memory_map: &mut MemoryRegions) 
         log::info!("Initialized memory manager");
         gdt::init();
         log::info!("Initialized the Global Decriptor Table");
-        int::init(cs);
+        interrupts::init(cs);
         log::info!("Initialized interrupts and handlers");
 
         context::init();

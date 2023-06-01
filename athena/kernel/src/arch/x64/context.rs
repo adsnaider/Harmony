@@ -152,14 +152,14 @@ impl Context {
             F: FnOnce() + Send + 'static,
         {
             // SAFETY: No locks are currently active in this context.
-            unsafe { crate::arch::int::enable() };
+            unsafe { crate::arch::interrupts::enable() };
             // SAFETY: We leaked it when we created the kthread.
             {
                 func();
             }
             // Reenable interrupts if they got disabled.
             // SAFETY: No locks are currently active in this context.
-            unsafe { crate::arch::int::enable() };
+            unsafe { crate::arch::interrupts::enable() };
             sched::exit();
         }
         let stack_page = mm::alloc_page().unwrap();
