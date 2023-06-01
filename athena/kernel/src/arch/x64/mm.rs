@@ -4,7 +4,8 @@ use core::sync::atomic::AtomicU64;
 use core::sync::atomic::Ordering::Relaxed;
 
 use bootloader_api::info::MemoryRegions;
-use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags};
+use x86_64::registers::control::Cr3;
+use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, PhysFrame};
 use x86_64::VirtAddr;
 
 pub use self::frames::FRAME_ALLOCATOR;
@@ -64,4 +65,22 @@ pub fn alloc_page() -> Option<Page> {
             Some(page)
         }
     })
+}
+
+/// Get's the L4 frame for the currently active page table.
+pub fn active_page_table() -> PhysFrame {
+    Cr3::read().0
+}
+
+/// Set's the currently active page table.
+///
+/// # Safety
+///
+/// The new page table should include the full kernel memory map.
+pub unsafe fn set_page_table(l4_frame: PhysFrame) -> PhysFrame {
+    let (old_frame, flags) = Cr3::read();
+    if l4_frame != old_frame {
+        unsafe { Cr3::write(l4_frame, flags) }
+    }
+    old_frame
 }
