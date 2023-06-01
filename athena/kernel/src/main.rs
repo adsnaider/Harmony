@@ -24,7 +24,8 @@ pub mod sys;
 extern crate alloc;
 
 use bootloader_api::config::Mapping;
-use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
+use bootloader_api::{BootInfo, BootloaderConfig};
+use limine::LimineFramebufferRequest;
 
 use crate::arch::context::Context;
 
@@ -37,6 +38,38 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
             arch::inst::hlt();
         }
     })
+}
+
+static FRAMEBUFFER_REQUEST: LimineFramebufferRequest = LimineFramebufferRequest::new(0);
+
+#[no_mangle]
+extern "C" fn _start() -> ! {
+    if let Some(framebuffer_response) = FRAMEBUFFER_REQUEST.get_response().get() {
+        assert!(framebuffer_response.framebuffer_count > 0);
+        // Get the first framebuffer's information.
+        let framebuffer = &framebuffer_response.framebuffers()[0];
+
+        for i in 0..100_usize {
+            // Calculate the pixel offset using the framebuffer information we obtained above.
+            // We skip `i` scanlines (pitch is provided in bytes) and add `i * 4` to skip `i` pixels forward.
+            let pixel_offset = i * framebuffer.pitch as usize + i * 4;
+
+            // Write 0xFFFFFFFF to the provided pixel offset to fill it white.
+            // We can safely unwrap the result of `as_ptr()` because the framebuffer address is
+            // guaranteed to be provided by the bootloader.
+            unsafe {
+                core::ptr::write_volatile(
+                    framebuffer
+                        .address
+                        .as_ptr()
+                        .unwrap()
+                        .offset(pixel_offset as isize) as *mut u32,
+                    0xFFFFFFFF,
+                );
+            }
+        }
+    }
+    loop {}
 }
 
 /// Kernel's starting point.
@@ -82,7 +115,7 @@ const CONFIG: BootloaderConfig = {
     config.mappings.framebuffer = Mapping::FixedAddress(0xFFFF_A000_0000_0000);
     config
 };
-entry_point!(kmain, config = &CONFIG);
+// entry_point!(kmain, config = &CONFIG);
 
 struct SingleThreadCS();
 critical_section::set_impl!(SingleThreadCS);

@@ -29,27 +29,29 @@ build:
 	@ln -fs $(realpath $(KERNEL_BIN)) $(ARTIFACTS)
 
 bootimage: build
-	@mkdir -p $(ARTIFACTS)
-	cargo run -p builder --profile ${PROFILE} -- -k ${KERNEL_BIN} -o ${ARTIFACTS}
+	@mkdir -p $(ARTIFACTS)/bootloader
+	# cargo run -p builder --profile ${PROFILE} -- -k ${KERNEL_BIN} -o ${ARTIFACTS}
 
-emulate: bootimage
+
+emulate: iso
 	qemu-system-x86_64 \
 		-drive if=pflash,format=raw,readonly=on,file=/usr/share/ovmf/OVMF.fd \
-		-drive format=raw,file=$(ARTIFACTS)/uefi.img \
+		-drive format=raw,media=cdrom,file=$(ARTIFACTS)/athena.iso \
 		$(QEMU_ARGS)
 
-iso: bootimage
-	@mkdir -p $(ARTIFACTS)
-	@rm -rf /tmp/iso
-	@mkdir /tmp/iso
-	@cp $(ARTIFACTS)/uefi.img /tmp/iso
-	mkisofs -R \
-			-f \
-			-e uefi.img \
+iso:
+	@rm -rf /$(ARTIFACTS)/iso
+	@mkdir -p $(ARTIFACTS)/iso
+	@cp $(ARTIFACTS)/kernel $(ARTIFACTS)/iso/athena.elf
+	@cp limine/limine.cfg limine/bin/limine.sys limine/bin/limine-cd.bin limine/bin/limine-cd-efi.bin $(ARTIFACTS)/iso
+	@xorriso -as mkisofs \
+			-b limine-cd.bin \
 			-no-emul-boot \
-			-V "Athena OS" \
-			-o $(ARTIFACTS)/athena.iso \
-			/tmp/iso
+			-boot-load-size 4 -boot-info-table \
+			--efi-boot limine-cd-efi.bin \
+			-efi-boot-part --efi-boot-image --protective-msdos-label \
+			$(ARTIFACTS)/iso -o $(ARTIFACTS)/athena.iso
+	@limine/bin/limine-deploy $(ARTIFACTS)/athena.iso
 		
 clean:
 	rm -rf $(ARTIFACTS)/*
