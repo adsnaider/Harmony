@@ -3,8 +3,7 @@
 use alloc::boxed::Box;
 use core::arch::asm;
 
-use x86_64::registers::rflags::RFlags;
-use x86_64::structures::paging::{Page, PageSize, Size4KiB};
+use x86_64::structures::paging::{Page, PageSize, PhysFrame, Size4KiB};
 
 use crate::arch::mm;
 use crate::sched;
@@ -55,19 +54,24 @@ struct Regs {
 
 /// A generic runnable context.
 #[derive(Debug)]
-#[repr(transparent)]
-pub struct Context(ContextVariant);
+#[repr(C)]
+pub struct Context {
+    regs: Regs,
+    l4_table: PhysFrame,
+    variant: ContextVariant,
+}
 
 #[derive(Debug)]
 enum ContextVariant {
     /// Kernel thread.
     KThread(KThread),
+    /// Main kernel thread.
+    KMain,
 }
 
 /// A kernel thread context.
 #[derive(Debug)]
 struct KThread {
-    regs: Regs,
     _stack_page: Page<Size4KiB>,
 }
 
@@ -125,12 +129,11 @@ impl Regs {
                 "mov r10, [rdi + 8*13]",
                 "mov r11, [rdi + 8*14]",
                 "mov rsp, [rdi + 8*15]",
-                // Return pointer
-                "push [rdi + 8*16]", //rip
                 // RFLAGS, this may reenable interrupts.
                 "push [rdi + 8*17]",
-                "popfq", // Rdi
-                "mov rdi, [rdi + 8*10]",
+                "popfq",
+                "push [rdi + 8*16]",     //rip
+                "mov rdi, [rdi + 8*10]", // Rdi
                 "ret",
                 options(noreturn)
             )
@@ -139,117 +142,25 @@ impl Regs {
 }
 
 impl Context {
-    /// Constructs a new kernel thread context.
+    /// Constructs a kernel thread context.
     pub fn kthread<F>(f: F) -> Self
     where
         F: FnOnce() + Send + 'static,
     {
-        Self(ContextVariant::kthread(f))
-    }
-
-    /// Performs a context switch.
-    ///
-    /// The `restore` context will be restored and the current context will be
-    /// stored to `store`.
-    ///
-    /// # Safety
-    ///
-    /// * The `restore` and `store` pointers must be valid `Context`s.
-    pub unsafe fn switch(restore: *const Self, store: *mut Self) {
-        // SAFETY: repr(transparent)
-        unsafe {
-            ContextVariant::switch(
-                restore as *const ContextVariant,
-                store as *mut ContextVariant,
-            )
-        }
-    }
-
-    /// Performs a context switch that doesn't restore.
-    ///
-    /// # Safety
-    ///
-    /// * The `restore` pointer must be a valid `Context.
-    pub unsafe fn jump(restore: *const Self) -> ! {
-        // SAFETY: repr(transparent)
-        unsafe {
-            ContextVariant::jump(restore as *const ContextVariant);
-        }
-    }
-}
-
-impl ContextVariant {
-    /// Constructs a new kernel thread context.
-    pub fn kthread<F>(f: F) -> Self
-    where
-        F: FnOnce() + Send + 'static,
-    {
-        Self::KThread(KThread::new(f))
-    }
-
-    /// Performs a context switch.
-    ///
-    /// The `restore` context will be restored and the current context will be
-    /// stored to `store`.
-    ///
-    /// # Safety
-    ///
-    /// * The `restore` and `store` pointers must be valid `Context`s.
-    pub unsafe fn switch(restore: *const Self, store: *mut Self) {
-        let (restore, store) = {
-            let restore = unsafe { &*restore };
-            let store = unsafe { &mut *store };
-
-            let reg_restore = match restore {
-                Self::KThread(kt) => &kt.regs,
-            };
-            let reg_store = match store {
-                Self::KThread(kt) => &mut kt.regs,
-            };
-            (reg_restore, reg_store)
-        };
-        unsafe {
-            Regs::switch(restore, store);
-        }
-    }
-
-    /// Performs a context switch that doesn't restore.
-    ///
-    /// # Safety
-    ///
-    /// * The `restore` pointer must be a valid `Context.
-    pub unsafe fn jump(restore: *const Self) -> ! {
-        let restore = {
-            let restore = unsafe { &*restore };
-
-            let reg_restore = match restore {
-                Self::KThread(kt) => &kt.regs,
-            };
-
-            reg_restore
-        };
-        unsafe {
-            Regs::jump(restore);
-        }
-    }
-}
-
-impl KThread {
-    /// Constructs the kernel thread context.
-    pub fn new<F>(f: F) -> Self
-    where
-        F: FnOnce() + Send + 'static,
-    {
-        extern "sysv64" fn inner<F>(func: *mut F) -> !
+        extern "sysv64" fn inner<F>(func: Box<F>) -> !
         where
             F: FnOnce() + Send + 'static,
         {
+            // SAFETY: No locks are currently active in this context.
+            unsafe { crate::arch::int::enable() };
             // SAFETY: We leaked it when we created the kthread.
             {
-                let func = unsafe { Box::from_raw(func) };
                 func();
             }
-            sched::terminate();
+            // Reenable interrupts if they got disabled.
+            // SAFETY: No locks are currently active in this context.
+            unsafe { crate::arch::int::enable() };
+            sched::exit();
         }
         let stack_page = mm::alloc_page().unwrap();
         let func = Box::into_raw(Box::new(f));
@@ -258,15 +169,57 @@ impl KThread {
         regs.scratch.rdi = func as u64;
         regs.rsp = stack_page.start_address().as_u64() + Size4KiB::SIZE;
         regs.rip = inner::<F> as u64;
-        regs.rflags = RFlags::INTERRUPT_FLAG.bits() | 0b10;
+        regs.rflags = 0x2;
         Self {
             regs,
-            _stack_page: stack_page,
+            l4_table: mm::active_page_table(),
+            variant: ContextVariant::KThread(KThread {
+                _stack_page: stack_page,
+            }),
+        }
+    }
+
+    /// Creates the "main" contxt that is associated with the kernel entry point.
+    ///
+    /// Note that this function doesn't set the registers to anything meaningful, so it wouldn't be
+    /// appropriate to jump directly into it.
+    pub fn main() -> Self {
+        Self {
+            regs: Regs::default(),
+            l4_table: mm::active_page_table(),
+            variant: ContextVariant::KMain,
+        }
+    }
+
+    /// Performs a context switch.
+    ///
+    /// The `restore` context will be restored and the current context will be
+    /// stored to `store`.
+    ///
+    /// # Safety
+    ///
+    /// * The `restore` and `store` pointers must be valid `Context`s.
+    pub unsafe fn switch(restore: &Self, store: &mut Self) {
+        // SAFETY: Preconditions
+        unsafe {
+            mm::set_page_table(restore.l4_table);
+            Regs::switch(&restore.regs, &mut store.regs)
+        }
+    }
+
+    /// Performs a context switch that doesn't restore.
+    ///
+    /// # Safety
+    ///
+    /// * The `restore` pointer must be a valid `Context.
+    pub unsafe fn jump(restore: &Self) -> ! {
+        // SAFETY: Preconditions
+        unsafe {
+            mm::set_page_table(restore.l4_table);
+            Regs::jump(&restore.regs)
         }
     }
 }
-
-// TODO: Drop.
 
 fn sce_enable() {
     unsafe {

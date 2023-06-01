@@ -64,7 +64,11 @@ fn kmain(bootinfo: &'static mut BootInfo) -> ! {
         }
     }));
 
-    sched::run();
+    // SAFETY: No locks held, we disabled it at the start of the function.
+    unsafe {
+        crate::arch::int::enable();
+    }
+    sched::exit();
 }
 
 const CONFIG: BootloaderConfig = {
