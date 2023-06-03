@@ -49,6 +49,33 @@ fn init_idt() {
         idt.page_fault.set_handler_fn(handlers::page_fault);
         idt.overflow.set_handler_fn(handlers::overflow);
         idt.divide_error.set_handler_fn(handlers::divide_error);
+        idt.non_maskable_interrupt
+            .set_handler_fn(handlers::non_maskable_interrupt);
+        idt.bound_range_exceeded
+            .set_handler_fn(handlers::bound_range_exceeded);
+        idt.bound_range_exceeded
+            .set_handler_fn(handlers::bound_range_exceeded);
+        idt.debug.set_handler_fn(handlers::debug);
+        idt.invalid_opcode.set_handler_fn(handlers::invalid_opcode);
+        idt.device_not_available
+            .set_handler_fn(handlers::device_not_available);
+        idt.invalid_tss.set_handler_fn(handlers::invalid_tss);
+        idt.segment_not_present
+            .set_handler_fn(handlers::segment_not_present);
+        idt.stack_segment_fault
+            .set_handler_fn(handlers::stack_segment_fault);
+        idt.x87_floating_point
+            .set_handler_fn(handlers::x87_floating_point);
+        idt.alignment_check
+            .set_handler_fn(handlers::alignment_check);
+        idt.machine_check.set_handler_fn(handlers::machine_check);
+        idt.simd_floating_point
+            .set_handler_fn(handlers::simd_floating_point);
+        idt.virtualization.set_handler_fn(handlers::virtualization);
+        idt.vmm_communication_exception
+            .set_handler_fn(handlers::vmm_communication_exception);
+        idt.security_exception
+            .set_handler_fn(handlers::security_exception);
         // SAFETY: Stack index provided is valid and only used for the double fault handler.
         unsafe {
             idt.double_fault

@@ -85,19 +85,89 @@ interrupt!(keyboard_interrupt, || {
     }
 });
 
+// EXCEPTIONS
+
 pub(super) extern "x86-interrupt" fn syscall_interrupt(stack_frame: InterruptStackFrame) {
     panic!("SYSCALL REQUEST:\n{stack_frame:#?}");
 }
 
-pub(super) extern "x86-interrupt" fn breakpoint(stack_frame: InterruptStackFrame) {
-    log::info!("EXCEPTION BREAKPOINT:\n{stack_frame:#?}");
+pub(super) extern "x86-interrupt" fn non_maskable_interrupt(stack_frame: InterruptStackFrame) {
+    panic!("NON MASKABLE INTERRUPT :\n{stack_frame:#?}");
+}
+
+pub(super) extern "x86-interrupt" fn bound_range_exceeded(stack_frame: InterruptStackFrame) {
+    panic!("BOUND RANGE EXCEEDED:\n{stack_frame:#?}");
+}
+
+pub(super) extern "x86-interrupt" fn debug(stack_frame: InterruptStackFrame) {
+    panic!("DEBUG:\n{stack_frame:#?}");
+}
+
+pub(super) extern "x86-interrupt" fn invalid_opcode(stack_frame: InterruptStackFrame) {
+    panic!("INVALID OPCODE:\n{stack_frame:#?}");
+}
+
+pub(super) extern "x86-interrupt" fn device_not_available(stack_frame: InterruptStackFrame) {
+    panic!("DEVICE NOT AVAILABLE:\n{stack_frame:#?}");
+}
+
+pub(super) extern "x86-interrupt" fn invalid_tss(stack_frame: InterruptStackFrame, code: u64) {
+    panic!("INVALID TSS:\n{stack_frame:#?} ({code:X})");
+}
+
+pub(super) extern "x86-interrupt" fn segment_not_present(
+    stack_frame: InterruptStackFrame,
+    code: u64,
+) {
+    panic!("SEGMENT NOT PRESENT:\n{stack_frame:#?} ({code:X})");
+}
+
+pub(super) extern "x86-interrupt" fn stack_segment_fault(
+    stack_frame: InterruptStackFrame,
+    code: u64,
+) {
+    panic!("STACK SEGMENT FAULT:\n{stack_frame:#?} ({code:X})");
+}
+
+pub(super) extern "x86-interrupt" fn x87_floating_point(stack_frame: InterruptStackFrame) {
+    panic!("X87 FLOATING POINT:\n{stack_frame:#?}");
+}
+
+pub(super) extern "x86-interrupt" fn alignment_check(stack_frame: InterruptStackFrame, code: u64) {
+    panic!("ALIGNMENT CHECK:\n{stack_frame:#?} ({code:X})");
+}
+
+pub(super) extern "x86-interrupt" fn machine_check(stack_frame: InterruptStackFrame) -> ! {
+    panic!("MACHINE CHECK:\n{stack_frame:#?}");
+}
+
+pub(super) extern "x86-interrupt" fn simd_floating_point(stack_frame: InterruptStackFrame) {
+    panic!("SIMD FLOATING POINT:\n{stack_frame:#?}");
+}
+
+pub(super) extern "x86-interrupt" fn virtualization(stack_frame: InterruptStackFrame) {
+    panic!("VIRTUALIZATION:\n{stack_frame:#?}");
+}
+
+pub(super) extern "x86-interrupt" fn vmm_communication_exception(
+    stack_frame: InterruptStackFrame,
+    code: u64,
+) {
+    panic!("VMM COMMUNICATION EXCEPTION:\n{stack_frame:#?} ({code:X})");
+}
+
+pub(super) extern "x86-interrupt" fn security_exception(
+    stack_frame: InterruptStackFrame,
+    code: u64,
+) {
+    panic!("SECURITY EXCEPTION:\n{stack_frame:#?} ({code:X})");
 }
 
 pub(super) extern "x86-interrupt" fn overflow(stack_frame: InterruptStackFrame) {
-    log::info!("EXCEPTION OVERFLOW:\n{stack_frame:#?}");
+    panic!("EXCEPTION OVERFLOW:\n{stack_frame:#?}");
 }
 pub(super) extern "x86-interrupt" fn divide_error(stack_frame: InterruptStackFrame) {
-    log::info!("EXCEPTION DIVIDE ERROR:\n{stack_frame:#?}");
+    panic!("EXCEPTION DIVIDE ERROR:\n{stack_frame:#?}");
 }
 
 pub(super) extern "x86-interrupt" fn general_protection_fault(
@@ -119,4 +189,8 @@ pub(super) extern "x86-interrupt" fn double_fault(
     error_code: u64,
 ) -> ! {
     panic!("EXCEPTION: DOUBLE FAULT - {error_code}\n{stack_frame:#?}");
+}
+
+pub(super) extern "x86-interrupt" fn breakpoint(stack_frame: InterruptStackFrame) {
+    log::info!("EXCEPTION BREAKPOINT:\n{stack_frame:#?}");
 }
