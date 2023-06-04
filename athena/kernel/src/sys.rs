@@ -22,7 +22,7 @@ const FONT: &[u8] = include_bytes!("../font.bdf");
 ///
 /// The information in `bootinfo` must be accurate.
 pub(super) unsafe fn init(bootinfo: &mut BootInfo) {
-    critical_section::with(|_| {
+    critical_section::with(|cs| {
         // SAFETY: Bootloader passed the framebuffer correctly.
         let framebuffer = core::mem::replace(&mut bootinfo.framebuffer, Optional::None)
             .into_option()
@@ -38,7 +38,7 @@ pub(super) unsafe fn init(bootinfo: &mut BootInfo) {
                 panic!("Can't get display to work.");
             }
         };
-        display::init(Console::new(display, font));
+        display::init(Console::new(display, font), cs);
         println!("Hello, Kernel!");
         log::info!("Hello, logging!");
 
