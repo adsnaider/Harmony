@@ -2,6 +2,7 @@
 
 use alloc::boxed::Box;
 use core::arch::asm;
+use core::ptr::{addr_of, addr_of_mut};
 
 use x86_64::structures::paging::{Page, PageSize, PhysFrame, Size4KiB};
 
@@ -88,6 +89,13 @@ impl Regs {
     /// return back to the caller as if this function had been a no-op.
     #[naked]
     pub unsafe extern "sysv64" fn switch(restore: *const Self, store: *mut Self) {
+        // SAFETY: Assuming the restore and store pointers are not aliasing and valid contexts,
+        // this function will save the preserved registers (from sysv64 abi) alongside the stack
+        // pointer and the return pointer (which both will be set appropriately for the return frame).
+        // This works since the caller understands that scratch registers won't be saved.
+        //
+        // This the calls the `jump` function for the restore context which does the opposite,
+        // restoring all the preserved registers before returning to the appropriate frame.
         unsafe {
             asm!(
                 // Save current state
@@ -110,30 +118,32 @@ impl Regs {
     }
 
     /// Performs a context switch, to the `restore` without saving the state.
+    ///
+    /// This restores the preserved registers only as the only safe way to save a context
+    /// is through the `switch` function which guarantees that only the preserved registers
+    /// must be saved.
+    ///
+    /// # Safety
+    ///
+    /// `restore` must be a valid context which was properly initialized and which state
+    /// was saved with the `switch` function.
     #[naked]
     pub unsafe extern "sysv64" fn jump(restore: *const Self) -> ! {
+        // SAFETY:
         unsafe {
             asm!(
+                "pop rax", // Discard the return pointer.
                 "mov rbx, [rdi]",
                 "mov rbp, [rdi + 8*1]",
                 "mov r12, [rdi + 8*2]",
                 "mov r13, [rdi + 8*3]",
                 "mov r14, [rdi + 8*4]",
                 "mov r15, [rdi + 8*5]",
-                "mov rax, [rdi + 8*6]",
-                "mov rcx, [rdi + 8*7]",
-                "mov rdx, [rdi + 8*8]",
-                "mov rsi, [rdi + 8*9]",
-                "mov r8, [rdi + 8*11]",
-                "mov r9, [rdi + 8*12]",
-                "mov r10, [rdi + 8*13]",
-                "mov r11, [rdi + 8*14]",
                 "mov rsp, [rdi + 8*15]",
-                // RFLAGS, this may reenable interrupts.
-                "push [rdi + 8*17]",
+                "push [rdi + 8*16]", //rip
+                "push [rdi + 8*17]", // rflags
                 "popfq",
-                "push [rdi + 8*16]",     //rip
-                "mov rdi, [rdi + 8*10]", // Rdi
+                "mov rdi, [rdi + 8*10]",
                 "ret",
                 options(noreturn)
             )
@@ -152,14 +162,14 @@ impl Context {
             F: FnOnce() + Send + 'static,
         {
             // SAFETY: No locks are currently active in this context.
-            unsafe { crate::arch::interrupts::enable() };
+            // unsafe { crate::arch::interrupts::enable() };
             // SAFETY: We leaked it when we created the kthread.
             {
                 func();
             }
             // Reenable interrupts if they got disabled.
             // SAFETY: No locks are currently active in this context.
-            unsafe { crate::arch::interrupts::enable() };
+            // unsafe { crate::arch::interrupts::enable() };
             sched::exit();
         }
         let stack_page = mm::alloc_page().unwrap();
@@ -167,7 +177,7 @@ impl Context {
         let mut regs = Regs::new();
         // System-V ABI pushes int-like arguements to registers.
         regs.scratch.rdi = func as u64;
-        regs.rsp = stack_page.start_address().as_u64() + Size4KiB::SIZE;
+        regs.rsp = stack_page.start_address().as_u64() + Size4KiB::SIZE - 8;
         regs.rip = inner::<F> as u64;
         regs.rflags = 0x2;
         Self {
@@ -199,11 +209,11 @@ impl Context {
     /// # Safety
     ///
     /// * The `restore` and `store` pointers must be valid `Context`s.
-    pub unsafe fn switch(restore: &Self, store: &mut Self) {
+    pub unsafe fn switch(restore: *const Self, store: *mut Self) {
         // SAFETY: Preconditions
         unsafe {
-            mm::set_page_table(restore.l4_table);
-            Regs::switch(&restore.regs, &mut store.regs)
+            mm::set_page_table((*restore).l4_table);
+            Regs::switch(addr_of!((*restore).regs), addr_of_mut!((*store).regs));
         }
     }
 
@@ -212,11 +222,11 @@ impl Context {
     /// # Safety
     ///
     /// * The `restore` pointer must be a valid `Context.
-    pub unsafe fn jump(restore: &Self) -> ! {
+    pub unsafe fn jump(restore: *const Self) -> ! {
         // SAFETY: Preconditions
         unsafe {
-            mm::set_page_table(restore.l4_table);
-            Regs::jump(&restore.regs)
+            mm::set_page_table((*restore).l4_table);
+            Regs::jump(addr_of!((*restore).regs));
         }
     }
 }
