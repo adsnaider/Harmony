@@ -21,7 +21,7 @@ pub fn init() {
     static TSS: Lazy<TaskStateSegment> = Lazy::new(|| {
         let mut tss = TaskStateSegment::new();
         tss.interrupt_stack_table[DOUBLE_FAULT_IST_INDEX as usize] = {
-            const STACK_SIZE: usize = 4096 * 5;
+            const STACK_SIZE: usize = 4096;
             static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
 
             // SAFETY: Although it's a static mut, STACK is only used in this context.
@@ -30,9 +30,8 @@ pub fn init() {
         };
         // Privilege stack table used on interrupts.
         tss.privilege_stack_table[0] = {
-            const STACK_SIZE: usize = 4096 * 5;
+            const STACK_SIZE: usize = 4096;
             static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
-
             // SAFETY: Although it's a static mut, STACK is only used in this context.
             let stack_start = VirtAddr::from_ptr(unsafe { &STACK });
             stack_start + STACK_SIZE // stack end.
