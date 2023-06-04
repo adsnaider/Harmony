@@ -1,5 +1,6 @@
 //! x86-64-specifc code and constructs.
 use bootloader_api::info::MemoryRegions;
+use critical_section::CriticalSection;
 
 pub mod context;
 pub mod inst;
@@ -10,21 +11,33 @@ mod gdt;
 mod timer;
 
 /// Initialize the system.
-pub unsafe fn init(physical_memory_offset: u64, memory_map: &mut MemoryRegions) {
-    critical_section::with(|cs| {
-        unsafe {
-            mm::init(physical_memory_offset, memory_map);
-        }
-        log::info!("Initialized memory manager");
-        gdt::init();
-        log::info!("Initialized the Global Decriptor Table");
-        interrupts::init(cs);
-        log::info!("Initialized interrupts and handlers");
+///
+/// # Safety
+///
+/// The memory offset and memory map must both be accurately representing the full span of memory.
+///
+/// # Panics
+///
+/// If `init` is called more than once.
+pub unsafe fn init(
+    physical_memory_offset: u64,
+    memory_map: &mut MemoryRegions,
+    cs: CriticalSection,
+) {
+    // SAFETY: Precondition.
+    unsafe {
+        mm::init(physical_memory_offset, memory_map);
+    }
+    log::info!("Initialized memory manager");
+    gdt::init();
+    log::info!("Initialized the Global Decriptor Table");
+    interrupts::init(cs);
+    log::info!("Initialized interrupts and handlers");
 
-        context::init();
+    context::init();
 
-        unsafe {
-            timer::Pit8253::new().into_timer(5966);
-        }
-    })
+    // SAFETY: We only construct a PIT here.
+    unsafe {
+        timer::Pit8253::new().into_timer(5966);
+    }
 }

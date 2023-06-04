@@ -23,6 +23,9 @@ pub mod sys;
 // #[macro_use]
 extern crate alloc;
 
+use alloc::boxed::Box;
+use alloc::vec;
+
 use bootloader_api::config::Mapping;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 
@@ -43,32 +46,40 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 fn kmain(bootinfo: &'static mut BootInfo) -> ! {
     crate::arch::interrupts::disable();
     // SAFETY: The bootinfo is directly provided by the bootloader.
-    critical_section::with(|_cs| {
-        unsafe {
-            sys::init(bootinfo);
-        }
+    critical_section::with(|cs| {
+        unsafe { sys::init(bootinfo, cs) };
         sched::init();
     });
     log::info!("Initialization sequence complete");
 
-    sched::push(Context::kthread(|| {
+    let id1 = sched::push(Context::kthread(|| {
+        let x = Box::new(5);
+        dbg!(x);
+        // sched::block();
+        /*
         for i in 0..20 {
-            println!("Hi from task 1 - ({i})");
-            core::hint::black_box(for _ in 0..1000000 {});
+            sched::push(Context::kthread(move || {
+                println!("Hi from task 1-{i}");
+            }));
         }
+        */
     }));
-    sched::push(Context::kthread(|| {
+    let id2 = sched::push(Context::kthread(move || {
+        let x = Box::new(6);
+        dbg!(x);
+        /*
         for i in 0..20 {
             println!("Hi from task 2 - ({i})");
             core::hint::black_box(for _ in 0..1000000 {});
+            sched::switch();
         }
+        */
     }));
 
-    // SAFETY: No locks held, we disabled it at the start of the function.
-    unsafe {
-        crate::arch::interrupts::enable();
-    }
     sched::exit();
+    // loop {
+    // sched::exit();
+    // }
 }
 
 const CONFIG: BootloaderConfig = {

@@ -43,6 +43,7 @@ pub fn are_enabled() -> bool {
 fn init_idt() {
     static IDT: Lazy<InterruptDescriptorTable> = Lazy::new(|| {
         let mut idt = InterruptDescriptorTable::new();
+        // Exceptions.
         idt.breakpoint.set_handler_fn(handlers::breakpoint);
         idt.general_protection_fault
             .set_handler_fn(handlers::general_protection_fault);
