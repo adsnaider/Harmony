@@ -20,11 +20,7 @@ pub mod ksync;
 pub mod sched;
 pub mod sys;
 
-// #[macro_use]
 extern crate alloc;
-
-use alloc::boxed::Box;
-use alloc::vec;
 
 use bootloader_api::config::Mapping;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
@@ -53,33 +49,23 @@ fn kmain(bootinfo: &'static mut BootInfo) -> ! {
     log::info!("Initialization sequence complete");
 
     let id1 = sched::push(Context::kthread(|| {
-        let x = Box::new(5);
-        dbg!(x);
-        // sched::block();
-        /*
+        sched::block();
         for i in 0..20 {
             sched::push(Context::kthread(move || {
                 println!("Hi from task 1-{i}");
             }));
         }
-        */
     }));
-    let id2 = sched::push(Context::kthread(move || {
-        let x = Box::new(6);
-        dbg!(x);
-        /*
+    let _id2 = sched::push(Context::kthread(move || {
         for i in 0..20 {
             println!("Hi from task 2 - ({i})");
             core::hint::black_box(for _ in 0..1000000 {});
             sched::switch();
         }
-        */
+        sched::wakeup(id1);
     }));
 
     sched::exit();
-    // loop {
-    // sched::exit();
-    // }
 }
 
 const CONFIG: BootloaderConfig = {

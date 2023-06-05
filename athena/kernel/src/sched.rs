@@ -83,7 +83,7 @@ impl Scheduler {
             .try_insert(tid, UnsafeCell::new(task))
             .unwrap();
         self.readyq.borrow_mut().push_back(tid);
-        dbg!(tid)
+        tid
     }
 
     /// Schedules the next task to run.
@@ -111,14 +111,14 @@ impl Scheduler {
             let previous = self.tasks.borrow()[&previous].get();
             let next = self.tasks.borrow()[&next].get();
 
-            Context::switch(next, previous);
+            Context::switch(&*next, &mut *previous);
         }
     }
 
     unsafe fn jump_to(&self, next: u64) -> ! {
         unsafe {
             let next = self.tasks.borrow()[&next].get();
-            Context::jump(next);
+            Context::jump(&*next);
         }
     }
 
@@ -141,14 +141,11 @@ impl Scheduler {
         let next = self.readyq.borrow_mut().pop_front().unwrap();
         let previous = self.current.borrow_mut().replace(next).unwrap();
         assert!(self.blocked.borrow_mut().insert(previous));
-        dbg!(&self.blocked);
         unsafe { self.switch_to(next, previous) }
     }
 
     /// Awake a blocked context.
     pub fn wakeup(&self, id: u64) {
-        dbg!(id);
-        dbg!(&self.blocked);
         if dbg!(self.blocked.borrow_mut().remove(&id)) {
             self.readyq.borrow_mut().push_back(id);
         }
