@@ -47,7 +47,6 @@ fn init_idt() {
         idt.breakpoint.set_handler_fn(handlers::breakpoint);
         idt.general_protection_fault
             .set_handler_fn(handlers::general_protection_fault);
-        idt.page_fault.set_handler_fn(handlers::page_fault);
         idt.overflow.set_handler_fn(handlers::overflow);
         idt.divide_error.set_handler_fn(handlers::divide_error);
         idt.non_maskable_interrupt
@@ -82,6 +81,9 @@ fn init_idt() {
             idt.double_fault
                 .set_handler_fn(handlers::double_fault)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
+            idt.page_fault
+                .set_handler_fn(handlers::page_fault)
+                .set_stack_index(gdt::PAGE_FAULT_IST_INDEX);
         }
         // Syscall
         idt[SYSCALL_INT as usize]
