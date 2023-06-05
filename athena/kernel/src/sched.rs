@@ -10,7 +10,6 @@ use hashbrown::{HashMap, HashSet};
 use once_cell::sync::OnceCell;
 
 use crate::arch::context::Context;
-use crate::dbg;
 
 /// The kernel scheduler.
 #[derive(Debug)]
@@ -19,6 +18,7 @@ pub struct Scheduler {
     blocked: RefCell<HashSet<u64>>,
     current: RefCell<Option<u64>>,
     tasks: RefCell<HashMap<u64, UnsafeCell<Context>>>,
+    looper: u64,
 }
 
 static SCHEDULER: OnceCell<Mutex<Scheduler>> = OnceCell::new();
@@ -67,11 +67,21 @@ impl Scheduler {
         let mut tasks = HashMap::new();
         tasks.try_insert(tid, UnsafeCell::new(current)).unwrap();
 
+        // A fake thread that never ends. Makes it easy to always have something to schedule.
+        let looper = Context::kthread(|| loop {
+            crate::arch::inst::hlt();
+        });
+        let looper_id = Self::next_tid();
+        tasks
+            .try_insert(looper_id, UnsafeCell::new(looper))
+            .unwrap();
+
         Self {
             readyq: RefCell::new(VecDeque::new()),
             current: RefCell::new(Some(tid)),
             blocked: RefCell::new(HashSet::new()),
             tasks: RefCell::new(tasks),
+            looper: looper_id,
         }
     }
 
@@ -90,9 +100,7 @@ impl Scheduler {
     ///
     /// Upon a follow up switch, the function will return back to its caller.
     pub fn switch(&self) {
-        let Some(next) = self
-            .readyq.borrow_mut()
-            .pop_front() else {
+        let Some(next) = self.try_get_next() else {
             // Nothing else to run, back to caller.
             return;
         };
@@ -103,6 +111,42 @@ impl Scheduler {
         // * The pointers only become references before the switch, not after.
         // * When the switch comes back to us (on a further restore, we don't have any more references around).
         unsafe { self.switch_to(next, previous) }
+    }
+
+    /// Terminates the currently running task and schedules the next one
+    pub fn exit(&self) -> ! {
+        let previous = self.current.borrow_mut().take().unwrap();
+        self.tasks.borrow_mut().remove(&previous).unwrap();
+
+        let next = self.get_next();
+        *self.current.borrow_mut() = Some(next);
+        unsafe {
+            self.jump_to(next);
+        }
+    }
+
+    /// Blocks the current process
+    pub fn block(&self) {
+        let previous = self.current.borrow_mut().take().unwrap();
+        assert!(self.blocked.borrow_mut().insert(previous));
+        let next = self.get_next();
+        *self.current.borrow_mut() = Some(next);
+        unsafe { self.switch_to(next, previous) }
+    }
+
+    /// Awake a blocked context.
+    pub fn wakeup(&self, id: u64) {
+        if self.blocked.borrow_mut().remove(&id) {
+            self.readyq.borrow_mut().push_back(id);
+        }
+    }
+
+    fn try_get_next(&self) -> Option<u64> {
+        self.readyq.borrow_mut().pop_front()
+    }
+
+    fn get_next(&self) -> u64 {
+        self.try_get_next().unwrap_or(self.looper)
     }
 
     unsafe fn switch_to(&self, next: u64, previous: u64) {
@@ -119,35 +163,6 @@ impl Scheduler {
         unsafe {
             let next = self.tasks.borrow()[&next].get();
             Context::jump(&*next);
-        }
-    }
-
-    /// Terminates the currently running task and schedules the next one
-    pub fn exit(&self) -> ! {
-        let next = self
-            .readyq
-            .borrow_mut()
-            .pop_front()
-            .expect("Looper should be ready");
-        let previous = self.current.borrow_mut().replace(next).unwrap();
-        self.tasks.borrow_mut().remove(&previous).unwrap();
-        unsafe {
-            self.jump_to(next);
-        }
-    }
-
-    /// Blocks the current process
-    pub fn block(&self) {
-        let next = self.readyq.borrow_mut().pop_front().unwrap();
-        let previous = self.current.borrow_mut().replace(next).unwrap();
-        assert!(self.blocked.borrow_mut().insert(previous));
-        unsafe { self.switch_to(next, previous) }
-    }
-
-    /// Awake a blocked context.
-    pub fn wakeup(&self, id: u64) {
-        if dbg!(self.blocked.borrow_mut().remove(&id)) {
-            self.readyq.borrow_mut().push_back(id);
         }
     }
 }

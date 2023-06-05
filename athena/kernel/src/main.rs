@@ -51,9 +51,7 @@ fn kmain(bootinfo: &'static mut BootInfo) -> ! {
     let id1 = sched::push(Context::kthread(|| {
         sched::block();
         for i in 0..20 {
-            sched::push(Context::kthread(move || {
-                println!("Hi from task 1-{i}");
-            }));
+            println!("Hi from task 1-{i}");
         }
     }));
     let _id2 = sched::push(Context::kthread(move || {
