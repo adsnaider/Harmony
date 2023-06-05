@@ -20,7 +20,6 @@ pub mod ksync;
 pub mod sched;
 pub mod sys;
 
-// #[macro_use]
 extern crate alloc;
 
 use bootloader_api::config::Mapping;
@@ -41,33 +40,29 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 
 /// Kernel's starting point.
 fn kmain(bootinfo: &'static mut BootInfo) -> ! {
-    crate::arch::int::disable();
+    crate::arch::interrupts::disable();
     // SAFETY: The bootinfo is directly provided by the bootloader.
-    critical_section::with(|_cs| {
-        unsafe {
-            sys::init(bootinfo);
-        }
+    critical_section::with(|cs| {
+        unsafe { sys::init(bootinfo, cs) };
         sched::init();
     });
     log::info!("Initialization sequence complete");
 
-    sched::push(Context::kthread(|| {
+    let id1 = sched::push(Context::kthread(|| {
+        sched::block();
         for i in 0..20 {
-            println!("Hi from task 1 - ({i})");
-            core::hint::black_box(for _ in 0..1000000 {});
+            println!("Hi from task 1-{i}");
         }
     }));
-    sched::push(Context::kthread(|| {
+    let _id2 = sched::push(Context::kthread(move || {
         for i in 0..20 {
             println!("Hi from task 2 - ({i})");
             core::hint::black_box(for _ in 0..1000000 {});
+            sched::switch();
         }
+        sched::wakeup(id1);
     }));
 
-    // SAFETY: No locks held, we disabled it at the start of the function.
-    unsafe {
-        crate::arch::int::enable();
-    }
     sched::exit();
 }
 
@@ -90,15 +85,15 @@ critical_section::set_impl!(SingleThreadCS);
 /// to guarantee a critical section's conditions.
 unsafe impl critical_section::Impl for SingleThreadCS {
     unsafe fn acquire() -> critical_section::RawRestoreState {
-        let interrupts_enabled = arch::int::are_enabled();
-        arch::int::disable();
+        let interrupts_enabled = arch::interrupts::are_enabled();
+        arch::interrupts::disable();
         interrupts_enabled
     }
 
     unsafe fn release(interrupts_were_enabled: critical_section::RawRestoreState) {
         if interrupts_were_enabled {
             unsafe {
-                arch::int::enable();
+                arch::interrupts::enable();
             }
         }
     }

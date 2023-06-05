@@ -1,14 +1,15 @@
 //! System display and console.
 
-use atomic_refcell::AtomicRefCell;
 use bootloader_api::info::{FrameBuffer, PixelFormat};
+use critical_section::CriticalSection;
 use framed::console::Console;
 use framed::{Frame, Pixel};
 use log::{self, LevelFilter, Metadata, Record};
 use once_cell::unsync::Lazy;
+use singleton::Singleton;
 
 /// The main console for the kernel.
-static CONSOLE: AtomicRefCell<Option<Console<Display>>> = AtomicRefCell::new(None);
+static CONSOLE: Singleton<Console<Display>> = Singleton::uninit();
 /// The global logger.
 static LOGGER: DisplayLogger = DisplayLogger {};
 
@@ -25,25 +26,18 @@ const LOG_LEVEL: Lazy<LevelFilter> = Lazy::new(|| {
 
 /// Initializes the console and logger. It's reasonable to use the print!,
 /// println! and log::* macros after this call.
-pub(super) fn init(console: Console<Display>) {
-    *CONSOLE.borrow_mut() = Some(console);
+pub(super) fn init(console: Console<Display>, cs: CriticalSection) {
+    CONSOLE.initialize(console, cs);
     if let Err(e) = log::set_logger(&LOGGER).map(|()| log::set_max_level(*LOG_LEVEL)) {
         crate::println!("Couldn't initialize logging services: {e}");
     }
 }
 
 /// The display struct implements the `Frame` trait from the framebuffer pointer.
-#[allow(missing_copy_implementations)]
 #[derive(Debug)]
 pub struct Display {
     framebuffer: FrameBuffer,
 }
-
-// SAFETY: Precondition for creating the display prevents multiple frame buffers from existing in
-// the system.
-unsafe impl Send for Display {}
-/// SAFETY: Only 1 framebuffer exists and we require a mutable reference to write to the display.
-unsafe impl Sync for Display {}
 
 impl Display {
     /// Create a new display with the framebuffer.
@@ -136,14 +130,9 @@ macro_rules! println {
 /// Prints the arguments to the screen, panicking if unable to.
 #[doc(hidden)]
 pub fn _print(args: core::fmt::Arguments) {
-    critical_section::with(|_cs| {
+    critical_section::with(|cs| {
         use core::fmt::Write;
-        CONSOLE
-            .borrow_mut()
-            .as_mut()
-            .unwrap()
-            .write_fmt(args)
-            .unwrap();
+        CONSOLE.lock(cs).write_fmt(args).unwrap();
     });
 }
 

@@ -1,11 +1,12 @@
 //! The kernel scheduler.
 
 use alloc::collections::VecDeque;
-use alloc::vec::Vec;
-use core::cell::UnsafeCell;
+use core::cell::{RefCell, UnsafeCell};
 use core::fmt::Debug;
+use core::sync::atomic::{AtomicU64, Ordering};
 
 use critical_section::Mutex;
+use hashbrown::{HashMap, HashSet};
 use once_cell::sync::OnceCell;
 
 use crate::arch::context::Context;
@@ -13,91 +14,166 @@ use crate::arch::context::Context;
 /// The kernel scheduler.
 #[derive(Debug)]
 pub struct Scheduler {
-    readyq: Mutex<UnsafeCell<VecDeque<Context>>>,
-    _blocked: Mutex<UnsafeCell<Vec<Context>>>,
-    current: Mutex<UnsafeCell<Context>>,
+    readyq: RefCell<VecDeque<u64>>,
+    blocked: RefCell<HashSet<u64>>,
+    current: RefCell<Option<u64>>,
+    tasks: RefCell<HashMap<u64, UnsafeCell<Context>>>,
+    looper: u64,
 }
 
-static SCHEDULER: OnceCell<Scheduler> = OnceCell::new();
+static SCHEDULER: OnceCell<Mutex<Scheduler>> = OnceCell::new();
 
 /// Initializes the scheduler.
 pub fn init() {
-    SCHEDULER.set(Scheduler::new(Context::main())).unwrap();
+    SCHEDULER
+        .set(Mutex::new(Scheduler::new(Context::main())))
+        .unwrap();
 }
 
 /// Pushes a new task to be scheduled.
-pub fn push(task: Context) {
-    SCHEDULER.get().unwrap().push(task);
+pub fn push(task: crate::arch::context::Context) -> u64 {
+    critical_section::with(|cs| SCHEDULER.get().unwrap().borrow(cs).push(task))
 }
 
 /// Performs a context switch.
 pub fn switch() {
-    SCHEDULER.get().unwrap().switch();
+    critical_section::with(|cs| SCHEDULER.get().unwrap().borrow(cs).switch())
 }
 
 /// Terminates the currently running task and schedules the next one
 pub fn exit() -> ! {
-    SCHEDULER.get().unwrap().exit();
+    critical_section::with(|cs| SCHEDULER.get().unwrap().borrow(cs).exit())
+}
+
+/// Blocks the current context until a wake up is received.
+pub fn block() {
+    critical_section::with(|cs| SCHEDULER.get().unwrap().borrow(cs).block())
+}
+
+/// Wakes up a given context (if blocked).
+pub fn wakeup(tid: u64) {
+    critical_section::with(|cs| SCHEDULER.get().unwrap().borrow(cs).wakeup(tid))
+}
+
+/// Gets the current thread's TID.
+pub fn tid() -> u64 {
+    critical_section::with(|cs| SCHEDULER.get().unwrap().borrow(cs).tid())
 }
 
 impl Scheduler {
     /// Creates an empty scheduler.
     pub fn new(current: Context) -> Self {
+        let tid = Self::next_tid();
+        let mut tasks = HashMap::new();
+        tasks.try_insert(tid, UnsafeCell::new(current)).unwrap();
+
+        // A fake thread that never ends. Makes it easy to always have something to schedule.
+        let looper = Context::kthread(|| loop {
+            crate::arch::inst::hlt();
+        });
+        let looper_id = Self::next_tid();
+        tasks
+            .try_insert(looper_id, UnsafeCell::new(looper))
+            .unwrap();
+
         Self {
-            readyq: Mutex::new(UnsafeCell::new(VecDeque::new())),
-            current: Mutex::new(UnsafeCell::new(current)),
-            _blocked: Mutex::new(UnsafeCell::new(Vec::new())),
+            readyq: RefCell::new(VecDeque::new()),
+            current: RefCell::new(Some(tid)),
+            blocked: RefCell::new(HashSet::new()),
+            tasks: RefCell::new(tasks),
+            looper: looper_id,
         }
     }
 
     /// Pushes a new task to the scheduler.
-    pub fn push(&self, task: Context) {
-        // SAFETY: This operation is non-reentrant.
-        critical_section::with(|cs| unsafe {
-            (*self.readyq.borrow(cs).get()).push_back(task);
-        });
+    pub fn push(&self, task: Context) -> u64 {
+        let tid = Self::next_tid();
+        self.tasks
+            .borrow_mut()
+            .try_insert(tid, UnsafeCell::new(task))
+            .unwrap();
+        self.readyq.borrow_mut().push_back(tid);
+        tid
     }
 
     /// Schedules the next task to run.
     ///
     /// Upon a follow up switch, the function will return back to its caller.
     pub fn switch(&self) {
-        critical_section::with(|cs| {
-            let readyq = unsafe { &mut *self.readyq.borrow(cs).get() };
-            let current = unsafe { &mut *self.current.borrow(cs).get() };
-            if let Some(next) = readyq.pop_front() {
-                let previous = core::mem::replace(current, next);
-                readyq.push_back(previous);
-                let previous = readyq.back_mut().unwrap();
-                let next = current;
-                // SAFETY: This is super awkward but hopefully safe.
-                // * It's probably not cool to keep references that need to live after the switch, so we use raw pointers.
-                // * The pointers only become references before the switch, not after.
-                // * When the switch comes back to us (on a further restore, we don't have any more references around).
-                unsafe {
-                    // This function will restore interrupts
-                    Context::switch(next, previous);
-                }
-            }
-        })
+        let Some(next) = self.try_get_next() else {
+            // Nothing else to run, back to caller.
+            return;
+        };
+        let previous = self.current.borrow_mut().replace(next).unwrap();
+        self.readyq.borrow_mut().push_back(previous);
+        // SAFETY: This is super awkward but hopefully safe.
+        // * It's probably not cool to keep references that need to live after the switch, so we use raw pointers.
+        // * The pointers only become references before the switch, not after.
+        // * When the switch comes back to us (on a further restore, we don't have any more references around).
+        self.switch_to(next, previous)
     }
 
     /// Terminates the currently running task and schedules the next one
     pub fn exit(&self) -> ! {
-        loop {
-            critical_section::with(|cs| {
-                let readyq = unsafe { &mut *self.readyq.borrow(cs).get() };
-                let current = unsafe { &mut *self.current.borrow(cs).get() };
-                if let Some(next) = readyq.pop_front() {
-                    *current = next;
-                    let next = current;
-                    unsafe {
-                        Context::jump(next);
-                    }
-                }
-            });
-            assert!(crate::arch::int::are_enabled());
-            crate::arch::inst::hlt();
+        let previous = self.current.borrow_mut().take().unwrap();
+        self.tasks.borrow_mut().remove(&previous).unwrap();
+
+        let next = self.get_next();
+        *self.current.borrow_mut() = Some(next);
+        self.jump_to(next);
+    }
+
+    /// Blocks the current process
+    pub fn block(&self) {
+        let previous = self.current.borrow_mut().take().unwrap();
+        assert!(self.blocked.borrow_mut().insert(previous));
+        let next = self.get_next();
+        *self.current.borrow_mut() = Some(next);
+        self.switch_to(next, previous)
+    }
+
+    /// Awake a blocked context.
+    pub fn wakeup(&self, id: u64) {
+        if self.blocked.borrow_mut().remove(&id) {
+            self.readyq.borrow_mut().push_back(id);
         }
+    }
+
+    /// Gets the current thread's TID.
+    pub fn tid(&self) -> u64 {
+        self.current.borrow().unwrap()
+    }
+
+    fn try_get_next(&self) -> Option<u64> {
+        self.readyq.borrow_mut().pop_front()
+    }
+
+    fn get_next(&self) -> u64 {
+        self.try_get_next().unwrap_or(self.looper)
+    }
+
+    fn switch_to(&self, next: u64, previous: u64) {
+        assert!(next != previous);
+        // SAFETY: All of the tasks in the map are properly initialized and `next` and `previous`
+        // are not the same.
+        unsafe {
+            let previous = self.tasks.borrow()[&previous].get();
+            let next = self.tasks.borrow()[&next].get();
+
+            Context::switch(next, previous);
+        }
+    }
+
+    fn jump_to(&self, next: u64) -> ! {
+        // SAFETY: All of the tasks in the map are properly initialized.
+        unsafe {
+            let next = self.tasks.borrow()[&next].get();
+            Context::jump(next);
+        }
+    }
+
+    fn next_tid() -> u64 {
+        static NEXT_TID: AtomicU64 = AtomicU64::new(0);
+        NEXT_TID.fetch_add(1, Ordering::Relaxed)
     }
 }
