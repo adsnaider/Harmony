@@ -55,12 +55,12 @@ pub fn wakeup(tid: u64) {
     critical_section::with(|cs| SCHEDULER.get().unwrap().borrow(cs).wakeup(tid))
 }
 
-impl Scheduler {
-    fn next_tid() -> u64 {
-        static NEXT_TID: AtomicU64 = AtomicU64::new(0);
-        NEXT_TID.fetch_add(1, Ordering::Relaxed)
-    }
+/// Gets the current thread's TID.
+pub fn tid() -> u64 {
+    critical_section::with(|cs| SCHEDULER.get().unwrap().borrow(cs).tid())
+}
 
+impl Scheduler {
     /// Creates an empty scheduler.
     pub fn new(current: Context) -> Self {
         let tid = Self::next_tid();
@@ -110,7 +110,7 @@ impl Scheduler {
         // * It's probably not cool to keep references that need to live after the switch, so we use raw pointers.
         // * The pointers only become references before the switch, not after.
         // * When the switch comes back to us (on a further restore, we don't have any more references around).
-        unsafe { self.switch_to(next, previous) }
+        self.switch_to(next, previous)
     }
 
     /// Terminates the currently running task and schedules the next one
@@ -120,9 +120,7 @@ impl Scheduler {
 
         let next = self.get_next();
         *self.current.borrow_mut() = Some(next);
-        unsafe {
-            self.jump_to(next);
-        }
+        self.jump_to(next);
     }
 
     /// Blocks the current process
@@ -131,7 +129,7 @@ impl Scheduler {
         assert!(self.blocked.borrow_mut().insert(previous));
         let next = self.get_next();
         *self.current.borrow_mut() = Some(next);
-        unsafe { self.switch_to(next, previous) }
+        self.switch_to(next, previous)
     }
 
     /// Awake a blocked context.
@@ -139,6 +137,11 @@ impl Scheduler {
         if self.blocked.borrow_mut().remove(&id) {
             self.readyq.borrow_mut().push_back(id);
         }
+    }
+
+    /// Gets the current thread's TID.
+    pub fn tid(&self) -> u64 {
+        self.current.borrow().unwrap()
     }
 
     fn try_get_next(&self) -> Option<u64> {
@@ -149,20 +152,28 @@ impl Scheduler {
         self.try_get_next().unwrap_or(self.looper)
     }
 
-    unsafe fn switch_to(&self, next: u64, previous: u64) {
+    fn switch_to(&self, next: u64, previous: u64) {
         assert!(next != previous);
+        // SAFETY: All of the tasks in the map are properly initialized and `next` and `previous`
+        // are not the same.
         unsafe {
             let previous = self.tasks.borrow()[&previous].get();
             let next = self.tasks.borrow()[&next].get();
 
-            Context::switch(&*next, &mut *previous);
+            Context::switch(next, previous);
         }
     }
 
-    unsafe fn jump_to(&self, next: u64) -> ! {
+    fn jump_to(&self, next: u64) -> ! {
+        // SAFETY: All of the tasks in the map are properly initialized.
         unsafe {
             let next = self.tasks.borrow()[&next].get();
-            Context::jump(&*next);
+            Context::jump(next);
         }
+    }
+
+    fn next_tid() -> u64 {
+        static NEXT_TID: AtomicU64 = AtomicU64::new(0);
+        NEXT_TID.fetch_add(1, Ordering::Relaxed)
     }
 }

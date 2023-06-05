@@ -2,6 +2,7 @@
 
 use alloc::boxed::Box;
 use core::arch::asm;
+use core::ptr::addr_of_mut;
 
 use x86_64::structures::paging::{Page, PageSize, Size4KiB};
 
@@ -38,9 +39,14 @@ struct KThread {
 }
 
 impl Context {
-    /// Performs the context switch into this context and stores the current state into `store`.j
+    /// Performs the context switch into this context and stores the current state into `store`.
+    ///
+    /// # Safety
+    ///
+    /// `restore` and `store` pointers must be properly initialized contexts and `restore`.
+    /// `restore` and `store` may not be equal.
     #[naked]
-    pub extern "sysv64" fn switch(restore: &Self, store: &mut Self) {
+    pub unsafe extern "sysv64" fn switch(restore: *const Self, store: *mut Self) {
         unsafe {
             asm!(
                 // caller saved registers.
@@ -148,10 +154,12 @@ impl Context {
     /// # Safety
     ///
     /// * The `restore` pointer must be a valid `Context.
-    pub unsafe fn jump(restore: &Self) -> ! {
+    pub unsafe fn jump(restore: *const Self) -> ! {
         let mut store = Context::main();
         // SAFETY: Preconditions
-        Self::switch(&restore, &mut store);
+        unsafe {
+            Self::switch(restore, addr_of_mut!(store));
+        }
         unreachable!();
     }
 }
