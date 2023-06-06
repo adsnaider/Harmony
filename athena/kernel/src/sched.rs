@@ -51,8 +51,15 @@ pub fn block() {
 }
 
 /// Wakes up a given context (if blocked).
-pub fn wakeup(tid: u64) {
-    critical_section::with(|cs| SCHEDULER.get().unwrap().borrow(cs).wakeup(tid))
+///
+/// # Safety
+///
+/// Awaking a thread can lead to data races if the thread was blocked due to synchronization, for instance.
+/// Calling `wakeup` on a thread should only be done if the blocked reason is known and can be guaranteed
+/// that it's safe to awaken the thread.
+pub unsafe fn wakeup(tid: u64) {
+    // SAFETY: Precondition.
+    unsafe { critical_section::with(|cs| SCHEDULER.get().unwrap().borrow(cs).wakeup(tid)) }
 }
 
 /// Gets the current thread's TID.
@@ -133,7 +140,13 @@ impl Scheduler {
     }
 
     /// Awake a blocked context.
-    pub fn wakeup(&self, id: u64) {
+    ///
+    /// # Safety
+    ///
+    /// Awaking a thread can lead to data races if the thread was blocked due to synchronization, for instance.
+    /// Calling `wakeup` on a thread should only be done if the blocked reason is known and can be guaranteed
+    /// that it's safe to awaken the thread.
+    pub unsafe fn wakeup(&self, id: u64) {
         if self.blocked.borrow_mut().remove(&id) {
             self.readyq.borrow_mut().push_back(id);
         }
