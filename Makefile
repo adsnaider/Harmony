@@ -36,6 +36,7 @@ emulate: bootimage
 	qemu-system-x86_64 \
 		-drive if=pflash,format=raw,readonly=on,file=/usr/share/ovmf/OVMF.fd \
 		-drive format=raw,file=$(ARTIFACTS)/uefi.img \
+		-serial stdio \
 		$(QEMU_ARGS)
 
 iso: bootimage
