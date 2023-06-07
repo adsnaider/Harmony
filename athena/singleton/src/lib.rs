@@ -59,7 +59,12 @@ impl<T: Send> Singleton<T> {
     }
 
     /// Locks the underlying data without the need of a critical section.
-    pub unsafe fn lock_unchecked<'a>(&'a self) -> impl DerefMut<Target = T> + 'a {
+    ///
+    /// # Safety
+    ///
+    /// The system must be within a critical section.
+    pub unsafe fn lock_unchecked(&self) -> impl DerefMut<Target = T> + '_ {
+        // SAFETY: Precondition.
         unsafe {
             let cs = CriticalSection::new();
             self.lock(cs)

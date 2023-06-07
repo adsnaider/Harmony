@@ -41,7 +41,7 @@ impl<T> Mutex<T> {
     /// Acquires the mutex, potentially locking the thread until it's able to do so.
     pub fn lock(&self) -> MutexGuard<'_, T> {
         self.sem.wait();
-        MutexGuard { lock: &self }
+        MutexGuard { lock: self }
     }
 
     /// Get a mutable reference to the underlying data.

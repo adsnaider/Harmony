@@ -25,6 +25,11 @@ const KEYBOARD_INT: u8 = PIC1_OFFSET + 1;
 const SYSCALL_INT: u8 = 0x80;
 
 /// Enable interrupts.
+///
+/// # Safety
+///
+/// Manually enabling interrupts can cause lead to critical section violation.
+/// Consider using `critical_section::with` or `critical_section::acquire` instead.
 pub unsafe fn enable() {
     x86_64::instructions::interrupts::enable();
 }

@@ -55,12 +55,13 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 /// `bootinfo` must be correct.
 unsafe fn init(bootinfo: &'static mut BootInfo) {
     crate::arch::interrupts::disable();
-    // SAFETY: The bootinfo is directly provided by the bootloader.
     critical_section::with(|cs| {
+        // SAFETY: The bootinfo is directly provided by the bootloader.
         unsafe { sys::init(bootinfo, cs) };
         sched::init();
     });
     log::info!("Initialization sequence complete");
+    // SAFETY: Initialization is complete, no locks are currently active.
     unsafe { crate::arch::interrupts::enable() }
 }
 
@@ -106,6 +107,7 @@ unsafe impl critical_section::Impl for SingleThreadCS {
 
     unsafe fn release(interrupts_were_enabled: critical_section::RawRestoreState) {
         if interrupts_were_enabled {
+            // SAFETY: Precondition.
             unsafe {
                 arch::interrupts::enable();
             }

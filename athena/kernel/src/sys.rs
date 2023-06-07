@@ -29,6 +29,7 @@ pub(super) unsafe fn init(bootinfo: &mut BootInfo, cs: CriticalSection) {
         .into_option()
         .unwrap();
     let framebuffer_addr = framebuffer.buffer() as *const [u8];
+    // SAFETY: framebuffer is correct and we only initialize it here.
     let mut display = unsafe { Display::new(framebuffer) };
 
     display.fill_with(Pixel::black());

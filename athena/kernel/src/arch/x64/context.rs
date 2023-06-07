@@ -47,6 +47,9 @@ impl Context {
     /// `restore` and `store` may not be equal.
     #[naked]
     pub unsafe extern "sysv64" fn switch(restore: *const Self, store: *mut Self) {
+        // SAFETY: Assuming we did everything else right, this will save the caller saved registers and rsp before
+        // jumping to a different context. When we come back, we restore the stack pointer and registers
+        // and return back to the original return point.
         unsafe {
             asm!(
                 // caller saved registers.
@@ -76,7 +79,13 @@ impl Context {
         }
     }
 
+    /// Pushes a value to the stack given the rsp.
+    ///
+    /// # Safety
+    ///
+    /// rsp must be valid and pointing to allocated memory.
     unsafe fn push(val: u64, rsp: &mut u64) {
+        // SAFETY: Precondition
         unsafe {
             *rsp -= 8;
             *(*rsp as *mut u64) = val;
@@ -90,10 +99,11 @@ impl Context {
     {
         // WARNING: Fake "C" ABI where argument is passed on the stack!
         #[naked]
-        extern "C" fn inner<F>(func: Box<F>) -> !
+        unsafe extern "C" fn inner<F>(func: Box<F>) -> !
         where
             F: FnOnce() + Send + 'static,
         {
+            // SAFETY: Argument is passed on the stack. `kstart` uses sysv64 abi which takes argument on `rdi`.
             unsafe {
                 asm!("pop rdi", "call {ktstart}", "ud2", ktstart = sym ktstart::<F>, options(noreturn));
             }
@@ -118,9 +128,10 @@ impl Context {
         let func = Box::into_raw(Box::new(f));
         // System-V ABI pushes int-like arguements to registers.
         let mut rsp = stack_page.start_address().as_u64() + Size4KiB::SIZE;
+        // SAFETY: Stack is big enough and `rsp` is correct.
         unsafe {
             Self::push(func as u64, &mut rsp);
-            Self::push(inner::<F> as u64, &mut rsp);
+            Self::push(inner::<F> as usize as u64, &mut rsp);
             Self::push(0, &mut rsp);
             Self::push(0, &mut rsp);
             Self::push(0, &mut rsp);
@@ -165,6 +176,7 @@ impl Context {
 }
 
 fn sce_enable() {
+    // SAFETY: This just enables system calls, no requirements necessary.
     unsafe {
         asm!(
             "mov rcx, 0xc0000082",

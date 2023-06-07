@@ -12,6 +12,7 @@ pub static FRAME_ALLOCATOR: Singleton<SystemFrameAllocator> = Singleton::uninit(
 
 struct Frame(PhysFrame<Size4KiB>);
 
+// SAFETY: Mapping is strictly 1-to-1.
 unsafe impl Indexable for Frame {
     fn index(&self) -> usize {
         (self.0.start_address().as_u64() / Size4KiB::SIZE) as usize
@@ -73,7 +74,7 @@ pub fn init(pmo: VirtAddr, memory_map: &mut MemoryRegions, cs: CriticalSection) 
     // `Bitalloc::new_with_availability` function that takes the iterator of the available frames.
     unsafe {
         let storage = core::slice::from_raw_parts_mut(
-            (pmo + available_region.start as u64).as_ptr::<u64>() as *mut u64,
+            (pmo + available_region.start).as_ptr::<u64>() as *mut u64,
             (bytes_required as usize - 1) / 8 + 1,
         );
 
