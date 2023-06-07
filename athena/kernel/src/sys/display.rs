@@ -4,33 +4,14 @@ use bootloader_api::info::{FrameBuffer, PixelFormat};
 use critical_section::CriticalSection;
 use framed::console::Console;
 use framed::{Frame, Pixel};
-use log::{self, LevelFilter, Metadata, Record};
-use once_cell::unsync::Lazy;
 use singleton::Singleton;
 
 /// The main console for the kernel.
 static CONSOLE: Singleton<Console<Display>> = Singleton::uninit();
-/// The global logger.
-static LOGGER: DisplayLogger = DisplayLogger {};
 
-const LOG_LEVEL: Lazy<LevelFilter> = Lazy::new(|| {
-    let level = option_env!("KERNEL_LOG_LEVEL").unwrap_or("info");
-    match level {
-        "debug" => LevelFilter::Debug,
-        "info" => LevelFilter::Info,
-        "warn" => LevelFilter::Warn,
-        "error" => LevelFilter::Error,
-        other => panic!("Unknown LOG LEVEL: {other}"),
-    }
-});
-
-/// Initializes the console and logger. It's reasonable to use the print!,
-/// println! and log::* macros after this call.
+/// Initializes the console. It's reasonable to use the print! and println! macros after this call.
 pub(super) fn init(console: Console<Display>, cs: CriticalSection) {
     CONSOLE.initialize(console, cs);
-    if let Err(e) = log::set_logger(&LOGGER).map(|()| log::set_max_level(*LOG_LEVEL)) {
-        crate::println!("Couldn't initialize logging services: {e}");
-    }
 }
 
 /// The display struct implements the `Frame` trait from the framebuffer pointer.
@@ -96,22 +77,6 @@ unsafe impl Frame for Display {
     fn height(&self) -> usize {
         self.framebuffer.info().height
     }
-}
-
-struct DisplayLogger;
-
-impl log::Log for DisplayLogger {
-    fn enabled(&self, metadata: &Metadata) -> bool {
-        metadata.level() <= *LOG_LEVEL
-    }
-
-    fn log(&self, record: &Record) {
-        if self.enabled(record.metadata()) {
-            crate::println!("{} - {}", record.level(), record.args());
-        }
-    }
-
-    fn flush(&self) {}
 }
 
 /// Prints the arguments to the console. May panic!.

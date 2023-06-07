@@ -21,6 +21,8 @@ pub mod sched;
 pub mod sync;
 pub mod sys;
 
+mod serial;
+
 extern crate alloc;
 
 use alloc::sync::Arc;
@@ -51,6 +53,7 @@ fn kmain(bootinfo: &'static mut BootInfo) -> ! {
         sched::init();
     });
     log::info!("Initialization sequence complete");
+    sprintln!("Testing serial port");
     const THREADS: usize = 10;
 
     let count = Arc::new(Mutex::new(0));

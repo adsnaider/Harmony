@@ -11,6 +11,7 @@ use framed::console::{BitmapFont, Console};
 use framed::{Frame, Pixel};
 
 use self::display::Display;
+use crate::serial;
 
 const FONT: &[u8] = include_bytes!("../font.bdf");
 
@@ -39,6 +40,7 @@ pub(super) unsafe fn init(bootinfo: &mut BootInfo, cs: CriticalSection) {
         }
     };
     display::init(Console::new(display, font), cs);
+    serial::init();
     println!("Hello, Kernel!");
     log::info!("Hello, logging!");
 
