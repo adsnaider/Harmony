@@ -18,14 +18,18 @@
 pub mod arch;
 pub mod ksync;
 pub mod sched;
+pub mod sync;
 pub mod sys;
 
 extern crate alloc;
+
+use alloc::sync::Arc;
 
 use bootloader_api::config::Mapping;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 
 use crate::arch::context::Context;
+use crate::sync::{Mutex, Semaphore};
 
 #[cfg(target_os = "none")]
 #[panic_handler]
@@ -47,22 +51,33 @@ fn kmain(bootinfo: &'static mut BootInfo) -> ! {
         sched::init();
     });
     log::info!("Initialization sequence complete");
+    const THREADS: usize = 10;
 
-    let id1 = sched::push(Context::kthread(|| {
-        sched::block();
-        for i in 0..20 {
-            println!("Hi from task 1-{i}");
-        }
-    }));
-    let _id2 = sched::push(Context::kthread(move || {
-        for i in 0..20 {
-            println!("Hi from task 2 - ({i})");
-            core::hint::black_box(for _ in 0..1000000 {});
-            sched::switch();
-        }
-        sched::wakeup(id1);
-    }));
+    let count = Arc::new(Mutex::new(0));
+    let done_threads = Arc::new(Semaphore::new(0));
 
+    for _ in 0..THREADS {
+        let done_threads = Arc::clone(&done_threads);
+        let count = Arc::clone(&count);
+        sched::push(Context::kthread(move || {
+            for _ in 0..100000 {
+                let mut count = count.lock();
+                let cached = *count;
+                sched::switch();
+                *count = cached + 1;
+            }
+            done_threads.signal();
+        }));
+    }
+
+    unsafe {
+        crate::arch::interrupts::enable();
+    }
+
+    for _ in 0..THREADS {
+        done_threads.wait();
+    }
+    dbg!(*count.lock());
     sched::exit();
 }
 
