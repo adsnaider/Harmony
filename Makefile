@@ -46,7 +46,7 @@ emulate: bootimage
 		$(QEMU_ARGS)
 
 test:
-	cargo test --workspace --exclude x64 --exclude kernel
+	cargo test --workspace --exclude kernel
 
 ktest: bootimage
 	@./go.sh 33 qemu-system-x86_64 \

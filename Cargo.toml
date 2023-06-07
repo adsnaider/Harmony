@@ -3,6 +3,7 @@ members = [
   "athena/*"
 ]
 
+resolver = "2"
 default-members = ["athena/kernel"]
 
 # Need some optimizations with or it's easy to run out of memory.
