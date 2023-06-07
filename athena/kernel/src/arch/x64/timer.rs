@@ -49,6 +49,7 @@ impl PitTimer {
     /// We currently don't allow a `reset_value` of 0.
     fn init(reset_value: u16) -> Self {
         let mut this = Self { reset_value };
+        // SAFETY: No other side effects.
         critical_section::with(|_cs| unsafe {
             // Set PIT to channel 0, mode 3 in low/high byte.
             MODE_PORT.write(0b00110110);
@@ -64,6 +65,7 @@ impl PitTimer {
             reset_value != 0,
             "Reset value of 0 is currently not supported."
         );
+        // SAFETY: No other side effects, the reset_value is valid.
         critical_section::with(|_cs| unsafe {
             // Low byte
             CHANNEL_0_PORT.write((reset_value & 0xFF) as u8);
@@ -76,6 +78,7 @@ impl PitTimer {
     pub fn read_count(&self) -> u16 {
         critical_section::with(|_cs| {
             let mut count: u16;
+            // SAFETY: No other side effects.
             unsafe {
                 MODE_PORT.write(0b00000000);
                 count = CHANNEL_0_PORT.read() as u16;

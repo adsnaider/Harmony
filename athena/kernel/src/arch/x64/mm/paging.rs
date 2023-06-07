@@ -5,9 +5,10 @@ use x86_64::{PhysAddr, VirtAddr};
 
 pub static PAGE_MAPPER: Singleton<OffsetPageTable<'static>> = Singleton::uninit();
 
-// SAFETY: Address is canonical.
-pub(super) static PHYSICAL_MEMORY_OFFSET: VirtAddr =
-    unsafe { VirtAddr::new_unsafe(0xFFFF_F000_0000_0000) };
+pub(super) static PHYSICAL_MEMORY_OFFSET: VirtAddr = {
+    // SAFETY: Address is canonical.
+    unsafe { VirtAddr::new_unsafe(0xFFFF_F000_0000_0000) }
+};
 
 pub fn init(pmo: VirtAddr, cs: CriticalSection) {
     assert_eq!(pmo, PHYSICAL_MEMORY_OFFSET);

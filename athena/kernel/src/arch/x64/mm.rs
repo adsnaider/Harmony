@@ -50,8 +50,9 @@ pub fn alloc_page() -> Option<Page> {
         let mut frame_allocator = FRAME_ALLOCATOR.lock(cs);
         let frame = frame_allocator.allocate_frame()?;
         let start_addr = PAGE_OFFSET.fetch_add(4096, Relaxed);
+        // SAFETY: The virtual address and frame are both unique.
         unsafe {
-            let page = Page::from_start_address_unchecked(VirtAddr::new_unsafe(start_addr));
+            let page = Page::from_start_address(VirtAddr::new(start_addr)).unwrap();
             PAGE_MAPPER.locked(cs, |map| {
                 map.map_to(
                     page,
@@ -80,6 +81,7 @@ pub fn active_page_table() -> PhysFrame {
 pub unsafe fn set_page_table(l4_frame: PhysFrame) -> PhysFrame {
     let (old_frame, flags) = Cr3::read();
     if l4_frame != old_frame {
+        // SAFETY: Precondition.
         unsafe { Cr3::write(l4_frame, flags) }
     }
     old_frame

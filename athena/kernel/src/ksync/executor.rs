@@ -11,6 +11,7 @@ use self::task::{Task, TaskId};
 
 /// An async executor suitable for the kernel.
 #[allow(missing_debug_implementations)]
+#[derive(Default)]
 pub struct Executor {
     ready: Arc<SegQueue<TaskId>>,
     tasks: BTreeMap<TaskId, Task>,
@@ -19,10 +20,7 @@ pub struct Executor {
 impl Executor {
     /// Constructs a new async executor.
     pub fn new() -> Self {
-        Self {
-            ready: Arc::new(SegQueue::new()),
-            tasks: BTreeMap::new(),
-        }
+        Default::default()
     }
 
     /// Spawns a new task.

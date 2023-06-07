@@ -40,6 +40,7 @@ pub enum QemuExitCode {
 
 pub fn exit_qemu(exit_code: QemuExitCode) -> ! {
     use x86_64::instructions::port::Port;
+    // SAFETY: Port has no other side effects.
     unsafe {
         let mut port = Port::new(0xf4);
         port.write(exit_code as u32)
@@ -60,6 +61,7 @@ impl<T: Fn()> Testable for T {
 }
 
 #[test_case]
+#[allow(clippy::eq_op)]
 fn trivial_assertion() {
     assert_eq!(1, 1);
 }

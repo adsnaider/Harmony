@@ -106,13 +106,11 @@ impl<T> Receiver<T> {
         let mut channel = self.channel.borrow_mut();
         if let Some(t) = channel.buffer.pop_front() {
             Poll::Ready(Ok(t))
+        } else if channel.senders == 0 {
+            Poll::Ready(Err(RecvError::Disconnected))
         } else {
-            if channel.senders == 0 {
-                Poll::Ready(Err(RecvError::Disconnected))
-            } else {
-                channel.waker = Some(cx.waker().clone());
-                Poll::Pending
-            }
+            channel.waker = Some(cx.waker().clone());
+            Poll::Pending
         }
     }
 
@@ -121,12 +119,10 @@ impl<T> Receiver<T> {
         let mut channel = self.channel.borrow_mut();
         if let Some(t) = channel.buffer.pop_front() {
             Ok(Some(t))
+        } else if channel.senders == 0 {
+            Err(RecvError::Disconnected)
         } else {
-            if channel.senders == 0 {
-                Err(RecvError::Disconnected)
-            } else {
-                Ok(None)
-            }
+            Ok(None)
         }
     }
 

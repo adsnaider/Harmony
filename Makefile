@@ -25,6 +25,9 @@ all: bootimage
 check:
 	cargo check --target $(TARGET) --tests
 
+clippy:
+	cargo clippy --target $(TARGET) --tests
+
 build: check
 	@mkdir -p $(ARTIFACTS)/tests
 	$(eval KERNEL_BIN=`cargo build --profile ${PROFILE} --target $(TARGET) --message-format=json | ./extract_exec.sh`)

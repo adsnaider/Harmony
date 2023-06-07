@@ -42,6 +42,7 @@ macro_rules! interrupt {
             extern "C" fn inner() {
                 $handler();
             }
+            // SAFETY: Following ABI with iretq and we only wrap a C call with push/pop scratch registers.
             unsafe {
                 core::arch::asm!(
                     push_scratch!(),
@@ -74,6 +75,7 @@ interrupt!(keyboard_interrupt, || {
     let cs = unsafe { CriticalSection::new() };
 
     let mut port = Port::new(0x60);
+    // SAFETY: No side effects from reading keyboard port.
     let _scancode: u8 = unsafe { port.read() };
     // print!("{}", scancode);
     print!("k");

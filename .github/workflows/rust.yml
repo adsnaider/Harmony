@@ -28,8 +28,21 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: ilammy/setup-nasm@v1
-    - name: cargo check
+    - name: Compile the code
       run: make check
+
+  clippy:
+    name: Check that code is proper with clippy
+    runs-on: ubuntu-latest
+
+    env:
+      RUSTFLAGS: -D warnings
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: ilammy/setup-nasm@v1
+    - name: Clippy
+      run: make clippy
 
   test:
     name: Run unit tests
