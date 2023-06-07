@@ -190,3 +190,37 @@ impl Scheduler {
         NEXT_TID.fetch_add(1, Ordering::Relaxed)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use alloc::sync::Arc;
+    use core::sync::atomic::AtomicUsize;
+
+    use super::*;
+    use crate::sched;
+    use crate::sync::Semaphore;
+    #[test_case]
+    fn threads_run() {
+        static COUNTER: AtomicUsize = AtomicUsize::new(0);
+        let done_threads = Arc::new(Semaphore::new(0));
+
+        const THREADS: usize = 1000;
+        const COUNT: usize = 10000;
+
+        for _ in 0..THREADS {
+            let done_threads = Arc::clone(&done_threads);
+            sched::push(Context::kthread(move || {
+                for _ in 0..COUNT {
+                    COUNTER.fetch_add(1, Ordering::Release);
+                }
+                done_threads.signal();
+            }));
+        }
+
+        for _ in 0..THREADS {
+            done_threads.wait();
+        }
+
+        assert_eq!(COUNTER.load(Ordering::Acquire), THREADS * COUNT);
+    }
+}

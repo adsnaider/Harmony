@@ -9,6 +9,12 @@
 #![feature(abi_x86_interrupt)]
 #![feature(negative_impls)]
 #![feature(const_fn_floating_point_arithmetic)]
+#![cfg_attr(
+    test,
+    feature(custom_test_frameworks),
+    test_runner(crate::tests::runner),
+    reexport_test_harness_main = "test_main"
+)]
 #![deny(absolute_paths_not_starting_with_crate)]
 #![warn(missing_debug_implementations)]
 #![warn(missing_docs)]
@@ -23,17 +29,15 @@ pub mod sys;
 
 mod serial;
 
-extern crate alloc;
+#[cfg(test)]
+mod tests;
 
-use alloc::sync::Arc;
+extern crate alloc;
 
 use bootloader_api::config::Mapping;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 
-use crate::arch::context::Context;
-use crate::sync::{Mutex, Semaphore};
-
-#[cfg(target_os = "none")]
+#[cfg(all(not(test), target_os = "none"))]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     critical_section::with(|_| {
@@ -44,8 +48,12 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     })
 }
 
-/// Kernel's starting point.
-fn kmain(bootinfo: &'static mut BootInfo) -> ! {
+/// Initializes the system.
+///
+/// # Safety
+///
+/// `bootinfo` must be correct.
+unsafe fn init(bootinfo: &'static mut BootInfo) {
     crate::arch::interrupts::disable();
     // SAFETY: The bootinfo is directly provided by the bootloader.
     critical_section::with(|cs| {
@@ -53,34 +61,18 @@ fn kmain(bootinfo: &'static mut BootInfo) -> ! {
         sched::init();
     });
     log::info!("Initialization sequence complete");
-    sprintln!("Testing serial port");
-    const THREADS: usize = 10;
+    unsafe { crate::arch::interrupts::enable() }
+}
 
-    let count = Arc::new(Mutex::new(0));
-    let done_threads = Arc::new(Semaphore::new(0));
-
-    for _ in 0..THREADS {
-        let done_threads = Arc::clone(&done_threads);
-        let count = Arc::clone(&count);
-        sched::push(Context::kthread(move || {
-            for _ in 0..100000 {
-                let mut count = count.lock();
-                let cached = *count;
-                sched::switch();
-                *count = cached + 1;
-            }
-            done_threads.signal();
-        }));
-    }
-
+// Test runner uses test main.
+#[allow(dead_code)]
+/// Kernel's starting point.
+fn kmain(bootinfo: &'static mut BootInfo) -> ! {
+    // SAFETY: bootinfo is correct.
     unsafe {
-        crate::arch::interrupts::enable();
+        init(bootinfo);
     }
 
-    for _ in 0..THREADS {
-        done_threads.wait();
-    }
-    dbg!(*count.lock());
     sched::exit();
 }
 
@@ -95,6 +87,10 @@ const CONFIG: BootloaderConfig = {
     config.mappings.framebuffer = Mapping::FixedAddress(0xFFFF_A000_0000_0000);
     config
 };
+
+#[cfg(test)]
+entry_point!(tests::kmain, config = &CONFIG);
+#[cfg(not(test))]
 entry_point!(kmain, config = &CONFIG);
 
 struct SingleThreadCS();

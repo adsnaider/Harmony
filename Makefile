@@ -16,28 +16,48 @@ else
 	PROFILE_DIR := $(PROFILE)
 endif
 
-BUILD_DIR = target/$(TARGET)/$(PROFILE_DIR)/
-
-KERNEL_BIN = $(BUILD_DIR)/kernel
-
 ARTIFACTS = .build/
 
-.PHONY: build bootimage emulate clean 
+.PHONY: build bootimage emulate clean check ktest test
 
-build:
-	cargo build -p kernel --profile ${PROFILE} --target $(TARGET)
-	@ln -fs $(realpath $(KERNEL_BIN)) $(ARTIFACTS)
+all: bootimage
+
+check:
+	cargo check --target $(TARGET) --tests
+
+build: check
+	@mkdir -p $(ARTIFACTS)/tests
+	$(eval KERNEL_BIN=`cargo build --profile ${PROFILE} --target $(TARGET) --message-format=json | ./extract_exec.sh`)
+	@ln -fs "$(KERNEL_BIN)" $(ARTIFACTS)/kernel
+	$(eval KERNEL_TEST_BIN=`cargo test --profile ${PROFILE} --target $(TARGET) --no-run --message-format=json | ./extract_exec.sh`)
+	@ln -fs "$(KERNEL_TEST_BIN)" $(ARTIFACTS)/tests/kernel
 
 bootimage: build
-	@mkdir -p $(ARTIFACTS)
-	cargo run -p builder --profile ${PROFILE} -- -k ${KERNEL_BIN} -o ${ARTIFACTS}
+	@mkdir -p $(ARTIFACTS)/tests
+	cargo run -p builder --profile ${PROFILE} -- -k $(ARTIFACTS)/kernel -o ${ARTIFACTS}
+	cargo run -p builder --profile ${PROFILE} -- -k $(ARTIFACTS)/tests/kernel  -o ${ARTIFACTS}/tests
 
 emulate: bootimage
-	qemu-system-x86_64 \
+	@./go.sh 33 qemu-system-x86_64 \
 		-drive if=pflash,format=raw,readonly=on,file=/usr/share/ovmf/OVMF.fd \
 		-drive format=raw,file=$(ARTIFACTS)/uefi.img \
-		-serial stdio \
+		-chardev stdio,id=char0,logfile=serial.log,signal=off \
+		-serial chardev:char0 \
 		$(QEMU_ARGS)
+
+test:
+	cargo test --workspace --exclude x64 --exclude kernel
+
+ktest: bootimage
+	@./go.sh 33 qemu-system-x86_64 \
+		-drive if=pflash,format=raw,readonly=on,file=/usr/share/ovmf/OVMF.fd \
+		-drive format=raw,file=$(ARTIFACTS)/tests/uefi.img \
+		-chardev stdio,id=char0,logfile=test.log,signal=off \
+		-serial chardev:char0 \
+		-device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+		-display none \
+		$(QEMU_ARGS)
+
 
 iso: bootimage
 	@mkdir -p $(ARTIFACTS)

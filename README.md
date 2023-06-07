@@ -22,7 +22,8 @@ There are make rules to make building/running the images easier.
 
 `make emulate` or `PROFILE=release make emulate`
 
-This should launch qemu and you should be able to see the OS running.
+This should launch qemu and you should be able to see the OS running. The
+generated `serial.log` will include the full serial output.
 
 Additionally you can set `DEBUGGER=yes` to run qemu with a remote debugger.
 
@@ -38,6 +39,13 @@ In order for this to work, you need to include the following in your
 ```
 set auto-load safe-path \
 ```
+
+### Testing
+
+Running `make test` will run unit tests across the entire project.
+
+Running `make ktest` will run kernel integration tests on Qemu. This will
+produce a `test.log` that contains the serial output.
 
 ### Building an ISO image
 

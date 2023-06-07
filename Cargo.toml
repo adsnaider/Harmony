@@ -3,6 +3,8 @@ members = [
   "athena/*"
 ]
 
+default-members = ["athena/kernel"]
+
 # Need some optimizations with or it's easy to run out of memory.
 # FIXME: Once we allocate larger stacks per threads.
 [profile.dev]
