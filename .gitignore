@@ -1,3 +1,5 @@
 target/
 .build/
 gdb.txt
+test.log
+serial.log
