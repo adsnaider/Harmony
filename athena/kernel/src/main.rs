@@ -16,9 +16,9 @@
     reexport_test_harness_main = "test_main"
 )]
 #![deny(absolute_paths_not_starting_with_crate)]
+#![deny(unsafe_op_in_unsafe_fn)]
 #![warn(missing_debug_implementations)]
 #![warn(missing_docs)]
-#![warn(unsafe_op_in_unsafe_fn)]
 #![warn(clippy::undocumented_unsafe_blocks)]
 
 pub mod arch;
@@ -91,6 +91,7 @@ const CONFIG: BootloaderConfig = {
 
 #[cfg(test)]
 entry_point!(tests::kmain, config = &CONFIG);
+
 #[cfg(not(test))]
 entry_point!(kmain, config = &CONFIG);
 

@@ -5,7 +5,8 @@ use core::sync::atomic::Ordering::Relaxed;
 
 use bootloader_api::info::MemoryRegions;
 use x86_64::registers::control::Cr3;
-use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, PhysFrame};
+use x86_64::structures::paging::{FrameAllocator, Mapper, PageTableFlags, PhysFrame};
+pub use x86_64::structures::paging::{Page, PageSize};
 use x86_64::VirtAddr;
 
 pub use self::frames::FRAME_ALLOCATOR;

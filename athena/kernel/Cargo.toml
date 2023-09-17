@@ -13,6 +13,7 @@ critical-section = { version = "1.1", features = ["restore-state-bool"] }
 thiserror = { version = "1.0", package = "thiserror-core", default-features = false }
 singleton = { path = "../singleton" }
 hashbrown = "0.13.2"
+enum_dispatch = "0.3.12"
 
 
 [dependencies.once_cell]
