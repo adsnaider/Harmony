@@ -3,7 +3,7 @@
 use core::arch::asm;
 use core::ptr::addr_of_mut;
 
-use crate::arch::mm;
+use super::mm::paging::AddrSpace;
 
 /// Initializes the hardware capabilities for context switching.
 pub fn init() {
@@ -18,7 +18,7 @@ pub fn init() {
 #[repr(C)]
 pub struct Context {
     stack_top: u64,
-    l4_table: u64,
+    address_space: AddrSpace,
 }
 
 impl Context {
@@ -29,15 +29,15 @@ impl Context {
     pub fn uninit() -> Self {
         Self {
             stack_top: 0,
-            l4_table: mm::active_page_table().start_address().as_u64(),
+            address_space: AddrSpace::current(),
         }
     }
 
     /// Creates a new context.
-    pub fn new(stack_top: u64, l4_table: u64) -> Self {
+    pub fn new(stack_top: u64, address_space: AddrSpace) -> Self {
         Self {
             stack_top,
-            l4_table,
+            address_space,
         }
     }
 
