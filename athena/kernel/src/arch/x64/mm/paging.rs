@@ -1,25 +1,27 @@
 //! Virtual memory management.
+use core::mem::MaybeUninit;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use critical_section::CriticalSection;
-use singleton::Singleton;
+use thiserror::Error;
+use x86_64::addr::VirtAddrNotValid;
 use x86_64::registers::control::Cr3;
 use x86_64::structures::paging::mapper::{MapToError, UnmapError};
-use x86_64::structures::paging::{
-    Mapper, OffsetPageTable, Page, PageTable, PageTableFlags, Size4KiB, Translate,
-};
+use x86_64::structures::paging::page::AddressNotAligned;
+use x86_64::structures::paging::{Mapper, OffsetPageTable, Page, PageTable, Size4KiB, Translate};
 use x86_64::{PhysAddr, VirtAddr};
 
 use super::frames::{Frame, FRAME_ALLOCATOR};
 
-pub(super) static PAGE_MAPPER: Singleton<OffsetPageTable<'static>> = Singleton::uninit();
+/// Flags for page mapping.
+pub type PageTableFlags = x86_64::structures::paging::PageTableFlags;
 
 pub(super) static PHYSICAL_MEMORY_OFFSET: VirtAddr = {
     // SAFETY: Address is canonical.
     unsafe { VirtAddr::new_unsafe(0xFFFF_F000_0000_0000) }
 };
 
-pub(super) fn init(pmo: VirtAddr, cs: CriticalSection) {
+pub(super) fn init(pmo: VirtAddr, _cs: CriticalSection) {
     assert_eq!(pmo, PHYSICAL_MEMORY_OFFSET);
     let l4_table = {
         let (frame, _) = Cr3::read();
@@ -37,8 +39,6 @@ pub(super) fn init(pmo: VirtAddr, cs: CriticalSection) {
     assert!(page_map.translate_addr(pmo + 0x0u64) == Some(PhysAddr::new(0)));
     assert!(page_map.translate_addr(pmo + 0xABCDu64) == Some(PhysAddr::new(0xABCD)));
     assert!(page_map.translate_addr(pmo + 0xABAB_0000u64) == Some(PhysAddr::new(0xABAB_0000)));
-
-    PAGE_MAPPER.initialize(page_map, cs);
 }
 
 /// An isolated virtual memory space.
@@ -55,23 +55,16 @@ impl AddrSpace {
     /// Note that kernel pages are not user-accessible (i.e. from Ring 3).
     pub fn new() -> Option<Self> {
         let l4_frame = Frame::alloc()?;
-        let l4_page = l4_frame.physical_offset();
+        let l4_table: &mut MaybeUninit<PageTable> =
+            unsafe { &mut *l4_frame.physical_offset().as_mut_ptr() };
 
-        let mut l4_table = PageTable::new();
-        let current_table = AddrSpace::current();
-        let current_page_table = current_table.l4_table();
+        let l4_table = l4_table.write(PageTable::new());
+        let current_table = AddrSpace::current().l4_table().clone();
         for i in 256..512 {
-            l4_table[i] = current_page_table[i].clone();
+            l4_table[i] = current_table[i].clone();
         }
         // SAFETY: Table is initialized and memory is exclusively allocated.
-        unsafe {
-            core::ptr::write(l4_page.as_mut_ptr(), l4_table);
-        }
         Some(Self { l4_frame })
-    }
-
-    fn l4_table(&self) -> &PageTable {
-        unsafe { *self.l4_frame.physical_offset().as_ptr() }
     }
 
     /// Returns the current virtual address space.
@@ -97,6 +90,66 @@ impl AddrSpace {
             l4_frame: old_frame,
         }
     }
+
+    /// Maps a virtual page to a physical frame.
+    ///
+    /// Note that a page must be unmapped before it can be remapped.
+    ///
+    /// # Safety
+    ///
+    /// You are fundamentally changing memory any time this function is called.
+    pub unsafe fn map_to(
+        &mut self,
+        page: VirtPage,
+        frame: Frame,
+        flags: PageTableFlags,
+    ) -> Result<(), MapToError<Size4KiB>> {
+        unsafe {
+            critical_section::with(|cs| {
+                self.page_table()
+                    .map_to(
+                        page.into(),
+                        frame.into(),
+                        flags,
+                        &mut *FRAME_ALLOCATOR.lock(cs),
+                    )
+                    .map(|map_flush| map_flush.flush())
+            })
+        }
+    }
+
+    /// Unmaps the given virtual page from the frame.
+    ///
+    /// # Safety
+    ///
+    /// You are fundamentally changing memory.
+    pub unsafe fn unmap(&mut self, page: VirtPage) -> Result<Frame, UnmapError> {
+        let mut page_table = self.page_table();
+        page_table.unmap(page.into()).map(|(frame, flush)| {
+            flush.flush();
+            frame.into()
+        })
+    }
+
+    /// Translates the given virtual address to the mapped physical address.
+    pub fn translate(&self, addr: u64) -> Result<Option<u64>, VirtAddrNotValid> {
+        Ok(self
+            .page_table()
+            .translate_addr(VirtAddr::try_new(addr)?)
+            .map(|addr| addr.as_u64()))
+    }
+
+    fn l4_table(&self) -> &PageTable {
+        unsafe { &*self.l4_frame.physical_offset().as_ptr() }
+    }
+
+    fn l4_table_mut(&self) -> &mut PageTable {
+        unsafe { &mut *self.l4_frame.physical_offset().as_mut_ptr() }
+    }
+
+    fn page_table(&self) -> OffsetPageTable {
+        unsafe { OffsetPageTable::new(self.l4_table_mut(), PHYSICAL_MEMORY_OFFSET) }
+    }
 }
 
 /// A virtual-space Page.
@@ -116,7 +169,34 @@ impl From<VirtPage> for Page<Size4KiB> {
     }
 }
 
+/// Attempted to construct an invalid page.
+#[derive(Debug, Error)]
+pub enum InvalidPage {
+    #[error("The page is not aligned to a page boundary")]
+    /// The page is not aligned to a page boundary.
+    NotAligned,
+    #[error("The provided virtual address is invalid")]
+    /// The address is not canonical.
+    InvalidAddress,
+}
+
+impl From<AddressNotAligned> for InvalidPage {
+    fn from(_value: AddressNotAligned) -> Self {
+        Self::NotAligned
+    }
+}
+impl From<VirtAddrNotValid> for InvalidPage {
+    fn from(_value: VirtAddrNotValid) -> Self {
+        Self::InvalidAddress
+    }
+}
+
 impl VirtPage {
+    /// Constructs a age from the provided virtual address.
+    pub fn from_start_address(addr: u64) -> Result<Self, InvalidPage> {
+        Ok(Page::from_start_address(VirtAddr::try_new(addr)?)?.into())
+    }
+
     /// Returns a pointer to the start of the page.
     pub fn as_ptr<T>(&self) -> *const T {
         self.0.start_address().as_ptr()
@@ -138,51 +218,15 @@ impl VirtPage {
             let page: VirtPage = Page::from_start_address(VirtAddr::new(start_addr))
                 .unwrap()
                 .into();
-            page.map_to(frame, PageTableFlags::PRESENT | PageTableFlags::WRITABLE)
+            AddrSpace::current()
+                .map_to(
+                    page,
+                    frame,
+                    PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
+                )
                 .unwrap();
             Some(page)
         }
-    }
-
-    /// Maps a virtual page to a physical frame.
-    ///
-    /// Note that a page must be unmapped before it can be remapped.
-    ///
-    /// # Safety
-    ///
-    /// You are fundamentally changing memory any time this function is called.
-    pub unsafe fn map_to(
-        self,
-        frame: Frame,
-        flags: PageTableFlags,
-    ) -> Result<(), MapToError<Size4KiB>> {
-        unsafe {
-            critical_section::with(|cs| {
-                PAGE_MAPPER
-                    .lock(cs)
-                    .map_to(
-                        self.into(),
-                        frame.into(),
-                        flags,
-                        &mut *FRAME_ALLOCATOR.lock(cs),
-                    )
-                    .map(|map_flush| map_flush.flush())
-            })
-        }
-    }
-
-    /// Unmaps the given virtual page from the frame.
-    ///
-    /// # Safety
-    ///
-    /// You are fundamentally changing memory.
-    pub unsafe fn unmap(self) -> Result<Frame, UnmapError> {
-        critical_section::with(|cs| PAGE_MAPPER.lock(cs).unmap(self.into())).map(
-            |(frame, flush)| {
-                flush.flush();
-                frame.into()
-            },
-        )
     }
 
     /// Returns the starting address as a u64.

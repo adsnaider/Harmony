@@ -1,7 +1,7 @@
 //! The kernel scheduler.
 
 mod kthread;
-
+mod uthread;
 use alloc::collections::VecDeque;
 use core::cell::RefCell;
 use core::fmt::Debug;
@@ -13,6 +13,7 @@ use hashbrown::{HashMap, HashSet};
 use once_cell::sync::OnceCell;
 
 use self::kthread::KThread;
+use self::uthread::UThread;
 use crate::arch::context::Context;
 
 #[enum_dispatch(Task)]
@@ -27,6 +28,8 @@ trait HasContext {
 pub enum Task {
     /// A kernel thread task.
     KThread,
+    /// A user thread task.
+    UThread,
 }
 
 impl Task {
@@ -36,6 +39,11 @@ impl Task {
         F: FnOnce() + Send + 'static,
     {
         Self::KThread(KThread::new(f))
+    }
+
+    /// Constructs a user thread with the given program.
+    pub fn uthread(program: &[u8]) -> Option<Self> {
+        Some(Self::UThread(UThread::new(program)?))
     }
 }
 
@@ -139,10 +147,12 @@ impl Scheduler {
     /// Upon a follow up switch, the function will return back to its caller.
     pub fn switch(&self) {
         let Some(next) = self.try_get_next() else {
+            log::debug!("Nothing else, back to the caller");
             // Nothing else to run, back to caller.
             return;
         };
         let previous = self.current.borrow_mut().replace(next).unwrap();
+        log::debug!("Switching to {next} from {previous}");
         self.readyq.borrow_mut().push_back(previous);
         // SAFETY: This is super awkward but hopefully safe.
         // * It's probably not cool to keep references that need to live after the switch, so we use raw pointers.
@@ -157,6 +167,7 @@ impl Scheduler {
         self.tasks.borrow_mut().remove(&previous).unwrap();
 
         let next = self.get_next();
+        log::debug!("Exiting task: {previous} - Next: {next}");
         *self.current.borrow_mut() = Some(next);
         self.jump_to(next);
     }

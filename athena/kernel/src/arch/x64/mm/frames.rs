@@ -148,4 +148,9 @@ impl Frame {
         let page_start = PHYSICAL_MEMORY_OFFSET + self.0.start_address().as_u64();
         Page::from_start_address(page_start).unwrap().into()
     }
+
+    /// Returns the start address of the frame.
+    pub fn start_address(&self) -> u64 {
+        self.0.start_address().as_u64()
+    }
 }

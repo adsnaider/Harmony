@@ -90,7 +90,7 @@ interrupt!(keyboard_interrupt, || {
 // EXCEPTIONS
 
 pub(super) extern "x86-interrupt" fn syscall_interrupt(stack_frame: InterruptStackFrame) {
-    panic!("SYSCALL REQUEST:\n{stack_frame:#?}");
+    log::info!("SYSCALL REQUEST:\n{stack_frame:#?}");
 }
 
 pub(super) extern "x86-interrupt" fn non_maskable_interrupt(stack_frame: InterruptStackFrame) {
@@ -176,21 +176,21 @@ pub(super) extern "x86-interrupt" fn general_protection_fault(
     stack_frame: InterruptStackFrame,
     error_code: u64,
 ) {
-    panic!("EXCEPTION: GENERAL PROTECTION - {error_code}\n{stack_frame:#?}");
+    panic!("EXCEPTION: GENERAL PROTECTION - {error_code:#02X}\n{stack_frame:#?}");
 }
 
 pub(super) extern "x86-interrupt" fn page_fault(
     stack_frame: InterruptStackFrame,
     error_code: PageFaultErrorCode,
 ) {
-    panic!("EXCEPTION: PAGE FAULT - {error_code:?}\n{stack_frame:#?}");
+    panic!("EXCEPTION: PAGE FAULT - {error_code:#02X}\n{stack_frame:#?}");
 }
 
 pub(super) extern "x86-interrupt" fn double_fault(
     stack_frame: InterruptStackFrame,
     error_code: u64,
 ) -> ! {
-    panic!("EXCEPTION: DOUBLE FAULT - {error_code}\n{stack_frame:#?}");
+    panic!("EXCEPTION: DOUBLE FAULT - {error_code:#02X}\n{stack_frame:#?}");
 }
 
 pub(super) extern "x86-interrupt" fn breakpoint(stack_frame: InterruptStackFrame) {

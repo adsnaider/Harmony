@@ -4,23 +4,20 @@ use core::ptr::NonNull;
 use critical_section::CriticalSection;
 use linked_list_allocator::Heap;
 use singleton::Singleton;
-use x86_64::structures::paging::{
-    FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB, Translate,
-};
-use x86_64::VirtAddr;
 
-use super::frames::FRAME_ALLOCATOR;
-use super::paging::PAGE_MAPPER;
+use super::VirtPage;
+use crate::arch::mm::paging::{AddrSpace, PageTableFlags};
+use crate::arch::mm::Frame;
 
 static MEMORY_ALLOCATOR: Singleton<Heap> = Singleton::uninit();
 
 #[allow(clippy::undocumented_unsafe_blocks)]
 // SAFETY: Address is well-aligned and canonical.
-const HEAP_START: VirtAddr = unsafe { VirtAddr::new_unsafe(0xFFFF_9000_0000_0000) };
+const HEAP_START: u64 = 0xFFFF_9000_0000_0000;
 
 #[allow(clippy::undocumented_unsafe_blocks)]
 // SAFETY: Address is well-aligned and canonical.
-const HEAP_MAX: VirtAddr = unsafe { VirtAddr::new_unsafe(0xFFFF_A000_0000_0000) };
+const HEAP_MAX: u64 = 0xFFFF_A000_0000_0000;
 
 #[derive(Debug, Copy, Clone)]
 struct MemoryManager {}
@@ -45,16 +42,11 @@ unsafe impl Allocator for MemoryManager {
                         )));
                     },
                     Err(_) => {
-                        let mut frame_allocator = FRAME_ALLOCATOR.lock(cs);
-                        let mut page_mapper = PAGE_MAPPER.lock(cs);
-                        let frame = frame_allocator.allocate_frame().ok_or(AllocError {})?;
+                        let frame = Frame::alloc().ok_or(AllocError {})?;
                         // SAFETY: The heap page is well aligned since we always allocate multiple of page
                         // sizes to extend the allocator.
-                        let next_heap_page = unsafe {
-                            Page::from_start_address_unchecked(VirtAddr::new_unsafe(
-                                allocator.top() as u64,
-                            ))
-                        };
+                        let next_heap_page =
+                            VirtPage::from_start_address(allocator.top() as u64).unwrap();
 
                         if next_heap_page.start_address() >= HEAP_MAX {
                             return Err(AllocError);
@@ -64,18 +56,15 @@ unsafe impl Allocator for MemoryManager {
                         // virtual memory collisions and the physical frame has just been allocated.
                         // See `virtual_memory_segmentation.md` for more information.
                         unsafe {
-                            page_mapper
+                            AddrSpace::current()
                                 .map_to(
                                     next_heap_page,
                                     frame,
                                     PageTableFlags::PRESENT
                                         | PageTableFlags::WRITABLE
                                         | PageTableFlags::NO_EXECUTE,
-                                    &mut *frame_allocator,
                                 )
-                                .or(Err(AllocError))?
-                                .flush();
-
+                                .or(Err(AllocError {}))?;
                             allocator.extend(4096);
                         }
                     }
@@ -106,35 +95,32 @@ unsafe impl GlobalAlloc for MemoryManager {
     }
 }
 
-pub fn init<M, F>(page_map: &mut M, frame_allocator: &mut F, cs: CriticalSection)
-where
-    M: Mapper<Size4KiB> + Translate,
-    F: FrameAllocator<Size4KiB>,
-{
+pub fn init(cs: CriticalSection<'_>) {
     // SAFETY: Address is aligned to page boundary and is canonical.
-    let heap_page: Page<Size4KiB> = unsafe { Page::from_start_address_unchecked(HEAP_START) };
+    let heap_page = VirtPage::from_start_address(HEAP_START).unwrap();
 
     // SAFETY: Heap page isn't originally mapped to anything and frame is recently allocated.
     unsafe {
-        let frame = frame_allocator.allocate_frame().expect("Out of frames");
+        let frame = Frame::alloc().expect("Out of frames");
 
-        page_map
+        AddrSpace::current()
             .map_to(
                 heap_page,
                 frame,
                 PageTableFlags::WRITABLE | PageTableFlags::PRESENT | PageTableFlags::NO_EXECUTE,
-                frame_allocator,
             )
-            .expect("Error mapping an initial heap page.")
-            .flush();
+            .expect("Error mapping an initial heap page.");
 
         assert_eq!(
-            page_map.translate_addr(heap_page.start_address()).unwrap(),
+            AddrSpace::current()
+                .translate(heap_page.start_address())
+                .unwrap()
+                .unwrap(),
             frame.start_address()
         );
     }
 
     // SAFETY: The memory has been allocated and will only be used by the allocator.
-    let allocator = unsafe { Heap::new(HEAP_START.as_mut_ptr(), 4096) };
+    let allocator = unsafe { Heap::new(HEAP_START as *mut u8, 4096) };
     MEMORY_ALLOCATOR.initialize(allocator, cs);
 }

@@ -3,7 +3,8 @@ use core::arch::asm;
 
 use super::HasContext;
 use crate::arch::context::Context;
-use crate::arch::mm;
+use crate::arch::mm::paging::AddrSpace;
+use crate::arch::mm::VirtPage;
 use crate::sched;
 
 /// A kernel thread.
@@ -45,10 +46,10 @@ impl KThread {
                 sched::exit();
             }
         }
-        let stack_page = mm::alloc_page().unwrap();
+        let stack_page = VirtPage::alloc().unwrap();
         let func = Box::into_raw(Box::new(f));
         // System-V ABI pushes int-like arguements to registers.
-        let mut rsp = stack_page.start_address().as_u64() + stack_page.size();
+        let mut rsp = stack_page.start_address() + stack_page.size();
         // SAFETY: Stack is big enough and `rsp` is correct.
         unsafe {
             Self::push(func as u64, &mut rsp);
@@ -61,7 +62,7 @@ impl KThread {
             Self::push(0, &mut rsp);
         }
         Self {
-            context: Context::new(rsp, mm::active_page_table().start_address().as_u64()),
+            context: Context::new(rsp, AddrSpace::current()),
         }
     }
 

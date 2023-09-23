@@ -23,6 +23,7 @@
 
 pub mod arch;
 pub mod ksync;
+pub mod proc;
 pub mod sched;
 pub mod sync;
 pub mod sys;
@@ -37,11 +38,14 @@ extern crate alloc;
 use bootloader_api::config::Mapping;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 
+use crate::sched::Task;
+
 #[cfg(all(not(test), target_os = "none"))]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     critical_section::with(|_| {
         println!("{}", info);
+        log::error!("{}", info);
         loop {
             arch::inst::hlt();
         }
@@ -69,11 +73,13 @@ unsafe fn init(bootinfo: &'static mut BootInfo) {
 #[allow(dead_code)]
 /// Kernel's starting point.
 fn kmain(bootinfo: &'static mut BootInfo) -> ! {
+    static INIT: &[u8] = include_bytes!("../programs/nop.bin");
     // SAFETY: bootinfo is correct.
     unsafe {
         init(bootinfo);
     }
 
+    sched::push(Task::uthread(INIT).unwrap());
     sched::exit();
 }
 

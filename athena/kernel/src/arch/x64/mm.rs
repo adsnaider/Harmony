@@ -1,11 +1,7 @@
 //! Memory management.
 
 use bootloader_api::info::MemoryRegions;
-pub use x86_64::structures::paging::{Page, PageSize};
 use x86_64::VirtAddr;
-
-use self::paging::PAGE_MAPPER;
-use crate::arch::mm::frames::FRAME_ALLOCATOR;
 
 pub mod frames;
 pub mod paging;
@@ -34,11 +30,7 @@ pub(super) unsafe fn init(physical_memory_offset: u64, memory_map: &mut MemoryRe
         paging::init(physical_memory_offset, cs);
         log::info!("Page mapper initialized");
 
-        heap::init(
-            &mut *PAGE_MAPPER.lock(cs),
-            &mut *FRAME_ALLOCATOR.lock(cs),
-            cs,
-        );
+        heap::init(cs);
         log::info!("Allocator initialized");
     })
 }

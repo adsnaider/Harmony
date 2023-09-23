@@ -122,3 +122,25 @@ macro_rules! dbg {
         ($($crate::dbg!($val)),+,)
     };
 }
+
+/// Prints a debug expression.
+#[macro_export]
+macro_rules! ldbg {
+    ($level:expr) => {
+        log::log!($level, "[{}:{}]", file!(), line!())
+    };
+    ($level:expr, $val:expr $(,)?) => {
+        // Use of `match` here is intentional because it affects the lifetimes
+        // of temporaries - https://stackoverflow.com/a/48732525/1063961
+        match $val {
+            tmp => {
+                $crate::println!("[{}:{}] {} = {:#?}",
+                    file!(), line!(), stringify!($val), &tmp);
+                tmp
+            }
+        }
+    };
+    ($level:expr, $($val:expr),+ $(,)?) => {
+        ($($crate::ldbg!($level, $val)),+,)
+    };
+}
