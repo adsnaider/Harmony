@@ -11,12 +11,7 @@ use crate::arch::mm::Frame;
 
 static MEMORY_ALLOCATOR: Singleton<Heap> = Singleton::uninit();
 
-#[allow(clippy::undocumented_unsafe_blocks)]
-// SAFETY: Address is well-aligned and canonical.
 const HEAP_START: u64 = 0xFFFF_9000_0000_0000;
-
-#[allow(clippy::undocumented_unsafe_blocks)]
-// SAFETY: Address is well-aligned and canonical.
 const HEAP_MAX: u64 = 0xFFFF_A000_0000_0000;
 
 #[derive(Debug, Copy, Clone)]
