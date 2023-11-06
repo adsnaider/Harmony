@@ -20,6 +20,8 @@ pub const PRIVILEGE_STACK_ADDR: u64 = 0xFFFF_B000_0000_0000;
 struct Selectors {
     code_selector: SegmentSelector,
     data_selector: SegmentSelector,
+    user_code_selector: SegmentSelector,
+    user_data_selector: SegmentSelector,
     tss_selector: SegmentSelector,
 }
 static TSS: Lazy<TaskStateSegment> = Lazy::new(|| {
@@ -54,14 +56,16 @@ static GDT: Lazy<(GlobalDescriptorTable, Selectors)> = Lazy::new(|| {
     let mut gdt = GlobalDescriptorTable::new();
     let code_selector = gdt.add_entry(Descriptor::kernel_code_segment());
     let data_selector = gdt.add_entry(Descriptor::kernel_data_segment());
-    gdt.add_entry(Descriptor::user_code_segment());
-    gdt.add_entry(Descriptor::user_data_segment());
+    let user_code_selector = gdt.add_entry(Descriptor::user_code_segment());
+    let user_data_selector = gdt.add_entry(Descriptor::user_data_segment());
     let tss_selector = gdt.add_entry(Descriptor::tss_segment(&TSS));
     (
         gdt,
         Selectors {
             code_selector,
             data_selector,
+            user_code_selector,
+            user_data_selector,
             tss_selector,
         },
     )
@@ -90,11 +94,20 @@ pub fn init() {
 pub unsafe fn sysret(rip: u64, rsp: u64) -> ! {
     unsafe {
         asm!(
-            "mov rsp, {stack}",
-            "sysretq",
-            stack = in(reg) rsp,
-            in("rcx") rip,
-            in("r11") 0x202,
+            "mov ds, ax",
+            "mov es, ax",
+            "mov fs, ax",
+            "mov gs, ax",
+            "push rax", // SS is handled by iret
+            "push r11", // stack pointer
+            "push 0x202", // rflags
+            "push rcx", // CS with RPL 3
+            "push r12",
+            "iretq",
+            in("rax") GDT.1.user_data_selector.0,
+            in("rcx") GDT.1.user_code_selector.0,
+            in("r11") rsp,
+            in("r12") rip,
             options(noreturn)
         )
     }
