@@ -2,6 +2,7 @@
 //! components.
 #![no_std]
 #![no_main]
+#![feature(inline_const)]
 #![feature(naked_functions)]
 #![feature(error_in_core)]
 #![feature(never_type)]

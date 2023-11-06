@@ -14,12 +14,10 @@ impl UThread {
     pub fn new(program: &[u8]) -> Option<Self> {
         log::debug!("Creating new UThread");
         let mut addrspace = AddrSpace::new()?;
-        unsafe {
-            addrspace.activate();
-        }
         log::debug!("Setting up address space");
         let interrupt_stack = Frame::alloc().unwrap();
         let interrupt_stack_page = VirtPage::from_start_address(PRIVILEGE_STACK_ADDR).unwrap();
+        // SAFETY: Interrupt stack page in use will be unnafected since we haven't switched address spaces.
         unsafe {
             let _ = addrspace.unmap(interrupt_stack_page);
             addrspace
@@ -33,11 +31,18 @@ impl UThread {
         log::debug!("Mapped interrupt stack");
         let process = Process::load(program, 1, &mut addrspace).unwrap();
         log::debug!("Loaded process");
+
         Some(Self {
-            thread: KThread::new(move || unsafe {
-                log::debug!("Executing process!");
-                process.exec();
-            }),
+            thread: KThread::new_with_addrspace(
+                move || {
+                    // SAFETY: Address space will be set when switching into the context.
+                    unsafe {
+                        log::debug!("Executing process!");
+                        process.exec();
+                    }
+                },
+                addrspace,
+            ),
         })
     }
 }

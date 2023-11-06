@@ -56,10 +56,13 @@ impl AddrSpace {
     pub fn new() -> Option<Self> {
         let l4_frame = Frame::alloc()?;
         let l4_table: &mut MaybeUninit<PageTable> =
+            // SAFETY: Size and alignment are valid for MaybeUninit<PageTable>
             unsafe { &mut *l4_frame.physical_offset().as_mut_ptr() };
 
         let l4_table = l4_table.write(PageTable::new());
-        let current_table = AddrSpace::current().l4_table().clone();
+        let current_table =
+            // SAFETY: critical section and non-reentrant function prevednt mutable aliasing
+            critical_section::with(|_cs| unsafe { AddrSpace::current().l4_table().clone() });
         for i in 256..512 {
             l4_table[i] = current_table[i].clone();
         }
@@ -79,7 +82,7 @@ impl AddrSpace {
     /// # Safety
     ///
     /// Obvious perils of changing memory spaces.
-    pub unsafe fn activate(&self) -> Self {
+    pub unsafe fn activate(&mut self) -> Self {
         let (old_frame, flags) = Cr3::read();
         let old_frame = old_frame.into();
         if self.l4_frame != old_frame {
@@ -104,18 +107,18 @@ impl AddrSpace {
         frame: Frame,
         flags: PageTableFlags,
     ) -> Result<(), MapToError<Size4KiB>> {
-        unsafe {
-            critical_section::with(|cs| {
-                self.page_table()
-                    .map_to(
-                        page.into(),
-                        frame.into(),
-                        flags,
-                        &mut *FRAME_ALLOCATOR.lock(cs),
-                    )
-                    .map(|map_flush| map_flush.flush())
-            })
-        }
+        // SAFETY: Conditions passed to the caller.
+        // SAFETY: critical section and non-reentrant function prevednt mutable aliasing
+        critical_section::with(|cs| unsafe {
+            self.page_table()
+                .map_to(
+                    page.into(),
+                    frame.into(),
+                    flags,
+                    &mut *FRAME_ALLOCATOR.lock(cs),
+                )
+                .map(|map_flush| map_flush.flush())
+        })
     }
 
     /// Unmaps the given virtual page from the frame.
@@ -124,30 +127,45 @@ impl AddrSpace {
     ///
     /// You are fundamentally changing memory.
     pub unsafe fn unmap(&mut self, page: VirtPage) -> Result<Frame, UnmapError> {
-        let mut page_table = self.page_table();
-        page_table.unmap(page.into()).map(|(frame, flush)| {
-            flush.flush();
-            frame.into()
+        // SAFETY: critical section and non-reentrant function prevednt mutable aliasing
+        critical_section::with(|_cs| unsafe {
+            let mut page_table = self.page_table();
+            page_table.unmap(page.into()).map(|(frame, flush)| {
+                flush.flush();
+                frame.into()
+            })
         })
     }
 
     /// Translates the given virtual address to the mapped physical address.
-    pub fn translate(&self, addr: u64) -> Result<Option<u64>, VirtAddrNotValid> {
-        Ok(self
-            .page_table()
-            .translate_addr(VirtAddr::try_new(addr)?)
-            .map(|addr| addr.as_u64()))
+    pub fn translate(&mut self, addr: u64) -> Result<Option<u64>, VirtAddrNotValid> {
+        // SAFETY: critical section and non-reentrant function prevednt mutable aliasing
+        critical_section::with(|_cs| unsafe {
+            Ok(self
+                .page_table()
+                .translate_addr(VirtAddr::try_new(addr)?)
+                .map(|addr| addr.as_u64()))
+        })
     }
 
-    fn l4_table(&self) -> &PageTable {
+    /// # Safety
+    ///
+    /// No other mutable references to the same table can exist
+    unsafe fn l4_table(&self) -> &PageTable {
+        // SAFETY: This is valid since l4_frame must have the l4_table
         unsafe { &*self.l4_frame.physical_offset().as_ptr() }
     }
 
-    fn l4_table_mut(&self) -> &mut PageTable {
+    // SAFETY: No other references to the same table can exist
+    unsafe fn l4_table_mut(&mut self) -> &mut PageTable {
+        // SAFETY: This is valid since l4_frame must have the l4_table
         unsafe { &mut *self.l4_frame.physical_offset().as_mut_ptr() }
     }
 
-    fn page_table(&self) -> OffsetPageTable {
+    // SAFETY: No other references to the same table can exist
+    unsafe fn page_table(&mut self) -> OffsetPageTable {
+        // SAFETY: Physical offset and l4 table are correct.
+        // Additionally, while the page table is a mutable reference,
         unsafe { OffsetPageTable::new(self.l4_table_mut(), PHYSICAL_MEMORY_OFFSET) }
     }
 }

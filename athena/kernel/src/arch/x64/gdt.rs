@@ -91,7 +91,13 @@ pub fn init() {
 ///
 /// This will set the stack pointer to `rsp` and perform a jump to `rip`.
 /// The processor will be switched to ring 3.
+///
+/// # Safety
+///
+/// The `rip` and `rsp` must be valid entrypoints for a user space process loaded
+/// into the current address space.
 pub unsafe fn sysret(rip: u64, rsp: u64) -> ! {
+    // SAFETY: This should be safe so long as rip and rsp are valid.
     unsafe {
         asm!(
             "mov ds, ax",

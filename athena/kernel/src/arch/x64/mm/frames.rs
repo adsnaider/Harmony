@@ -137,7 +137,7 @@ impl Frame {
 
     /// Dealocates the frame.
     pub fn dealloc(&self) -> Result<(), BitDeallocError> {
-        critical_section::with(|cs| FRAME_ALLOCATOR.lock(cs).dealloc_frame(&self))
+        critical_section::with(|cs| FRAME_ALLOCATOR.lock(cs).dealloc_frame(self))
     }
 
     /// Returns a page that is guaranteed to be mapped to the given frame.

@@ -67,6 +67,7 @@ impl<'a> Segment<'a> {
         for i in 0..frames_needed {
             let frame = Frame::alloc().unwrap();
             let page = VirtPage::from_start_address(vm_range.start + i * 4096).unwrap();
+            // SAFETY: Just mapping the elf data.
             unsafe {
                 address_space
                     .map_to(
@@ -80,6 +81,7 @@ impl<'a> Segment<'a> {
             }
 
             let offset_page = frame.physical_offset().as_mut_ptr();
+            // SAFETY: Hopefully no bugs here...
             unsafe {
                 core::ptr::write_bytes(offset_page, 0, 4096);
                 core::ptr::copy(
@@ -115,6 +117,7 @@ impl Process {
             let addr = rsp - 4096 * (i + 1);
             let page = VirtPage::from_start_address(addr).unwrap();
             log::debug!("Mapping page {page:?} to frame {frame:?}");
+            // SAFETY: Just mapping the stack pages.
             unsafe {
                 addrspace
                     .map_to(
@@ -138,13 +141,15 @@ impl Process {
     /// The correct address space must be active.
     pub unsafe fn exec(&self) -> ! {
         log::debug!("Entering process at {:#X}", self.entry);
+        // SAFETY: The entry and rsp are valid for the user process.
         unsafe {
-            sysret(self.entry, 0x0000_8000_0000_0000 - 64);
+            sysret(self.entry, 0x0000_8000_0000_0000);
         }
     }
 }
 
 fn sce_enable() {
+    // SAFETY: Nothing special, just enabling Syscall extension.
     unsafe {
         asm!(
             "mov rcx, 0xc0000082",

@@ -15,7 +15,7 @@ pub struct KThread {
 
 impl KThread {
     /// Constructs a kernel thread context.
-    pub fn new<F>(f: F) -> Self
+    pub fn new_with_addrspace<F>(f: F, address_space: AddrSpace) -> Self
     where
         F: FnOnce() + Send + 'static,
     {
@@ -62,8 +62,15 @@ impl KThread {
             Self::push(0, &mut rsp);
         }
         Self {
-            context: Context::new(rsp, AddrSpace::current()),
+            context: Context::new(rsp, address_space),
         }
+    }
+
+    pub fn new<F>(f: F) -> Self
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        Self::new_with_addrspace(f, AddrSpace::current())
     }
 
     unsafe fn push(val: u64, rsp: &mut u64) {
