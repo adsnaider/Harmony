@@ -7,6 +7,8 @@ pub mod inst;
 pub mod interrupts;
 pub mod mm;
 
+pub use gdt::{sysret, PRIVILEGE_STACK_ADDR};
+
 mod gdt;
 mod timer;
 

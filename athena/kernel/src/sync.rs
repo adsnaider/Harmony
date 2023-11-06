@@ -11,8 +11,7 @@ mod tests {
     use alloc::sync::Arc;
 
     use super::*;
-    use crate::arch::context::Context;
-    use crate::sched;
+    use crate::sched::{self, Task};
 
     #[test_case]
     fn synchronization() {
@@ -25,7 +24,7 @@ mod tests {
         for _ in 0..THREADS {
             let done_threads = Arc::clone(&done_threads);
             let count = Arc::clone(&count);
-            sched::push(Context::kthread(move || {
+            sched::push(Task::kthread(move || {
                 for _ in 0..COUNT {
                     let mut count = count.lock();
                     let cached = *count;

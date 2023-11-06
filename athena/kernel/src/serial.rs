@@ -1,10 +1,11 @@
 //! Helpers to communicate with the serial port.
 
+use core::cell::RefCell;
+
+use critical_section::Mutex;
 use log::{self, LevelFilter, Metadata, Record};
 use once_cell::sync::Lazy;
 use uart_16550::SerialPort;
-
-use crate::sync::Mutex;
 
 /// Initializes serial port and logger. sprint! and log macros after this.
 pub(super) fn init() {
@@ -13,20 +14,22 @@ pub(super) fn init() {
     }
 }
 
-static SERIAL: Lazy<Mutex<SerialPort>> = Lazy::new(|| {
+static SERIAL: Lazy<Mutex<RefCell<SerialPort>>> = Lazy::new(|| {
     // SAFETY: Serial port address base is correct.
     let mut serial_port = unsafe { SerialPort::new(0x3F8) };
     serial_port.init();
-    Mutex::new(serial_port)
+    Mutex::new(RefCell::new(serial_port))
 });
 
 #[doc(hidden)]
 pub fn _print(args: ::core::fmt::Arguments) {
     use core::fmt::Write;
-    SERIAL
-        .lock()
-        .write_fmt(args)
-        .expect("Printing to serial failed");
+    critical_section::with(|cs| {
+        SERIAL
+            .borrow_ref_mut(cs)
+            .write_fmt(args)
+            .expect("Printing to serial failed");
+    })
 }
 
 /// Prints to the host through the serial interface.

@@ -1,15 +1,51 @@
 //! The kernel scheduler.
 
+mod kthread;
+mod uthread;
 use alloc::collections::VecDeque;
-use core::cell::{RefCell, UnsafeCell};
+use core::cell::RefCell;
 use core::fmt::Debug;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use critical_section::Mutex;
+use enum_dispatch::enum_dispatch;
 use hashbrown::{HashMap, HashSet};
 use once_cell::sync::OnceCell;
 
+use self::kthread::KThread;
+use self::uthread::UThread;
 use crate::arch::context::Context;
+
+#[enum_dispatch(Task)]
+trait HasContext {
+    fn context(&self) -> *const crate::arch::context::Context;
+    fn context_mut(&mut self) -> *mut crate::arch::context::Context;
+}
+
+/// A runnable task such as a KThread, UThread, etc.
+#[enum_dispatch]
+#[derive(Debug)]
+pub enum Task {
+    /// A kernel thread task.
+    KThread,
+    /// A user thread task.
+    UThread,
+}
+
+impl Task {
+    /// Constructs a kernel thread task.
+    pub fn kthread<F>(f: F) -> Self
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        Self::KThread(KThread::new(f))
+    }
+
+    /// Constructs a user thread with the given program.
+    pub fn uthread(program: &[u8]) -> Option<Self> {
+        Some(Self::UThread(UThread::new(program)?))
+    }
+}
 
 /// The kernel scheduler.
 #[derive(Debug)]
@@ -17,21 +53,29 @@ pub struct Scheduler {
     readyq: RefCell<VecDeque<u64>>,
     blocked: RefCell<HashSet<u64>>,
     current: RefCell<Option<u64>>,
-    tasks: RefCell<HashMap<u64, UnsafeCell<Context>>>,
+    tasks: RefCell<HashMap<u64, Task>>,
     looper: u64,
 }
 
 static SCHEDULER: OnceCell<Mutex<Scheduler>> = OnceCell::new();
 
 /// Initializes the scheduler.
+///
+/// # Panics
+///
+/// The main thread (that calls this), **should not** call [`switch`] since
+/// the scheduler can't go back to the main thread. Instead, it will place a
+/// a thread that panics in its place.
 pub fn init() {
     SCHEDULER
-        .set(Mutex::new(Scheduler::new(Context::main())))
+        .set(Mutex::new(Scheduler::new(Task::kthread(|| {
+            panic!("Main thread called sched::switch. Should call sched::exit instead");
+        }))))
         .unwrap();
 }
 
 /// Pushes a new task to be scheduled.
-pub fn push(task: crate::arch::context::Context) -> u64 {
+pub fn push(task: Task) -> u64 {
     critical_section::with(|cs| SCHEDULER.get().unwrap().borrow(cs).push(task))
 }
 
@@ -69,19 +113,17 @@ pub fn tid() -> u64 {
 
 impl Scheduler {
     /// Creates an empty scheduler.
-    pub fn new(current: Context) -> Self {
+    pub fn new(current: Task) -> Self {
         let tid = Self::next_tid();
         let mut tasks = HashMap::new();
-        tasks.try_insert(tid, UnsafeCell::new(current)).unwrap();
+        tasks.try_insert(tid, current).unwrap();
 
         // A fake thread that never ends. Makes it easy to always have something to schedule.
-        let looper = Context::kthread(|| loop {
+        let looper = Task::kthread(|| loop {
             crate::arch::inst::hlt();
         });
         let looper_id = Self::next_tid();
-        tasks
-            .try_insert(looper_id, UnsafeCell::new(looper))
-            .unwrap();
+        tasks.try_insert(looper_id, looper).unwrap();
 
         Self {
             readyq: RefCell::new(VecDeque::new()),
@@ -93,12 +135,9 @@ impl Scheduler {
     }
 
     /// Pushes a new task to the scheduler.
-    pub fn push(&self, task: Context) -> u64 {
+    pub fn push(&self, task: Task) -> u64 {
         let tid = Self::next_tid();
-        self.tasks
-            .borrow_mut()
-            .try_insert(tid, UnsafeCell::new(task))
-            .unwrap();
+        self.tasks.borrow_mut().try_insert(tid, task).unwrap();
         self.readyq.borrow_mut().push_back(tid);
         tid
     }
@@ -108,10 +147,12 @@ impl Scheduler {
     /// Upon a follow up switch, the function will return back to its caller.
     pub fn switch(&self) {
         let Some(next) = self.try_get_next() else {
+            log::debug!("Nothing else, back to the caller");
             // Nothing else to run, back to caller.
             return;
         };
         let previous = self.current.borrow_mut().replace(next).unwrap();
+        log::debug!("Switching to {next} from {previous}");
         self.readyq.borrow_mut().push_back(previous);
         // SAFETY: This is super awkward but hopefully safe.
         // * It's probably not cool to keep references that need to live after the switch, so we use raw pointers.
@@ -124,8 +165,12 @@ impl Scheduler {
     pub fn exit(&self) -> ! {
         let previous = self.current.borrow_mut().take().unwrap();
         self.tasks.borrow_mut().remove(&previous).unwrap();
+        if self.tasks.borrow().len() == 1 {
+            panic!("No more tasks to run :O");
+        }
 
         let next = self.get_next();
+        log::debug!("Exiting task: {previous} - Next: {next}");
         *self.current.borrow_mut() = Some(next);
         self.jump_to(next);
     }
@@ -170,8 +215,18 @@ impl Scheduler {
         // SAFETY: All of the tasks in the map are properly initialized and `next` and `previous`
         // are not the same.
         unsafe {
-            let previous = self.tasks.borrow()[&previous].get();
-            let next = self.tasks.borrow()[&next].get();
+            let previous = self
+                .tasks
+                .borrow_mut()
+                .get_mut(&previous)
+                .unwrap()
+                .context_mut();
+            let next = self
+                .tasks
+                .borrow_mut()
+                .get_mut(&next)
+                .unwrap()
+                .context_mut();
 
             Context::switch(next, previous);
         }
@@ -180,7 +235,12 @@ impl Scheduler {
     fn jump_to(&self, next: u64) -> ! {
         // SAFETY: All of the tasks in the map are properly initialized.
         unsafe {
-            let next = self.tasks.borrow()[&next].get();
+            let next = self
+                .tasks
+                .borrow_mut()
+                .get_mut(&next)
+                .unwrap()
+                .context_mut();
             Context::jump(next);
         }
     }
@@ -199,6 +259,7 @@ mod tests {
     use super::*;
     use crate::sched;
     use crate::sync::Semaphore;
+
     #[test_case]
     fn threads_run() {
         static COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -209,7 +270,7 @@ mod tests {
 
         for _ in 0..THREADS {
             let done_threads = Arc::clone(&done_threads);
-            sched::push(Context::kthread(move || {
+            sched::push(Task::kthread(move || {
                 for _ in 0..COUNT {
                     COUNTER.fetch_add(1, Ordering::Release);
                 }

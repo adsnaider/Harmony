@@ -1,33 +1,30 @@
+//! Process loading and execution.
 use core::arch::asm;
 
 use goblin::elf::program_header::PT_LOAD;
 use goblin::elf::{Elf, ProgramHeader};
 use thiserror::Error;
-use x86_64::registers::control::Cr3;
-use x86_64::structures::paging::{
-    FrameAllocator, Mapper, OffsetPageTable, Page, PageTableFlags, PhysFrame,
-};
-use x86_64::VirtAddr;
 
-use crate::sys::memory::{self, SystemFrameAllocator, FRAME_ALLOCATOR};
+use crate::arch::mm::paging::{AddrSpace, PageTableFlags};
+use crate::arch::mm::{Frame, VirtPage};
+use crate::arch::sysret;
 
-/// Context associated with a process.
+/// Initializes the sysret operation for switching to ring 3.
+pub fn init() {
+    sce_enable();
+}
+
+/// A process is a thread with its own memory space that runs in Ring 3.
 #[derive(Debug)]
 pub struct Process {
-    page_table: OffsetPageTable<'static>,
-    l4_frame: PhysFrame,
-    regs: CpuRegs,
+    entry: u64,
 }
 
-#[derive(Debug)]
-struct CpuRegs {
-    rip: u64,
-    rsp: u64,
-}
-
+/// Error loading the ELF binary.
 #[derive(Debug, Error)]
 pub enum LoadError {
     #[error("Error parsing the binary")]
+    /// Error during parsing.
     ParseError(goblin::error::Error),
 }
 
@@ -56,14 +53,11 @@ impl<'a> Segment<'a> {
         }
     }
 
-    pub fn load(
-        &self,
-        frame_allocator: &mut SystemFrameAllocator,
-        virtual_mapping: &mut OffsetPageTable,
-    ) {
+    pub fn load(&self, address_space: &mut AddrSpace) {
         let vm_range = self.virt_addr..(self.virt_addr + self.memsz);
         let file_range = self.file_off..(self.file_off + self.filesz);
 
+        // FIXME: No panics!
         assert!(vm_range.end <= 0xFFFF800000000000);
         assert!(vm_range.start % 4096 == 0);
         assert!(file_range.end <= self.program.len() as u64);
@@ -71,24 +65,23 @@ impl<'a> Segment<'a> {
         let frames_needed = (self.memsz - 1) / 4096 + 1;
         let mut remaining = self.filesz as usize;
         for i in 0..frames_needed {
-            let frame = frame_allocator.allocate_frame().unwrap();
-            let page = Page::from_start_address(VirtAddr::new(vm_range.start + i * 4096)).unwrap();
+            let frame = Frame::alloc().unwrap();
+            let page = VirtPage::from_start_address(vm_range.start + i * 4096).unwrap();
+            // SAFETY: Just mapping the elf data.
             unsafe {
-                virtual_mapping
+                address_space
                     .map_to(
                         page,
                         frame,
                         PageTableFlags::PRESENT
                             | PageTableFlags::USER_ACCESSIBLE
                             | PageTableFlags::WRITABLE,
-                        frame_allocator,
                     )
                     .unwrap()
-                    .ignore();
             }
 
-            let offset_page = (frame.start_address().as_u64()
-                + virtual_mapping.phys_offset().as_u64()) as *mut u8;
+            let offset_page = frame.physical_offset().as_mut_ptr();
+            // SAFETY: Hopefully no bugs here...
             unsafe {
                 core::ptr::write_bytes(offset_page, 0, 4096);
                 core::ptr::copy(
@@ -104,11 +97,59 @@ impl<'a> Segment<'a> {
     }
 }
 
-pub fn init() {
-    sce_enable();
+impl Process {
+    /// Loads the process to main memory and returns a context associated with it.
+    pub fn load(
+        program: &[u8],
+        stack_pages: u64,
+        addrspace: &mut AddrSpace,
+    ) -> Result<Self, goblin::error::Error> {
+        let elf = Elf::parse(program)?;
+        assert!(elf.is_64);
+        for ph in elf.program_headers.iter().filter(|ph| ph.p_type == PT_LOAD) {
+            let segment = Segment::new(program, ph);
+            segment.load(addrspace);
+        }
+        let rsp = 0x0000_8000_0000_0000;
+
+        for i in 0..stack_pages {
+            let frame = Frame::alloc().unwrap();
+            let addr = rsp - 4096 * (i + 1);
+            let page = VirtPage::from_start_address(addr).unwrap();
+            log::debug!("Mapping page {page:?} to frame {frame:?}");
+            // SAFETY: Just mapping the stack pages.
+            unsafe {
+                addrspace
+                    .map_to(
+                        page,
+                        frame,
+                        PageTableFlags::PRESENT
+                            | PageTableFlags::WRITABLE
+                            | PageTableFlags::USER_ACCESSIBLE
+                            | PageTableFlags::NO_EXECUTE,
+                    )
+                    .unwrap()
+            }
+        }
+        Ok(Self { entry: elf.entry })
+    }
+
+    /// Runs the user process.
+    ///
+    /// # Safety
+    ///
+    /// The correct address space must be active.
+    pub unsafe fn exec(&self) -> ! {
+        log::debug!("Entering process at {:#X}", self.entry);
+        // SAFETY: The entry and rsp are valid for the user process.
+        unsafe {
+            sysret(self.entry, 0x0000_8000_0000_0000);
+        }
+    }
 }
 
 fn sce_enable() {
+    // SAFETY: Nothing special, just enabling Syscall extension.
     unsafe {
         asm!(
             "mov rcx, 0xc0000082",
@@ -129,60 +170,15 @@ fn sce_enable() {
     }
 }
 
-impl Process {
-    /// Loads the process to main memory and returns a context associated with it.
-    pub fn load(program: &[u8], stack_pages: u64) -> Result<Self, goblin::error::Error> {
-        let elf = Elf::parse(program)?;
-        assert!(elf.is_64);
-        let (mut page_table, l4_frame) = unsafe { memory::shallow_clone_page_table() };
-        critical_section::with(|cs| {
-            let mut frame_allocator = FRAME_ALLOCATOR.lock(cs);
-            for ph in elf.program_headers.iter().filter(|ph| ph.p_type == PT_LOAD) {
-                let segment = Segment::new(program, ph);
-                segment.load(&mut frame_allocator, &mut page_table);
-            }
-        });
-        let rsp = 0x0000_8000_0000_0000;
+#[cfg(test)]
+mod tests {
+    use crate::sched::{self, Task};
 
-        critical_section::with(|cs| {
-            let mut frame_allocator = FRAME_ALLOCATOR.lock(cs);
-            for i in 0..stack_pages {
-                let frame = frame_allocator.allocate_frame().unwrap();
-                let addr = rsp - 4096 * (i + 1);
-                let page = Page::from_start_address(VirtAddr::new(addr)).unwrap();
-                log::debug!("Mapping page {page:?} to frame {frame:?}");
-                unsafe {
-                    page_table
-                        .map_to(
-                            page,
-                            frame,
-                            PageTableFlags::PRESENT
-                                | PageTableFlags::WRITABLE
-                                | PageTableFlags::USER_ACCESSIBLE
-                                | PageTableFlags::NO_EXECUTE,
-                            &mut *frame_allocator,
-                        )
-                        .unwrap()
-                        .ignore();
-                }
-            }
-        });
-        Ok(Self {
-            page_table,
-            l4_frame,
-            regs: CpuRegs {
-                rip: elf.entry,
-                rsp,
-            },
-        })
-    }
-
-    /// Runs the user process.
-    pub unsafe fn exec(&self) -> ! {
-        let (_, flags) = Cr3::read();
-        unsafe {
-            Cr3::write(self.l4_frame, flags);
-            crate::sys::gdt::sysret(self.regs.rip, self.regs.rsp);
-        }
+    #[test_case]
+    fn hello_user_process() {
+        // FIXME: Add waiting for task to finish.
+        static PROC: &[u8] = include_bytes!("../programs/hello.bin");
+        let task = Task::uthread(PROC).expect("Unable to create user process stask.");
+        sched::push(task);
     }
 }

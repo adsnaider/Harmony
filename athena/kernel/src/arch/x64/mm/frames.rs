@@ -1,16 +1,33 @@
 //! Physical frame allocation and management.
 
-use bitalloc::{Bitalloc, Indexable};
+use bitalloc::{BitDeallocError, Bitalloc, Indexable};
 use bootloader_api::info::{MemoryRegion, MemoryRegionKind, MemoryRegions};
 use critical_section::CriticalSection;
 use singleton::Singleton;
-use x86_64::structures::paging::{FrameAllocator, PageSize, PhysFrame, Size4KiB};
+use x86_64::structures::paging::{FrameAllocator, Page, PageSize, PhysFrame, Size4KiB};
 use x86_64::{PhysAddr, VirtAddr};
 
-/// The system-wide frame allocator.
-pub static FRAME_ALLOCATOR: Singleton<SystemFrameAllocator> = Singleton::uninit();
+use super::paging::{VirtPage, PHYSICAL_MEMORY_OFFSET};
 
-struct Frame(PhysFrame<Size4KiB>);
+/// The system-wide frame allocator.
+pub(super) static FRAME_ALLOCATOR: Singleton<SystemFrameAllocator> = Singleton::uninit();
+
+/// A physical frame.
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[repr(transparent)]
+pub struct Frame(PhysFrame<Size4KiB>);
+
+impl From<PhysFrame> for Frame {
+    fn from(value: PhysFrame) -> Self {
+        Self(value)
+    }
+}
+
+impl From<Frame> for PhysFrame {
+    fn from(value: Frame) -> Self {
+        value.0
+    }
+}
 
 // SAFETY: Mapping is strictly 1-to-1.
 unsafe impl Indexable for Frame {
@@ -29,7 +46,7 @@ unsafe impl Indexable for Frame {
 }
 
 #[allow(missing_debug_implementations)]
-pub struct SystemFrameAllocator(Bitalloc<'static, Frame>);
+pub(super) struct SystemFrameAllocator(Bitalloc<'static, Frame>);
 
 // SAFETY: We use a bitmap to make sure that all frames returned are unique
 // and available for use.
@@ -39,11 +56,24 @@ unsafe impl FrameAllocator<Size4KiB> for SystemFrameAllocator {
     }
 }
 
+impl SystemFrameAllocator {
+    /// Allocates a new frame.
+    pub fn alloc_frame(&mut self) -> Option<Frame> {
+        self.0.allocate().ok()
+    }
+
+    /// Deallocates a frame.
+    pub fn dealloc_frame(&mut self, frame: &Frame) -> Result<(), BitDeallocError> {
+        self.0.deallocate(frame)
+    }
+}
+
 /// Returns true if the memory region is generally usable.
 fn is_region_usable(region: &MemoryRegion) -> bool {
     matches!(region.kind, MemoryRegionKind::Usable)
 }
 
+/// Initializes the frame allocator.
 pub fn init(pmo: VirtAddr, memory_map: &mut MemoryRegions, cs: CriticalSection) {
     // UEFI makes no guarantees that the memory map is sorted in ascending order so we have to
     // get the last frame by iterating through all of them.
@@ -96,5 +126,31 @@ pub fn init(pmo: VirtAddr, memory_map: &mut MemoryRegions, cs: CriticalSection) 
                 }),
         );
         FRAME_ALLOCATOR.initialize(SystemFrameAllocator(bitalloc), cs);
+    }
+}
+
+impl Frame {
+    /// Allocates a new frame and returns it.
+    pub fn alloc() -> Option<Self> {
+        critical_section::with(|cs| FRAME_ALLOCATOR.lock(cs).alloc_frame())
+    }
+
+    /// Dealocates the frame.
+    pub fn dealloc(&self) -> Result<(), BitDeallocError> {
+        critical_section::with(|cs| FRAME_ALLOCATOR.lock(cs).dealloc_frame(self))
+    }
+
+    /// Returns a page that is guaranteed to be mapped to the given frame.
+    ///
+    /// This page is mapped to the frame since all physical memory is mapped to
+    /// some offset at boot time.
+    pub fn physical_offset(&self) -> VirtPage {
+        let page_start = PHYSICAL_MEMORY_OFFSET + self.0.start_address().as_u64();
+        Page::from_start_address(page_start).unwrap().into()
+    }
+
+    /// Returns the start address of the frame.
+    pub fn start_address(&self) -> u64 {
+        self.0.start_address().as_u64()
     }
 }
