@@ -169,3 +169,16 @@ fn sce_enable() {
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::sched::{self, Task};
+
+    #[test_case]
+    fn hello_user_process() {
+        // FIXME: Add waiting for task to finish.
+        static PROC: &[u8] = include_bytes!("../programs/hello.bin");
+        let task = Task::uthread(PROC).expect("Unable to create user process stask.");
+        sched::push(task);
+    }
+}

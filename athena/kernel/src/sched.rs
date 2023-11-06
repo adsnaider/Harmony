@@ -165,6 +165,9 @@ impl Scheduler {
     pub fn exit(&self) -> ! {
         let previous = self.current.borrow_mut().take().unwrap();
         self.tasks.borrow_mut().remove(&previous).unwrap();
+        if self.tasks.borrow().len() == 1 {
+            panic!("No more tasks to run :O");
+        }
 
         let next = self.get_next();
         log::debug!("Exiting task: {previous} - Next: {next}");

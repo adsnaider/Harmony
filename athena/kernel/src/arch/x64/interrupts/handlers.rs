@@ -1,8 +1,11 @@
+use core::arch::asm;
+
 use critical_section::CriticalSection;
 use x86_64::instructions::port::Port;
 use x86_64::structures::idt::{InterruptStackFrame, PageFaultErrorCode};
 
 use super::{KEYBOARD_INT, PICS, TIMER_INT};
+use crate::sched;
 
 macro_rules! push_scratch {
     () => {
@@ -89,8 +92,27 @@ interrupt!(keyboard_interrupt, || {
 
 // EXCEPTIONS
 
+extern "sysv64" fn handle_syscall(code: u64) {
+    log::debug!("GOT SYSCALL {code}");
+    match code {
+        1 => log::debug!("Write request"), // TODO
+        60 => {
+            log::debug!("Exit request");
+            sched::exit();
+        }
+        _ => {}
+    }
+}
+
+#[naked]
 pub(super) extern "x86-interrupt" fn syscall_interrupt(stack_frame: InterruptStackFrame) {
-    log::info!("SYSCALL REQUEST:\n{stack_frame:#?}");
+    unsafe {
+        asm!("mov rdi, rax",
+            "call {handle_syscall}",
+            "iretq",
+            handle_syscall = sym handle_syscall,
+            options(noreturn));
+    }
 }
 
 pub(super) extern "x86-interrupt" fn non_maskable_interrupt(stack_frame: InterruptStackFrame) {

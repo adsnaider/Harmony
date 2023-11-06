@@ -74,7 +74,7 @@ unsafe fn init(bootinfo: &'static mut BootInfo) {
 #[allow(dead_code)]
 /// Kernel's starting point.
 fn kmain(bootinfo: &'static mut BootInfo) -> ! {
-    static INIT: &[u8] = include_bytes!("../programs/nop.bin");
+    static INIT: &[u8] = include_bytes!("../programs/hello.bin");
     // SAFETY: bootinfo is correct.
     unsafe {
         init(bootinfo);
