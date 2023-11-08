@@ -51,13 +51,25 @@ impl Task {
 /// The kernel scheduler.
 #[derive(Debug)]
 pub struct Scheduler {
-    readyq: RefCell<VecDeque<u64>>,
-    blocked: RefCell<HashSet<u64>>,
-    current: RefCell<Option<u64>>,
-    tasks: RefCell<HashMap<u64, Task>>,
+    readyq: RefCell<VecDeque<Tid>>,
+    blocked: RefCell<HashSet<Tid>>,
+    current: RefCell<Option<Tid>>,
+    tasks: RefCell<HashMap<Tid, Task>>,
 }
 
 static SCHEDULER: OnceCell<Mutex<Scheduler>> = OnceCell::new();
+
+/// A thread ID.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
+pub struct Tid(u64);
+
+impl Tid {
+    /// Returns the next available TID.
+    pub fn next() -> Self {
+        static NEXT_TID: AtomicU64 = AtomicU64::new(0);
+        Self(NEXT_TID.fetch_add(1, Ordering::Relaxed))
+    }
+}
 
 /// Initializes the scheduler.
 ///
@@ -75,7 +87,7 @@ pub fn init() {
 }
 
 /// Pushes a new task to be scheduled.
-pub fn push(task: Task) -> u64 {
+pub fn push(task: Task) -> Tid {
     critical_section::with(|cs| SCHEDULER.get().unwrap().borrow(cs).push(task))
 }
 
@@ -101,20 +113,20 @@ pub fn block() {
 /// Awaking a thread can lead to data races if the thread was blocked due to synchronization, for instance.
 /// Calling `wakeup` on a thread should only be done if the blocked reason is known and can be guaranteed
 /// that it's safe to awaken the thread.
-pub unsafe fn wakeup(tid: u64) {
+pub unsafe fn wakeup(tid: Tid) {
     // SAFETY: Precondition.
     unsafe { critical_section::with(|cs| SCHEDULER.get().unwrap().borrow(cs).wakeup(tid)) }
 }
 
 /// Gets the current thread's TID.
-pub fn tid() -> u64 {
+pub fn tid() -> Tid {
     critical_section::with(|cs| SCHEDULER.get().unwrap().borrow(cs).tid())
 }
 
 impl Scheduler {
     /// Creates an empty scheduler.
     pub fn new(current: Task) -> Self {
-        let tid = Self::next_tid();
+        let tid = Tid::next();
         let mut tasks = HashMap::new();
         tasks.try_insert(tid, current).unwrap();
 
@@ -127,8 +139,8 @@ impl Scheduler {
     }
 
     /// Pushes a new task to the scheduler.
-    pub fn push(&self, task: Task) -> u64 {
-        let tid = Self::next_tid();
+    pub fn push(&self, task: Task) -> Tid {
+        let tid = Tid::next();
         self.tasks.borrow_mut().try_insert(tid, task).unwrap();
         self.readyq.borrow_mut().push_back(tid);
         tid
@@ -144,7 +156,7 @@ impl Scheduler {
             return;
         };
         let previous = self.current.borrow_mut().replace(next).unwrap();
-        log::debug!("Switching to {next} from {previous}");
+        log::debug!("Switching to {next:?} from {previous:?}");
         self.readyq.borrow_mut().push_back(previous);
         // SAFETY: This is super awkward but hopefully safe.
         // * It's probably not cool to keep references that need to live after the switch, so we use raw pointers.
@@ -162,7 +174,7 @@ impl Scheduler {
         }
 
         let next = self.get_next();
-        log::debug!("Exiting task: {previous} - Next: {next}");
+        log::debug!("Exiting task: {previous:?} - Next: {next:?}");
         *self.current.borrow_mut() = Some(next);
         self.jump_to(next);
     }
@@ -183,22 +195,22 @@ impl Scheduler {
     /// Awaking a thread can lead to data races if the thread was blocked due to synchronization, for instance.
     /// Calling `wakeup` on a thread should only be done if the blocked reason is known and can be guaranteed
     /// that it's safe to awaken the thread.
-    pub unsafe fn wakeup(&self, id: u64) {
+    pub unsafe fn wakeup(&self, id: Tid) {
         if self.blocked.borrow_mut().remove(&id) {
             self.readyq.borrow_mut().push_back(id);
         }
     }
 
     /// Gets the current thread's TID.
-    pub fn tid(&self) -> u64 {
+    pub fn tid(&self) -> Tid {
         self.current.borrow().unwrap()
     }
 
-    fn try_get_next(&self) -> Option<u64> {
+    fn try_get_next(&self) -> Option<Tid> {
         self.readyq.borrow_mut().pop_front()
     }
 
-    fn get_next(&self) -> u64 {
+    fn get_next(&self) -> Tid {
         loop {
             match self.try_get_next() {
                 Some(tid) => break tid,
@@ -207,7 +219,7 @@ impl Scheduler {
         }
     }
 
-    fn switch_to(&self, next: u64, previous: u64) {
+    fn switch_to(&self, next: Tid, previous: Tid) {
         assert!(next != previous);
         // SAFETY: All of the tasks in the map are properly initialized and `next` and `previous`
         // are not the same.
@@ -229,7 +241,7 @@ impl Scheduler {
         }
     }
 
-    fn jump_to(&self, next: u64) -> ! {
+    fn jump_to(&self, next: Tid) -> ! {
         // SAFETY: All of the tasks in the map are properly initialized.
         unsafe {
             let next = self
@@ -240,11 +252,6 @@ impl Scheduler {
                 .context_mut();
             Context::jump(next);
         }
-    }
-
-    fn next_tid() -> u64 {
-        static NEXT_TID: AtomicU64 = AtomicU64::new(0);
-        NEXT_TID.fetch_add(1, Ordering::Relaxed)
     }
 }
 
