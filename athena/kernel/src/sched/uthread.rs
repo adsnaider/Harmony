@@ -29,6 +29,7 @@ impl UThread {
                 .unwrap();
         }
         log::debug!("Mapped interrupt stack");
+        // FIXME: Load more virtual pages!
         let process = Process::load(program, 1, &mut addrspace).unwrap();
         log::debug!("Loaded process");
 
