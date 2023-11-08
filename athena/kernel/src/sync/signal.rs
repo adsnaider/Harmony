@@ -1,17 +1,16 @@
 //! A signal that wakes up all blocked threads when set.
 
-use alloc::vec::Vec;
 use core::cell::RefCell;
 
 use critical_section::Mutex;
 
-use crate::sched::{self, Tid};
+use super::block_list::BlockQueue;
 
 /// A synchronization primitive that wakes up all blocked threads once a signal is set.
 #[derive(Debug)]
 pub struct Signal {
     set: Mutex<RefCell<bool>>,
-    blocked: Mutex<RefCell<Vec<Tid>>>,
+    blocked: BlockQueue,
 }
 
 impl Default for Signal {
@@ -25,7 +24,7 @@ impl Signal {
     pub fn new() -> Self {
         Self {
             set: Mutex::new(RefCell::new(false)),
-            blocked: Mutex::new(RefCell::new(Vec::new())),
+            blocked: BlockQueue::new(),
         }
     }
 
@@ -33,8 +32,7 @@ impl Signal {
     pub fn wait(&self) {
         critical_section::with(|cs| {
             if !(*self.set.borrow_ref(cs)) {
-                self.blocked.borrow_ref_mut(cs).push(sched::tid());
-                sched::block();
+                self.blocked.block_current()
             }
         })
     }
@@ -43,13 +41,7 @@ impl Signal {
     pub fn signal(&self) {
         critical_section::with(|cs| {
             *self.set.borrow_ref_mut(cs) = true;
-            self.blocked
-                .borrow_ref_mut(cs)
-                .drain(..)
-                // SAFETY: tid is in blocked guarantees the blocked reason is waiting for the signal.
-                .for_each(|tid| unsafe {
-                    sched::wakeup(tid);
-                });
+            self.blocked.awake_all();
         })
     }
 }

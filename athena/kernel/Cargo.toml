@@ -14,6 +14,7 @@ thiserror = { version = "1.0", package = "thiserror-core", default-features = fa
 singleton = { path = "../singleton" }
 hashbrown = "0.13.2"
 enum_dispatch = "0.3.12"
+intrusive-collections = "0.9.6"
 
 
 [dependencies.once_cell]
