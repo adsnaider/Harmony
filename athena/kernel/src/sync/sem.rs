@@ -1,17 +1,16 @@
 //! The humble semaphore that lays the foundation for synchronization.
 
-use alloc::collections::VecDeque;
 use core::cell::RefCell;
 
 use critical_section::Mutex;
 
-use crate::sched::{self, Tid};
+use super::block_list::BlockQueue;
 
 /// A semaphore that blocks the process when the count is 0.
 #[derive(Debug)]
 pub struct Semaphore {
     count: Mutex<RefCell<i64>>,
-    blocked_threads: Mutex<RefCell<VecDeque<Tid>>>,
+    blocked_threads: BlockQueue,
 }
 
 impl Semaphore {
@@ -19,19 +18,14 @@ impl Semaphore {
     pub fn new(count: i64) -> Self {
         Self {
             count: Mutex::new(RefCell::new(count)),
-            blocked_threads: Mutex::new(RefCell::new(VecDeque::new())),
+            blocked_threads: BlockQueue::new(),
         }
     }
 
     /// Increments the count, potentially unblocking a thread.
     pub fn signal(&self) {
         critical_section::with(|cs| {
-            if let Some(tid) = self.blocked_threads.borrow_ref_mut(cs).pop_front() {
-                // SAFETY: `tid` is in `blocked_threads` guarantees the blocked reason is due to semaphore.
-                unsafe {
-                    sched::wakeup(tid);
-                }
-            }
+            self.blocked_threads.awake_single();
             *self.count.borrow_ref_mut(cs) += 1;
         });
     }
@@ -45,10 +39,7 @@ impl Semaphore {
                 *count < 0
             };
             if sleep {
-                self.blocked_threads
-                    .borrow_ref_mut(cs)
-                    .push_back(sched::tid());
-                sched::block();
+                self.blocked_threads.block_current()
             }
         });
     }
