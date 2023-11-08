@@ -14,6 +14,7 @@ use once_cell::sync::OnceCell;
 
 use self::kthread::KThread;
 use self::uthread::UThread;
+use crate::arch;
 use crate::arch::context::Context;
 
 #[enum_dispatch(Task)]
@@ -54,7 +55,6 @@ pub struct Scheduler {
     blocked: RefCell<HashSet<u64>>,
     current: RefCell<Option<u64>>,
     tasks: RefCell<HashMap<u64, Task>>,
-    looper: u64,
 }
 
 static SCHEDULER: OnceCell<Mutex<Scheduler>> = OnceCell::new();
@@ -118,19 +118,11 @@ impl Scheduler {
         let mut tasks = HashMap::new();
         tasks.try_insert(tid, current).unwrap();
 
-        // A fake thread that never ends. Makes it easy to always have something to schedule.
-        let looper = Task::kthread(|| loop {
-            crate::arch::inst::hlt();
-        });
-        let looper_id = Self::next_tid();
-        tasks.try_insert(looper_id, looper).unwrap();
-
         Self {
             readyq: RefCell::new(VecDeque::new()),
             current: RefCell::new(Some(tid)),
             blocked: RefCell::new(HashSet::new()),
             tasks: RefCell::new(tasks),
-            looper: looper_id,
         }
     }
 
@@ -165,7 +157,7 @@ impl Scheduler {
     pub fn exit(&self) -> ! {
         let previous = self.current.borrow_mut().take().unwrap();
         self.tasks.borrow_mut().remove(&previous).unwrap();
-        if self.tasks.borrow().len() == 1 {
+        if self.tasks.borrow().is_empty() {
             panic!("No more tasks to run :O");
         }
 
@@ -207,7 +199,12 @@ impl Scheduler {
     }
 
     fn get_next(&self) -> u64 {
-        self.try_get_next().unwrap_or(self.looper)
+        loop {
+            match self.try_get_next() {
+                Some(tid) => break tid,
+                None => arch::inst::hlt(),
+            }
+        }
     }
 
     fn switch_to(&self, next: u64, previous: u64) {
