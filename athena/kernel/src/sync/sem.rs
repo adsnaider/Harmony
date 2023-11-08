@@ -5,13 +5,13 @@ use core::cell::RefCell;
 
 use critical_section::Mutex;
 
-use crate::sched;
+use crate::sched::{self, Tid};
 
 /// A semaphore that blocks the process when the count is 0.
 #[derive(Debug)]
 pub struct Semaphore {
     count: Mutex<RefCell<i64>>,
-    blocked_threads: Mutex<RefCell<VecDeque<u64>>>,
+    blocked_threads: Mutex<RefCell<VecDeque<Tid>>>,
 }
 
 impl Semaphore {
