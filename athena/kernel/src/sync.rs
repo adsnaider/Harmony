@@ -2,6 +2,7 @@
 
 pub mod mutex;
 pub mod sem;
+pub mod signal;
 
 pub use mutex::Mutex;
 pub use sem::Semaphore;
