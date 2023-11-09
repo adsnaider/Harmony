@@ -1,5 +1,6 @@
 use alloc::boxed::Box;
 use core::arch::asm;
+use core::cell::UnsafeCell;
 
 use super::HasContext;
 use crate::arch::context::Context;
@@ -10,8 +11,11 @@ use crate::sched;
 /// A kernel thread.
 #[derive(Debug)]
 pub struct KThread {
-    context: Context,
+    context: UnsafeCell<Context>,
 }
+
+// SAFETY: FIXME: ....
+unsafe impl Sync for KThread {}
 
 impl KThread {
     /// Constructs a kernel thread context.
@@ -62,7 +66,7 @@ impl KThread {
             Self::push(0, &mut rsp);
         }
         Self {
-            context: Context::new(rsp, address_space),
+            context: UnsafeCell::new(Context::new(rsp, address_space)),
         }
     }
 
@@ -84,10 +88,10 @@ impl KThread {
 
 impl HasContext for KThread {
     fn context(&self) -> *const crate::arch::context::Context {
-        &self.context
+        self.context.get()
     }
 
-    fn context_mut(&mut self) -> *mut crate::arch::context::Context {
-        &mut self.context
+    fn context_mut(&self) -> *mut crate::arch::context::Context {
+        self.context.get()
     }
 }

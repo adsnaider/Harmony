@@ -4,7 +4,7 @@ use core::cell::RefCell;
 
 use critical_section::Mutex;
 
-use super::block_list::BlockQueue;
+use crate::sched::BlockQueue;
 
 /// A semaphore that blocks the process when the count is 0.
 #[derive(Debug)]

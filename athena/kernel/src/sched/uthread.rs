@@ -53,7 +53,7 @@ impl HasContext for UThread {
         self.thread.context()
     }
 
-    fn context_mut(&mut self) -> *mut crate::arch::context::Context {
+    fn context_mut(&self) -> *mut crate::arch::context::Context {
         self.thread.context_mut()
     }
 }
