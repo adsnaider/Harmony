@@ -179,6 +179,6 @@ mod tests {
         // FIXME: Add waiting for task to finish.
         static PROC: &[u8] = include_bytes!("../programs/hello.bin");
         let task = Task::uthread(PROC).expect("Unable to create user process stask.");
-        sched::push(task);
+        sched::spawn(task);
     }
 }
