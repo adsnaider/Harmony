@@ -44,4 +44,9 @@ impl<T> Signal<T> {
         }
         result
     }
+
+    /// Tries to get the signaled value without blocking.
+    pub fn get_value(&self) -> Option<&T> {
+        self.value.get()
+    }
 }

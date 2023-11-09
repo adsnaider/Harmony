@@ -13,6 +13,7 @@ use intrusive_collections::{
 
 use self::kthread::KThread;
 use self::uthread::UThread;
+use crate::sync::signal::Signal;
 
 #[enum_dispatch(Task)]
 pub(super) trait HasContext {
@@ -54,6 +55,7 @@ impl Task {
 pub(super) struct TaskInfo {
     pub tid: Tid,
     pub task: Task,
+    pub exited: Signal<()>,
 
     // Intrusive links
     ready_link: LinkedListAtomicLink,
@@ -66,6 +68,7 @@ impl TaskInfo {
         Self {
             tid: Tid::make_unique(),
             task,
+            exited: Signal::new(),
             ready_link: Default::default(),
             blocked_link: Default::default(),
             by_tid_link: Default::default(),
@@ -126,5 +129,10 @@ impl TaskHandle {
 
     pub(super) fn into_info(self) -> Arc<TaskInfo> {
         self.0
+    }
+
+    /// Blocks the current thread until [`self`] exits.
+    pub fn join(self) {
+        self.0.exited.wait();
     }
 }
