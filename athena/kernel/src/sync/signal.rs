@@ -1,47 +1,47 @@
 //! A signal that wakes up all blocked threads when set.
 
-use core::cell::RefCell;
-
-use critical_section::Mutex;
+use once_cell::sync::OnceCell;
 
 use crate::sched::BlockQueue;
 
 /// A synchronization primitive that wakes up all blocked threads once a signal is set.
 #[derive(Debug)]
-pub struct Signal {
-    set: Mutex<RefCell<bool>>,
+pub struct Signal<T> {
+    value: OnceCell<T>,
     blocked: BlockQueue,
 }
 
-impl Default for Signal {
+impl<T> Default for Signal<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Signal {
+impl<T> Signal<T> {
     /// Makes a new unset signal.
     pub fn new() -> Self {
         Self {
-            set: Mutex::new(RefCell::new(false)),
+            value: OnceCell::new(),
             blocked: BlockQueue::new(),
         }
     }
 
     /// Blocks this thread until the signal has been set.
-    pub fn wait(&self) {
-        critical_section::with(|cs| {
-            if !(*self.set.borrow_ref(cs)) {
-                self.blocked.block_current()
+    pub fn wait(&self) -> &T {
+        critical_section::with(|_cs| {
+            if self.value.get().is_none() {
+                self.blocked.block_current();
             }
-        })
+        });
+        self.value.get().unwrap()
     }
 
     /// Wakes up all blocked threads and prevents further threads from blocking on [`Signal::wait`].
-    pub fn signal(&self) {
-        critical_section::with(|cs| {
-            *self.set.borrow_ref_mut(cs) = true;
-            self.blocked.awake_all();
-        })
+    pub fn signal(&self, value: T) -> Result<(), T> {
+        let result = self.value.set(value);
+        if result.is_ok() {
+            self.blocked.awake_all()
+        }
+        result
     }
 }
