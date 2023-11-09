@@ -2,14 +2,19 @@
 
 mod kthread;
 mod uthread;
-use alloc::collections::VecDeque;
+
+use alloc::sync::Arc;
 use core::cell::RefCell;
 use core::fmt::Debug;
+use core::mem;
 use core::sync::atomic::{AtomicU64, Ordering};
 
+pub use block_queue::BlockQueue;
 use critical_section::Mutex;
 use enum_dispatch::enum_dispatch;
-use hashbrown::{HashMap, HashSet};
+use intrusive_collections::{
+    intrusive_adapter, KeyAdapter, LinkedList, LinkedListAtomicLink, RBTree, RBTreeAtomicLink,
+};
 use once_cell::sync::OnceCell;
 
 use self::kthread::KThread;
@@ -20,7 +25,7 @@ use crate::arch::context::Context;
 #[enum_dispatch(Task)]
 trait HasContext {
     fn context(&self) -> *const crate::arch::context::Context;
-    fn context_mut(&mut self) -> *mut crate::arch::context::Context;
+    fn context_mut(&self) -> *mut crate::arch::context::Context;
 }
 
 /// A runnable task such as a KThread, UThread, etc.
@@ -48,13 +53,45 @@ impl Task {
     }
 }
 
+#[derive(Debug)]
+struct TaskInfo {
+    tid: Tid,
+    task: Task,
+
+    // Intrusive links
+    ready_link: LinkedListAtomicLink,
+    blocked_link: LinkedListAtomicLink,
+    by_tid_link: RBTreeAtomicLink,
+}
+
+impl TaskInfo {
+    pub fn new(task: Task) -> Self {
+        Self {
+            tid: Tid::next(),
+            task,
+            ready_link: Default::default(),
+            blocked_link: Default::default(),
+            by_tid_link: Default::default(),
+        }
+    }
+}
+
+intrusive_adapter!(ReadyAdapter = Arc<TaskInfo>: TaskInfo { ready_link: LinkedListAtomicLink });
+intrusive_adapter!(ByTidAdapter = Arc<TaskInfo>: TaskInfo { by_tid_link: RBTreeAtomicLink });
+
+impl<'a> KeyAdapter<'a> for ByTidAdapter {
+    type Key = Tid;
+    fn get_key(&self, x: &'a TaskInfo) -> Tid {
+        x.tid
+    }
+}
+
 /// The kernel scheduler.
 #[derive(Debug)]
-pub struct Scheduler {
-    readyq: RefCell<VecDeque<Tid>>,
-    blocked: RefCell<HashSet<Tid>>,
-    current: RefCell<Option<Tid>>,
-    tasks: RefCell<HashMap<Tid, Task>>,
+struct Scheduler {
+    current: RefCell<Arc<TaskInfo>>,
+    readyq: RefCell<LinkedList<ReadyAdapter>>,
+    tasks: RefCell<RBTree<ByTidAdapter>>,
 }
 
 static SCHEDULER: OnceCell<Mutex<Scheduler>> = OnceCell::new();
@@ -102,7 +139,7 @@ pub fn exit() -> ! {
 }
 
 /// Blocks the current context until a wake up is received.
-pub fn block() {
+fn block() {
     critical_section::with(|cs| SCHEDULER.get().unwrap().borrow(cs).block())
 }
 
@@ -113,9 +150,9 @@ pub fn block() {
 /// Awaking a thread can lead to data races if the thread was blocked due to synchronization, for instance.
 /// Calling `wakeup` on a thread should only be done if the blocked reason is known and can be guaranteed
 /// that it's safe to awaken the thread.
-pub unsafe fn wakeup(tid: Tid) {
+unsafe fn wakeup(info: Arc<TaskInfo>) {
     // SAFETY: Precondition.
-    unsafe { critical_section::with(|cs| SCHEDULER.get().unwrap().borrow(cs).wakeup(tid)) }
+    unsafe { critical_section::with(|cs| SCHEDULER.get().unwrap().borrow(cs).wakeup(info)) }
 }
 
 /// Gets the current thread's TID.
@@ -123,26 +160,31 @@ pub fn tid() -> Tid {
     critical_section::with(|cs| SCHEDULER.get().unwrap().borrow(cs).tid())
 }
 
+fn tinfo() -> Arc<TaskInfo> {
+    critical_section::with(|cs| SCHEDULER.get().unwrap().borrow(cs).tinfo())
+}
+
 impl Scheduler {
     /// Creates an empty scheduler.
     pub fn new(current: Task) -> Self {
-        let tid = Tid::next();
-        let mut tasks = HashMap::new();
-        tasks.try_insert(tid, current).unwrap();
+        let current = Arc::new(TaskInfo::new(current));
+        let mut tasks = RBTree::new(ByTidAdapter::new());
+
+        tasks.insert(current.clone());
 
         Self {
-            readyq: RefCell::new(VecDeque::new()),
-            current: RefCell::new(Some(tid)),
-            blocked: RefCell::new(HashSet::new()),
+            current: RefCell::new(current),
+            readyq: Default::default(),
             tasks: RefCell::new(tasks),
         }
     }
 
     /// Pushes a new task to the scheduler.
     pub fn push(&self, task: Task) -> Tid {
-        let tid = Tid::next();
-        self.tasks.borrow_mut().try_insert(tid, task).unwrap();
-        self.readyq.borrow_mut().push_back(tid);
+        let task = Arc::new(TaskInfo::new(task));
+        let tid = task.tid;
+        self.tasks.borrow_mut().insert(task.clone());
+        self.readyq.borrow_mut().push_back(task);
         tid
     }
 
@@ -155,62 +197,58 @@ impl Scheduler {
             // Nothing else to run, back to caller.
             return;
         };
-        let previous = self.current.borrow_mut().replace(next).unwrap();
-        log::debug!("Switching to {next:?} from {previous:?}");
-        self.readyq.borrow_mut().push_back(previous);
-        // SAFETY: This is super awkward but hopefully safe.
-        // * It's probably not cool to keep references that need to live after the switch, so we use raw pointers.
-        // * The pointers only become references before the switch, not after.
-        // * When the switch comes back to us (on a further restore, we don't have any more references around).
+        let previous = mem::replace(&mut *self.current.borrow_mut(), next.clone());
+        log::debug!("Switching to {:?} from {:?}", next.tid, previous.tid);
+        self.readyq.borrow_mut().push_back(previous.clone());
         self.switch_to(next, previous)
     }
 
     /// Terminates the currently running task and schedules the next one
     pub fn exit(&self) -> ! {
-        let previous = self.current.borrow_mut().take().unwrap();
-        self.tasks.borrow_mut().remove(&previous).unwrap();
+        let previous = unsafe {
+            self.tasks
+                .borrow_mut()
+                .cursor_mut_from_ptr(self.current.borrow().as_ref())
+                .remove()
+                .unwrap()
+        };
         if self.tasks.borrow().is_empty() {
             panic!("No more tasks to run :O");
         }
 
         let next = self.get_next();
-        log::debug!("Exiting task: {previous:?} - Next: {next:?}");
-        *self.current.borrow_mut() = Some(next);
+        log::debug!("Exiting task: {:?} - Next: {:?}", previous.tid, next.tid);
+        *self.current.borrow_mut() = next.clone();
         self.jump_to(next);
     }
 
-    /// Blocks the current process
-    pub fn block(&self) {
-        let previous = self.current.borrow_mut().take().unwrap();
-        assert!(self.blocked.borrow_mut().insert(previous));
+    /// Blocks the current process by not placing it in the readyq.
+    fn block(&self) {
         let next = self.get_next();
-        *self.current.borrow_mut() = Some(next);
+        let previous = mem::replace(&mut *self.current.borrow_mut(), next.clone());
         self.switch_to(next, previous)
     }
 
-    /// Awake a blocked context.
-    ///
-    /// # Safety
-    ///
-    /// Awaking a thread can lead to data races if the thread was blocked due to synchronization, for instance.
-    /// Calling `wakeup` on a thread should only be done if the blocked reason is known and can be guaranteed
-    /// that it's safe to awaken the thread.
-    pub unsafe fn wakeup(&self, id: Tid) {
-        if self.blocked.borrow_mut().remove(&id) {
-            self.readyq.borrow_mut().push_back(id);
-        }
+    /// Awakes a blocked context.
+    unsafe fn wakeup(&self, task: Arc<TaskInfo>) {
+        self.readyq.borrow_mut().push_back(task);
     }
 
     /// Gets the current thread's TID.
     pub fn tid(&self) -> Tid {
-        self.current.borrow().unwrap()
+        self.current.borrow().tid
     }
 
-    fn try_get_next(&self) -> Option<Tid> {
+    /// Gets the current thread's task information.
+    pub fn tinfo(&self) -> Arc<TaskInfo> {
+        self.current.borrow().clone()
+    }
+
+    fn try_get_next(&self) -> Option<Arc<TaskInfo>> {
         self.readyq.borrow_mut().pop_front()
     }
 
-    fn get_next(&self) -> Tid {
+    fn get_next(&self) -> Arc<TaskInfo> {
         loop {
             match self.try_get_next() {
                 Some(tid) => break tid,
@@ -219,38 +257,71 @@ impl Scheduler {
         }
     }
 
-    fn switch_to(&self, next: Tid, previous: Tid) {
-        assert!(next != previous);
+    fn switch_to(&self, next: Arc<TaskInfo>, previous: Arc<TaskInfo>) {
+        assert!(!Arc::ptr_eq(&next, &previous));
         // SAFETY: All of the tasks in the map are properly initialized and `next` and `previous`
         // are not the same.
         unsafe {
-            let previous = self
-                .tasks
-                .borrow_mut()
-                .get_mut(&previous)
-                .unwrap()
-                .context_mut();
-            let next = self
-                .tasks
-                .borrow_mut()
-                .get_mut(&next)
-                .unwrap()
-                .context_mut();
+            let previous = previous.task.context_mut();
+            let next = next.task.context();
 
             Context::switch(next, previous);
         }
     }
 
-    fn jump_to(&self, next: Tid) -> ! {
+    fn jump_to(&self, next: Arc<TaskInfo>) -> ! {
         // SAFETY: All of the tasks in the map are properly initialized.
         unsafe {
-            let next = self
-                .tasks
-                .borrow_mut()
-                .get_mut(&next)
-                .unwrap()
-                .context_mut();
+            let next = next.task.context();
             Context::jump(next);
+        }
+    }
+}
+
+mod block_queue {
+    use alloc::sync::Arc;
+    use core::cell::RefCell;
+
+    use critical_section::Mutex;
+    use intrusive_collections::{intrusive_adapter, LinkedList, LinkedListAtomicLink};
+
+    use crate::sched::TaskInfo;
+
+    intrusive_adapter!(BlockedAdapter = Arc<TaskInfo>: TaskInfo { blocked_link: LinkedListAtomicLink });
+
+    #[derive(Debug)]
+    pub struct BlockQueue {
+        blocked: Mutex<RefCell<LinkedList<BlockedAdapter>>>,
+    }
+
+    impl BlockQueue {
+        pub fn new() -> Self {
+            Self {
+                blocked: Mutex::new(RefCell::new(LinkedList::new(BlockedAdapter::new()))),
+            }
+        }
+
+        pub fn awake_single(&self) -> bool {
+            let thread = critical_section::with(|cs| self.blocked.borrow_ref_mut(cs).pop_front());
+            thread.map(|th| unsafe { super::wakeup(th) }).is_some()
+        }
+
+        pub fn block_current(&self) {
+            let blocked = super::tinfo();
+            critical_section::with(|cs| {
+                self.blocked.borrow_ref_mut(cs).push_back(blocked);
+            });
+            super::block();
+        }
+
+        pub fn awake_all(&self) {
+            critical_section::with(|cs| {
+                while let Some(thread) = self.blocked.borrow_ref_mut(cs).pop_front() {
+                    unsafe {
+                        super::wakeup(thread);
+                    }
+                }
+            })
         }
     }
 }

@@ -4,7 +4,7 @@ use core::cell::RefCell;
 
 use critical_section::Mutex;
 
-use super::block_list::BlockQueue;
+use crate::sched::BlockQueue;
 
 /// A synchronization primitive that wakes up all blocked threads once a signal is set.
 #[derive(Debug)]
