@@ -65,8 +65,6 @@ unsafe fn init(bootinfo: &'static mut BootInfo) {
         sched::init();
     });
     log::info!("Initialization sequence complete");
-    // SAFETY: Initialization is complete, no locks are currently active.
-    unsafe { crate::arch::interrupts::enable() }
 }
 
 // Test runner uses test main.
@@ -79,7 +77,7 @@ fn kmain(bootinfo: &'static mut BootInfo) -> ! {
         init(bootinfo);
     }
 
-    sched::push(Task::uthread(INIT).unwrap());
+    sched::spawn(Task::uthread(INIT).unwrap());
     sched::exit();
 }
 

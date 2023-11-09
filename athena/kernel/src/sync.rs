@@ -25,11 +25,11 @@ mod tests {
         for _ in 0..THREADS {
             let done_threads = Arc::clone(&done_threads);
             let count = Arc::clone(&count);
-            sched::push(Task::kthread(move || {
+            sched::spawn(Task::kthread(move || {
                 for _ in 0..COUNT {
                     let mut count = count.lock();
                     let cached = *count;
-                    sched::switch();
+                    sched::yield_now();
                     *count = cached + 1;
                 }
                 done_threads.signal();

@@ -25,7 +25,7 @@ impl Semaphore {
     /// Increments the count, potentially unblocking a thread.
     pub fn signal(&self) {
         critical_section::with(|cs| {
-            self.blocked_threads.awake_single();
+            self.blocked_threads.awake_one();
             *self.count.borrow_ref_mut(cs) += 1;
         });
     }
