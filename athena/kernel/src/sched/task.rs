@@ -123,7 +123,12 @@ impl TaskHandle {
         super::current()
     }
     /// Wakes up the blocked task.
+    ///
+    /// # Safety
+    ///
+    /// See [`sched::wake_up`](crate::sched::wake_up) for safety requirements.
     pub unsafe fn wake_up(&self) {
+        // SAFETY: Precondition.
         unsafe { super::wake_up(self.clone()) }
     }
 
