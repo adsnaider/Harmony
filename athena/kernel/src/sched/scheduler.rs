@@ -64,6 +64,10 @@ impl Scheduler {
                 .remove()
                 .unwrap()
         };
+        previous
+            .exited
+            .signal(())
+            .expect("Process exited more than once ???");
         if self.tasks.borrow().is_empty() {
             panic!("No more tasks to run :O");
         }
