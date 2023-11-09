@@ -52,6 +52,7 @@ impl BlockQueue {
     pub fn awake_all(&self) {
         critical_section::with(|cs| {
             while let Some(thread) = self.blocked.borrow_ref_mut(cs).pop_front() {
+                // SAFETY: Task was in the queue so it must have been blocked.
                 unsafe {
                     super::wake_up(thread.into());
                 }

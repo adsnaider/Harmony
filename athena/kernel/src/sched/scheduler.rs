@@ -57,6 +57,7 @@ impl Scheduler {
 
     /// Terminates the currently running task and schedules the next one
     pub fn exit(&self) -> ! {
+        // SAFETY: `current` is always a valid task in the tasks tree.
         let previous = unsafe {
             self.tasks
                 .borrow_mut()
