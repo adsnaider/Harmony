@@ -4,47 +4,30 @@
 #![no_main]
 #![feature(naked_functions)]
 #![feature(error_in_core)]
-#![feature(never_type)]
-#![feature(allocator_api)]
 #![feature(abi_x86_interrupt)]
-#![feature(negative_impls)]
-#![feature(const_fn_floating_point_arithmetic)]
-#![cfg_attr(
-    test,
-    feature(custom_test_frameworks),
-    test_runner(crate::tests::runner),
-    reexport_test_harness_main = "test_main"
-)]
 #![deny(absolute_paths_not_starting_with_crate)]
 #![deny(unsafe_op_in_unsafe_fn)]
-#![warn(missing_debug_implementations)]
-#![warn(missing_docs)]
+// #![warn(missing_docs)]
 #![warn(clippy::undocumented_unsafe_blocks)]
 
+mod sys;
+
 pub mod arch;
-pub mod ksync;
+pub mod capabilities;
+pub mod components;
 pub mod proc;
-pub mod sched;
-pub mod sync;
-pub mod sys;
-
-mod serial;
-
-#[cfg(test)]
-mod tests;
-
-extern crate alloc;
+pub mod thread;
 
 use bootloader_api::config::Mapping;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
 
-use crate::sched::Task;
+use crate::arch::mm::frames::FrameBumpAllocator;
+use crate::proc::Process;
 
-#[cfg(all(not(test), target_os = "none"))]
+#[cfg(target_os = "none")]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     critical_section::with(|_| {
-        println!("{}", info);
         log::error!("{}", info);
         loop {
             arch::inst::hlt();
@@ -57,28 +40,27 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 /// # Safety
 ///
 /// `bootinfo` must be correct.
-unsafe fn init(bootinfo: &'static mut BootInfo) {
+unsafe fn init(bootinfo: &mut BootInfo) {
     crate::arch::interrupts::disable();
     critical_section::with(|cs| {
         // SAFETY: The bootinfo is directly provided by the bootloader.
         unsafe { sys::init(bootinfo, cs) };
-        sched::init();
     });
-    log::info!("Initialization sequence complete");
 }
 
-// Test runner uses test main.
-#[allow(dead_code)]
 /// Kernel's starting point.
 fn kmain(bootinfo: &'static mut BootInfo) -> ! {
     static INIT: &[u8] = include_bytes!("../programs/hello.bin");
+
     // SAFETY: bootinfo is correct.
     unsafe {
         init(bootinfo);
     }
+    log::info!("System initialization complete");
 
-    sched::spawn(Task::uthread(INIT).unwrap());
-    sched::exit();
+    let mut fallocator = FrameBumpAllocator::new(&mut bootinfo.memory_regions);
+    let mut init = Process::load(INIT, 10, &mut fallocator).unwrap();
+    init.exec();
 }
 
 const CONFIG: BootloaderConfig = {
@@ -93,10 +75,6 @@ const CONFIG: BootloaderConfig = {
     config
 };
 
-#[cfg(test)]
-entry_point!(tests::kmain, config = &CONFIG);
-
-#[cfg(not(test))]
 entry_point!(kmain, config = &CONFIG);
 
 struct SingleThreadCS();

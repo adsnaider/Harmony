@@ -7,40 +7,24 @@ edition = "2021"
 
 [dependencies]
 bootloader_api = "=0.11.0"
-framed = { path = "../framed" }
-log = "0.4"
 critical-section = { version = "1.1", features = ["restore-state-bool"] }
 thiserror = { version = "1.0", package = "thiserror-core", default-features = false }
+log = "0.4"
 singleton = { path = "../singleton" }
-hashbrown = "0.13.2"
-enum_dispatch = "0.3.12"
-intrusive-collections = "0.9.6"
-
+tailcall = { git = "https://github.com/adsnaider/tailcall.git", branch = "no_std" }
 
 [dependencies.once_cell]
 version = "1.17"
 default-features = false
 features = ["critical-section"]
 
-[dependencies.crossbeam]
-version = "0.8"
-default-features = false
-features = ["alloc"]
-
-[dependencies.futures]
-version = "0.3"
-default-features = false
-features = ["async-await"]
-
-
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 x86_64 = "0.14"
-linked_list_allocator = "0.10"
 bitalloc = { path = "../bitalloc" }
 pic8259 = "0.10.2"
 uart_16550 = "0.2"
 
 [target.'cfg(target_arch = "x86_64")'.dependencies.goblin]
-version = "0.6"
+version = "0.8"
 default-features = false
-features = ["elf32", "elf64", "endian_fd"]
+features = ["elf64"]

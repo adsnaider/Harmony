@@ -9,9 +9,9 @@ use uart_16550::SerialPort;
 
 /// Initializes serial port and logger. sprint! and log macros after this.
 pub(super) fn init() {
-    if let Err(e) = log::set_logger(&LOGGER).map(|()| log::set_max_level(*LOG_LEVEL)) {
-        crate::println!("Couldn't initialize logging services: {e}");
-    }
+    log::set_logger(&LOGGER)
+        .map(|()| log::set_max_level(*LOG_LEVEL))
+        .expect("Error initializing the logger");
 }
 
 static SERIAL: Lazy<Mutex<RefCell<SerialPort>>> = Lazy::new(|| {
@@ -36,7 +36,7 @@ pub fn _print(args: ::core::fmt::Arguments) {
 #[macro_export]
 macro_rules! sprint {
     ($($arg:tt)*) => {
-        $crate::serial::_print(format_args!($($arg)*));
+        $crate::sys::serial::_print(format_args!($($arg)*));
     };
 }
 

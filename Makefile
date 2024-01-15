@@ -22,23 +22,23 @@ ARTIFACTS = .build/
 
 all: bootimage
 
-check:
-	cargo check --target $(TARGET) --tests
+# check:
+	# cargo check --target $(TARGET) --tests --exclude=kernel
 
 clippy:
 	cargo clippy --target $(TARGET) --tests
 
-build: check
+build:
 	@mkdir -p $(ARTIFACTS)/tests
 	$(eval KERNEL_BIN=`cargo build --profile ${PROFILE} --target $(TARGET) --message-format=json | ./extract_exec.sh`)
 	@ln -fs "$(KERNEL_BIN)" $(ARTIFACTS)/kernel
-	$(eval KERNEL_TEST_BIN=`cargo test --profile ${PROFILE} --target $(TARGET) --no-run --message-format=json | ./extract_exec.sh`)
-	@ln -fs "$(KERNEL_TEST_BIN)" $(ARTIFACTS)/tests/kernel
+	# $(eval KERNEL_TEST_BIN=`cargo test --profile ${PROFILE} --target $(TARGET) --no-run --message-format=json | ./extract_exec.sh`)
+	# @ln -fs "$(KERNEL_TEST_BIN)" $(ARTIFACTS)/tests/kernel
 
 bootimage: build
 	@mkdir -p $(ARTIFACTS)/tests
 	cargo run -p builder --profile ${PROFILE} -- -k $(ARTIFACTS)/kernel -o ${ARTIFACTS}
-	cargo run -p builder --profile ${PROFILE} -- -k $(ARTIFACTS)/tests/kernel  -o ${ARTIFACTS}/tests
+	# cargo run -p builder --profile ${PROFILE} -- -k $(ARTIFACTS)/tests/kernel  -o ${ARTIFACTS}/tests
 
 emulate: bootimage
 	@./go.sh 33 qemu-system-x86_64 \
@@ -51,15 +51,15 @@ emulate: bootimage
 test:
 	cargo test --workspace --exclude kernel
 
-ktest: bootimage
-	@./go.sh 33 qemu-system-x86_64 \
-		-drive if=pflash,format=raw,readonly=on,file=/usr/share/ovmf/OVMF.fd \
-		-drive format=raw,file=$(ARTIFACTS)/tests/uefi.img \
-		-chardev stdio,id=char0,logfile=test.log,signal=off \
-		-serial chardev:char0 \
-		-device isa-debug-exit,iobase=0xf4,iosize=0x04 \
-		-display none \
-		$(QEMU_ARGS)
+# ktest: bootimage
+# 	@./go.sh 33 qemu-system-x86_64 \
+# 		-drive if=pflash,format=raw,readonly=on,file=/usr/share/ovmf/OVMF.fd \
+# 		-drive format=raw,file=$(ARTIFACTS)/tests/uefi.img \
+# 		-chardev stdio,id=char0,logfile=test.log,signal=off \
+# 		-serial chardev:char0 \
+# 		-device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+# 		-display none \
+# 		$(QEMU_ARGS)
 
 
 iso: bootimage

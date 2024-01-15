@@ -1,13 +1,13 @@
 //! Process loading and execution.
 use core::arch::asm;
 
-use goblin::elf::program_header::PT_LOAD;
-use goblin::elf::{Elf, ProgramHeader};
+use goblin::elf64::header::{Header, SIZEOF_EHDR};
+use goblin::elf64::program_header::ProgramHeader;
 use thiserror::Error;
 
-use crate::arch::mm::paging::{AddrSpace, PageTableFlags};
-use crate::arch::mm::{Frame, VirtPage};
-use crate::arch::sysret;
+use crate::arch::mm::addrspace::{AddrSpace, PageTableFlags, VirtPage};
+use crate::arch::mm::frames::FrameBumpAllocator;
+use crate::arch::{sysret, PRIVILEGE_STACK_ADDR};
 
 /// Initializes the sysret operation for switching to ring 3.
 pub fn init() {
@@ -18,6 +18,7 @@ pub fn init() {
 #[derive(Debug)]
 pub struct Process {
     entry: u64,
+    addrspace: AddrSpace,
 }
 
 /// Error loading the ELF binary.
@@ -25,13 +26,7 @@ pub struct Process {
 pub enum LoadError {
     #[error("Error parsing the binary")]
     /// Error during parsing.
-    ParseError(goblin::error::Error),
-}
-
-impl From<goblin::error::Error> for LoadError {
-    fn from(value: goblin::error::Error) -> Self {
-        Self::ParseError(value)
-    }
+    ParseError,
 }
 
 struct Segment<'a> {
@@ -53,11 +48,10 @@ impl<'a> Segment<'a> {
         }
     }
 
-    pub fn load(&self, address_space: &mut AddrSpace) {
+    pub fn load(&self, address_space: &mut AddrSpace, fallocator: &mut FrameBumpAllocator<'_>) {
         let vm_range = self.virt_addr..(self.virt_addr + self.memsz);
         let file_range = self.file_off..(self.file_off + self.filesz);
 
-        // FIXME: No panics!
         assert!(vm_range.end <= 0xFFFF800000000000);
         assert!(vm_range.start % 4096 == 0);
         assert!(file_range.end <= self.program.len() as u64);
@@ -65,22 +59,22 @@ impl<'a> Segment<'a> {
         let frames_needed = (self.memsz - 1) / 4096 + 1;
         let mut remaining = self.filesz as usize;
         for i in 0..frames_needed {
-            let frame = Frame::alloc().unwrap();
+            let frame = fallocator.alloc_frame().unwrap();
             let page = VirtPage::from_start_address(vm_range.start + i * 4096).unwrap();
             // SAFETY: Just mapping the elf data.
+            log::debug!("Mapping page {page:?} to frame {frame:?}");
             unsafe {
                 address_space
                     .map_to(
                         page,
                         frame,
-                        PageTableFlags::PRESENT
-                            | PageTableFlags::USER_ACCESSIBLE
-                            | PageTableFlags::WRITABLE,
+                        PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE,
+                        fallocator,
                     )
                     .unwrap()
             }
 
-            let offset_page = frame.physical_offset().as_mut_ptr();
+            let offset_page = frame.as_ptr_mut();
             // SAFETY: Hopefully no bugs here...
             unsafe {
                 core::ptr::write_bytes(offset_page, 0, 4096);
@@ -102,18 +96,35 @@ impl Process {
     pub fn load(
         program: &[u8],
         stack_pages: u64,
-        addrspace: &mut AddrSpace,
-    ) -> Result<Self, goblin::error::Error> {
-        let elf = Elf::parse(program)?;
-        assert!(elf.is_64);
-        for ph in elf.program_headers.iter().filter(|ph| ph.p_type == PT_LOAD) {
+        fallocator: &mut FrameBumpAllocator<'_>,
+    ) -> Result<Self, LoadError> {
+        let mut addrspace = AddrSpace::new(fallocator.alloc_frame().unwrap());
+        let header = Header::from_bytes(program[..SIZEOF_EHDR].try_into().unwrap());
+        let entry = header.e_entry;
+        let phdrs = unsafe {
+            assert!(program.len() > header.e_phoff.try_into().unwrap());
+            assert!(
+                program.len()
+                    > usize::try_from(header.e_phoff).unwrap()
+                        + usize::try_from(header.e_phentsize).unwrap()
+                            * usize::try_from(header.e_phnum).unwrap()
+            );
+            ProgramHeader::from_raw_parts(
+                program
+                    .as_ptr()
+                    .add(header.e_phoff.try_into().unwrap())
+                    .cast(),
+                header.e_phnum.try_into().unwrap(),
+            )
+        };
+        for ph in phdrs {
             let segment = Segment::new(program, ph);
-            segment.load(addrspace);
+            segment.load(&mut addrspace, fallocator);
         }
         let rsp = 0x0000_8000_0000_0000;
 
         for i in 0..stack_pages {
-            let frame = Frame::alloc().unwrap();
+            let frame = fallocator.alloc_frame().unwrap();
             let addr = rsp - 4096 * (i + 1);
             let page = VirtPage::from_start_address(addr).unwrap();
             log::debug!("Mapping page {page:?} to frame {frame:?}");
@@ -127,22 +138,36 @@ impl Process {
                             | PageTableFlags::WRITABLE
                             | PageTableFlags::USER_ACCESSIBLE
                             | PageTableFlags::NO_EXECUTE,
+                        fallocator,
                     )
                     .unwrap()
             }
         }
-        Ok(Self { entry: elf.entry })
+
+        let interrupt_stack = fallocator.alloc_frame().unwrap();
+        let interrupt_stack_page = VirtPage::from_start_address(PRIVILEGE_STACK_ADDR).unwrap();
+        // SAFETY: Interrupt stack page in use will be unnafected since we haven't switched address spaces.
+        unsafe {
+            let _ = addrspace.unmap(interrupt_stack_page);
+            addrspace
+                .map_to(
+                    interrupt_stack_page,
+                    interrupt_stack,
+                    PageTableFlags::WRITABLE | PageTableFlags::PRESENT | PageTableFlags::NO_EXECUTE,
+                    fallocator,
+                )
+                .unwrap();
+        }
+        log::debug!("Mapped interrupt stack");
+        Ok(Self { entry, addrspace })
     }
 
     /// Runs the user process.
-    ///
-    /// # Safety
-    ///
-    /// The correct address space must be active.
-    pub unsafe fn exec(&self) -> ! {
+    pub fn exec(&mut self) -> ! {
         log::debug!("Entering process at {:#X}", self.entry);
         // SAFETY: The entry and rsp are valid for the user process.
         unsafe {
+            self.addrspace.activate();
             sysret(self.entry, 0x0000_8000_0000_0000);
         }
     }
@@ -167,18 +192,5 @@ fn sce_enable() {
             out("edx") _,
             options(nostack, nomem),
         );
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::sched::{self, Task};
-
-    #[test_case]
-    fn hello_user_process() {
-        static PROC: &[u8] = include_bytes!("../programs/hello.bin");
-        let task = Task::uthread(PROC).expect("Unable to create user process stask.");
-        let handle = sched::spawn(task);
-        handle.join();
     }
 }

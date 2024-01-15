@@ -1,13 +1,12 @@
 #![allow(unused)]
 //! Implementaion of the 8253 PIT.
 
+use core::marker::PhantomData;
+
 use x86_64::instructions::port::Port;
 
 /// Frequency of the internal oscillator in Hz.
 pub const OSCILATING_FREQ: f32 = 1193182.0;
-
-static mut CHANNEL_0_PORT: Port<u8> = Port::new(0x40);
-static mut MODE_PORT: Port<u8> = Port::new(0x43);
 
 #[allow(missing_copy_implementations)]
 #[derive(Debug)]
@@ -21,7 +20,7 @@ impl Pit8253 {
     /// # Safety
     ///
     /// There can only be 1 instance of the PIT at any time in the program.
-    pub(super) const unsafe fn new() -> Self {
+    pub(super) const unsafe fn steal() -> Self {
         Self { _private: () }
     }
 
@@ -35,10 +34,9 @@ impl Pit8253 {
 #[derive(Debug)]
 pub struct PitTimer {
     reset_value: u16,
+    channel0: Port<u8>,
+    mode: Port<u8>,
 }
-
-// The timer isn't sync because we could get to race conditions when reading the counter.
-impl !Sync for PitTimer {}
 
 impl PitTimer {
     /// Sets the PIT into a timer interrupt generator that goes off every
@@ -48,11 +46,15 @@ impl PitTimer {
     ///
     /// We currently don't allow a `reset_value` of 0.
     fn init(reset_value: u16) -> Self {
-        let mut this = Self { reset_value };
+        let mut this = Self {
+            reset_value,
+            channel0: Port::new(0x40),
+            mode: Port::new(0x43),
+        };
         // SAFETY: No other side effects.
         critical_section::with(|_cs| unsafe {
             // Set PIT to channel 0, mode 3 in low/high byte.
-            MODE_PORT.write(0b00110110);
+            this.mode.write(0b00110110);
             this.reset(reset_value);
         });
         this
@@ -68,21 +70,21 @@ impl PitTimer {
         // SAFETY: No other side effects, the reset_value is valid.
         critical_section::with(|_cs| unsafe {
             // Low byte
-            CHANNEL_0_PORT.write((reset_value & 0xFF) as u8);
+            self.channel0.write((reset_value & 0xFF) as u8);
             // High byte
-            CHANNEL_0_PORT.write(((reset_value >> 8) & 0xFF) as u8);
+            self.channel0.write(((reset_value >> 8) & 0xFF) as u8);
         });
     }
 
     /// Read's the PIT's current count.
-    pub fn read_count(&self) -> u16 {
+    pub fn read_count(&mut self) -> u16 {
         critical_section::with(|_cs| {
             let mut count: u16;
             // SAFETY: No other side effects.
             unsafe {
-                MODE_PORT.write(0b00000000);
-                count = CHANNEL_0_PORT.read() as u16;
-                count |= (CHANNEL_0_PORT.read() as u16) << 8;
+                self.mode.write(0b00000000);
+                count = self.channel0.read() as u16;
+                count |= (self.channel0.read() as u16) << 8;
             }
             count
         })
@@ -91,10 +93,5 @@ impl PitTimer {
     /// Get's the PIT's configured reset value.
     pub fn reset_value(&self) -> u16 {
         self.reset_value
-    }
-
-    /// Get's the frequency associated with the timer interrupts in Hz.
-    pub const fn freq(reset_value: u16) -> f32 {
-        OSCILATING_FREQ / reset_value as f32
     }
 }

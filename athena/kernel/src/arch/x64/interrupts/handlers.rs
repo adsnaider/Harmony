@@ -2,10 +2,10 @@ use core::arch::asm;
 
 use critical_section::CriticalSection;
 use x86_64::instructions::port::Port;
+use x86_64::registers::control::Cr2;
 use x86_64::structures::idt::{InterruptStackFrame, PageFaultErrorCode};
 
 use super::{KEYBOARD_INT, PICS, TIMER_INT};
-use crate::sched;
 
 macro_rules! push_scratch {
     () => {
@@ -61,7 +61,6 @@ macro_rules! interrupt {
 }
 
 interrupt!(timer_interrupt, || {
-    use crate::sched;
     // SAFETY: An interrupt cannot be interrupted. This is reasonable in single threaded code.
     let cs = unsafe { CriticalSection::new() };
 
@@ -69,19 +68,15 @@ interrupt!(timer_interrupt, || {
     unsafe {
         PICS.borrow_ref_mut(cs).notify_end_of_interrupt(TIMER_INT);
     }
-    sched::yield_now();
 });
 
 interrupt!(keyboard_interrupt, || {
-    use crate::print;
     // SAFETY: An interrupt cannot be interrupted. This is reasonable in single threaded code.
     let cs = unsafe { CriticalSection::new() };
 
     let mut port = Port::new(0x60);
     // SAFETY: No side effects from reading keyboard port.
     let _scancode: u8 = unsafe { port.read() };
-    // print!("{}", scancode);
-    print!("k");
 
     // SAFETY: Notify keyboard interrupt vector.
     unsafe {
@@ -90,17 +85,10 @@ interrupt!(keyboard_interrupt, || {
     }
 });
 
-// EXCEPTIONS
-
 extern "sysv64" fn handle_syscall(code: u64) {
     log::debug!("GOT SYSCALL {code}");
     match code {
-        1 => log::debug!("Write request"), // TODO
-        60 => {
-            log::debug!("Exit request");
-            sched::exit();
-        }
-        _ => {}
+        other => todo!("Syscall {other}"),
     }
 }
 
@@ -116,6 +104,8 @@ pub(super) extern "x86-interrupt" fn syscall_interrupt(stack_frame: InterruptSta
             options(noreturn));
     }
 }
+
+// EXCEPTIONS
 
 pub(super) extern "x86-interrupt" fn non_maskable_interrupt(stack_frame: InterruptStackFrame) {
     panic!("NON MASKABLE INTERRUPT :\n{stack_frame:#?}");
@@ -207,7 +197,8 @@ pub(super) extern "x86-interrupt" fn page_fault(
     stack_frame: InterruptStackFrame,
     error_code: PageFaultErrorCode,
 ) {
-    panic!("EXCEPTION: PAGE FAULT - {error_code:#02X}\n{stack_frame:#?}");
+    let addrs: *const () = Cr2::read().as_ptr();
+    panic!("EXCEPTION: PAGE FAULT @ {addrs:#?} - {error_code:#02X}\n{stack_frame:#?}");
 }
 
 pub(super) extern "x86-interrupt" fn double_fault(

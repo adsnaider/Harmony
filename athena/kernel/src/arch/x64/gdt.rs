@@ -96,24 +96,22 @@ pub fn init() {
 ///
 /// The `rip` and `rsp` must be valid entrypoints for a user space process loaded
 /// into the current address space.
-pub unsafe fn sysret(rip: u64, rsp: u64) -> ! {
+#[naked]
+pub unsafe extern "C" fn sysret(rip: u64, rsp: u64) -> ! {
     // SAFETY: This should be safe so long as rip and rsp are valid.
     unsafe {
         asm!(
+            "mov ax, (4 * 8) | 3",
             "mov ds, ax",
             "mov es, ax",
             "mov fs, ax",
             "mov gs, ax",
-            "push rax", // SS is handled by iret
-            "push r11", // stack pointer
-            "push 0x202", // rflags
-            "push rcx", // CS with RPL 3
-            "push r12",
+            "push (4 * 8) | 3", // SS is handled by iret
+            "push rsi",         // Stack pointer
+            "push 0x202",       // rflags
+            "push (3 * 8) | 3", // CS with RPL 3
+            "push rdi",
             "iretq",
-            in("rax") GDT.1.user_data_selector.0,
-            in("rcx") GDT.1.user_code_selector.0,
-            in("r11") rsp,
-            in("r12") rip,
             options(noreturn)
         )
     }

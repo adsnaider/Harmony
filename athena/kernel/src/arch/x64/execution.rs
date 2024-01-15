@@ -3,7 +3,7 @@
 use core::arch::asm;
 use core::ptr::addr_of_mut;
 
-use super::mm::paging::AddrSpace;
+use super::mm::addrspace::AddrSpace;
 
 /// Initializes the hardware capabilities for context switching.
 pub fn init() {
@@ -16,12 +16,12 @@ pub fn init() {
 /// used to switch the current thread of execution to a different context.
 #[derive(Debug)]
 #[repr(C)]
-pub struct Context {
+pub struct ExecutionContext {
     stack_top: u64,
     address_space: AddrSpace,
 }
 
-impl Context {
+impl ExecutionContext {
     /// Creates an uninitialized context that cannot be jumped into.
     ///
     /// Note that this function doesn't set the registers to anything meaningful, so it wouldn't be
@@ -87,7 +87,7 @@ impl Context {
     ///
     /// * The `restore` pointer must be a valid `Context.
     pub unsafe fn jump(restore: *const Self) -> ! {
-        let mut store = Context::uninit();
+        let mut store = ExecutionContext::uninit();
         // SAFETY: Preconditions
         unsafe {
             Self::switch(restore, addr_of_mut!(store));

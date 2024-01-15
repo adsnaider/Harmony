@@ -1,7 +1,5 @@
 [workspace]
-members = [
-  "athena/*"
-]
+members = ["athena/*"]
 
 resolver = "2"
 default-members = ["athena/kernel"]
