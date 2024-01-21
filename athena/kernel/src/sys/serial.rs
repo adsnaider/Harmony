@@ -77,6 +77,7 @@ static LOGGER: Logger = Logger {};
 static LOG_LEVEL: Lazy<LevelFilter> = Lazy::new(|| {
     let level = option_env!("KERNEL_LOG_LEVEL").unwrap_or("info");
     match level {
+        "trace" => LevelFilter::Trace,
         "debug" => LevelFilter::Debug,
         "info" => LevelFilter::Info,
         "warn" => LevelFilter::Warn,
