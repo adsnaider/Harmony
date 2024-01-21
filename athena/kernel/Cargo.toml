@@ -11,7 +11,7 @@ critical-section = { version = "1.1", features = ["restore-state-bool"] }
 thiserror = { version = "1.0", package = "thiserror-core", default-features = false }
 log = "0.4"
 singleton = { path = "../singleton" }
-tailcall = { git = "https://github.com/adsnaider/tailcall.git", branch = "no_std" }
+tailcall = "1.0.1"
 
 [dependencies.once_cell]
 version = "1.17"
