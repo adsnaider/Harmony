@@ -22,13 +22,14 @@ ARTIFACTS = .build/
 
 all: bootimage
 
-# check:
-	# cargo check --target $(TARGET) --tests --exclude=kernel
+check:
+	cargo check --target $(TARGET) --tests --exclude=kernel
 
 clippy:
 	cargo clippy --target $(TARGET) --tests
 
 build:
+	RUSTFLAGS="-C relocation-model=static" cargo build --release -p booter --target $(TARGET)
 	@mkdir -p $(ARTIFACTS)/tests
 	$(eval KERNEL_BIN=`cargo build --profile ${PROFILE} --target $(TARGET) --message-format=json | ./extract_exec.sh`)
 	@ln -fs "$(KERNEL_BIN)" $(ARTIFACTS)/kernel

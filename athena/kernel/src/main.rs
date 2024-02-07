@@ -20,6 +20,7 @@ pub mod thread;
 
 use bootloader_api::config::Mapping;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
+use include_bytes_aligned::include_bytes_aligned;
 
 use crate::arch::mm::frames::FrameBumpAllocator;
 use crate::proc::Process;
@@ -50,7 +51,7 @@ unsafe fn init(bootinfo: &mut BootInfo) {
 
 /// Kernel's starting point.
 fn kmain(bootinfo: &'static mut BootInfo) -> ! {
-    static INIT: &[u8] = include_bytes!("../programs/hello.bin");
+    static INIT: &[u8] = include_bytes_aligned!(8, "../programs/init");
 
     // SAFETY: bootinfo is correct.
     unsafe {

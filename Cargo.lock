@@ -121,6 +121,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "booter"
+version = "0.1.0"
+dependencies = [
+ "librs",
+]
+
+[[package]]
 name = "bootloader"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -363,6 +370,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "include_bytes_aligned"
+version = "0.1.2"
+source = "git+https://github.com/adsnaider/include_bytes_aligned.git?branch=no_std#a5a56cbf0fd941477c82786dcdc12cbd9aceecc2"
+
+[[package]]
 name = "js-sys"
 version = "0.3.67"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -379,6 +391,7 @@ dependencies = [
  "bootloader_api",
  "critical-section",
  "goblin",
+ "include_bytes_aligned",
  "log",
  "once_cell",
  "pic8259",
@@ -394,6 +407,10 @@ name = "libc"
 version = "0.2.151"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "302d7ab3130588088d277783b1e2d2e10c9e9e4a16dd9050e6ec93fb3e7048f4"
+
+[[package]]
+name = "librs"
+version = "0.1.0"
 
 [[package]]
 name = "linux-raw-sys"

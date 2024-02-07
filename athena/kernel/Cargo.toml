@@ -12,6 +12,7 @@ thiserror = { version = "1.0", package = "thiserror-core", default-features = fa
 log = "0.4"
 singleton = { path = "../singleton" }
 tailcall = "1.0.1"
+include_bytes_aligned = { git = "https://github.com/adsnaider/include_bytes_aligned.git", branch = "no_std" }
 
 [dependencies.once_cell]
 version = "1.17"

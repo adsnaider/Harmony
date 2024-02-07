@@ -108,6 +108,7 @@ impl AddrSpace {
         flags: PageTableFlags,
         allocator: &mut impl FrameAllocator<Size4KiB>,
     ) -> Result<(), MapToError<Size4KiB>> {
+        log::trace!("Mapping page {page:?} to frame {frame:?} - ({flags:?})");
         // SAFETY: Conditions passed to the caller.
         // SAFETY: critical section and non-reentrant function prevednt mutable aliasing
         critical_section::with(|cs| unsafe {
@@ -172,6 +173,10 @@ pub struct VirtPage(Page<Size4KiB>);
 impl VirtPage {
     pub fn from_start_address(addr: u64) -> Result<Self, AddressNotAligned> {
         Ok(Self(Page::from_start_address(VirtAddr::new(addr))?))
+    }
+
+    pub fn containing_address(addr: u64) -> Self {
+        Self(Page::containing_address(VirtAddr::new(addr)))
     }
 }
 
