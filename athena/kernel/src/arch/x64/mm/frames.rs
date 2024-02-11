@@ -1,9 +1,11 @@
 //! Physical frame allocation and management.
 
-use bootloader_api::info::{MemoryRegion, MemoryRegionKind, MemoryRegions};
 use thiserror::Error;
-use x86_64::structures::paging::{FrameAllocator, PageSize, PhysFrame, Size4KiB};
+use x86_64::structures::paging::{FrameAllocator, PhysFrame, Size4KiB};
 use x86_64::{PhysAddr, VirtAddr};
+
+use super::retyping::{RetypeError, UntypedFrame};
+use crate::arch::PAGE_SIZE;
 
 pub static PHYSICAL_MEMORY_OFFSET: VirtAddr = {
     // SAFETY: Address is canonical.
@@ -27,13 +29,7 @@ impl From<RawFrame> for PhysFrame<Size4KiB> {
     }
 }
 
-/// Returns true if the memory region is generally usable.
-fn is_region_usable(region: &MemoryRegion) -> bool {
-    matches!(region.kind, MemoryRegionKind::Usable) && region.end > region.start
-}
-
-pub struct FrameBumpAllocator<'a> {
-    mmap: &'a mut MemoryRegions,
+pub struct FrameBumpAllocator {
     index: usize,
 }
 
@@ -43,35 +39,31 @@ pub enum AllocError {
     OutOfMemory,
 }
 
-impl<'a> FrameBumpAllocator<'a> {
-    pub fn new(mmap: &'a mut MemoryRegions) -> Self {
-        Self { mmap, index: 0 }
+impl FrameBumpAllocator {
+    pub fn new() -> Self {
+        Self { index: 0 }
     }
 
-    pub fn alloc_frame(&mut self) -> Result<RawFrame, AllocError> {
-        let (idx, region) = self
-            .mmap
-            .iter_mut()
-            .enumerate()
-            .skip(self.index)
-            .filter(|(num, region)| is_region_usable(region))
-            .next()
-            .ok_or(AllocError::OutOfMemory)?;
-
-        self.index = idx;
-        let start = region.start;
-        region.start += Size4KiB::SIZE;
-        assert!(region.start <= region.end);
-        Ok(RawFrame(
-            PhysFrame::from_start_address(PhysAddr::new(start))
-                .expect("Regions should be 4k aligned"),
-        ))
+    pub fn alloc_frame(&mut self) -> Result<UntypedFrame<'static>, AllocError> {
+        let start = self.index * PAGE_SIZE;
+        let frame = loop {
+            let frame = RawFrame::from_index(self.index).into_untyped();
+            self.index += 1;
+            match frame {
+                Ok(frame) => break frame,
+                Err(RetypeError::OutOfBounds) => return Err(AllocError::OutOfMemory),
+                Err(_) => {}
+            }
+        };
+        Ok(frame)
     }
 }
 
-unsafe impl FrameAllocator<Size4KiB> for FrameBumpAllocator<'_> {
+unsafe impl FrameAllocator<Size4KiB> for FrameBumpAllocator {
     fn allocate_frame(&mut self) -> Option<PhysFrame<Size4KiB>> {
-        self.alloc_frame().ok().map(|frame| frame.into())
+        self.alloc_frame()
+            .ok()
+            .map(|frame| frame.into_kernel().into_raw().into())
     }
 }
 
@@ -94,5 +86,10 @@ impl RawFrame {
 
     pub fn index(&self) -> usize {
         self.0.start_address().as_u64() as usize / Self::size()
+    }
+
+    pub fn from_index(idx: usize) -> Self {
+        let start_address = (Self::size() * idx) as u64;
+        Self(PhysFrame::from_start_address(PhysAddr::new(start_address)).unwrap())
     }
 }

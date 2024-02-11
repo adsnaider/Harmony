@@ -16,7 +16,7 @@ pub mod serial;
 /// # Safety
 ///
 /// The information in `bootinfo` must be accurate.
-pub(super) unsafe fn init(bootinfo: &mut BootInfo, cs: CriticalSection) {
+pub(super) unsafe fn init(bootinfo: &'static mut BootInfo, cs: CriticalSection) {
     // SAFETY: Bootloader passed the framebuffer correctly.
     serial::init();
     log::info!("Hello, logging!");
@@ -38,5 +38,5 @@ pub(super) unsafe fn init(bootinfo: &mut BootInfo, cs: CriticalSection) {
 
     // SAFETY: The physical memory offset is correct, well-aligned, and canonical, and the memory
     // map is correct from the bootloader.
-    unsafe { crate::arch::init(cs) }
+    unsafe { crate::arch::init(cs, &mut bootinfo.memory_regions) }
 }

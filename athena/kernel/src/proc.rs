@@ -9,7 +9,7 @@ use crate::arch::mm::addrspace::{AddrSpace, PageTableFlags, VirtPage};
 use crate::arch::mm::frames::FrameBumpAllocator;
 use crate::arch::{sysret, PRIVILEGE_STACK_ADDR};
 
-/// Initializes the sysret operation for switching to ring 3.
+/// Initializes the syscall/sysret operation for switching to ring 0/3.
 pub fn init() {
     sce_enable();
 }
@@ -39,7 +39,7 @@ impl<'prog, 'head> Segment<'prog, 'head> {
         Self { program, header }
     }
 
-    pub fn load(&self, address_space: &mut AddrSpace, fallocator: &mut FrameBumpAllocator<'_>) {
+    pub fn load(&self, address_space: &mut AddrSpace, fallocator: &mut FrameBumpAllocator) {
         let vm_range = self.header.p_vaddr..(self.header.p_vaddr + self.header.p_memsz);
         let file_range = self.header.p_offset..(self.header.p_offset + self.header.p_filesz);
 
@@ -49,7 +49,7 @@ impl<'prog, 'head> Segment<'prog, 'head> {
         let mut vcurrent = vm_range.start;
         let mut fcurrent = file_range.start;
         while vcurrent < vm_range.end {
-            let frame = fallocator.alloc_frame().unwrap();
+            let frame = fallocator.alloc_frame().unwrap().into_user().into_raw();
             let page = VirtPage::containing_address(vcurrent);
             // SAFETY: Just mapping the elf data.
             let flags = self.header.p_flags;
@@ -96,8 +96,9 @@ impl Process {
     pub fn load(
         program: &[u8],
         stack_pages: u64,
-        fallocator: &mut FrameBumpAllocator<'_>,
+        fallocator: &mut FrameBumpAllocator,
     ) -> Result<Self, LoadError> {
+        // FIXME: This should create a new thread/component alltogether!
         let mut addrspace = AddrSpace::new(fallocator.alloc_frame().unwrap());
         let header = Header::from_bytes(program[..SIZEOF_EHDR].try_into().unwrap());
         let entry = header.e_entry;
@@ -125,7 +126,7 @@ impl Process {
         let rsp = 0x0000_8000_0000_0000;
 
         for i in 0..stack_pages {
-            let frame = fallocator.alloc_frame().unwrap();
+            let frame = fallocator.alloc_frame().unwrap().into_user().into_raw();
             let addr = rsp - 4096 * (i + 1);
             let page = VirtPage::from_start_address(addr).unwrap();
             // SAFETY: Just mapping the stack pages.
@@ -144,7 +145,7 @@ impl Process {
             }
         }
 
-        let interrupt_stack = fallocator.alloc_frame().unwrap();
+        let interrupt_stack = fallocator.alloc_frame().unwrap().into_kernel().into_raw();
         let interrupt_stack_page = VirtPage::from_start_address(PRIVILEGE_STACK_ADDR).unwrap();
         // SAFETY: Interrupt stack page in use will be unnafected since we haven't switched address spaces.
         unsafe {

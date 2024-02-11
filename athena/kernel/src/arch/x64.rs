@@ -1,4 +1,5 @@
 //! x86-64-specifc code and constructs.
+use bootloader_api::info::MemoryRegions;
 use critical_section::CriticalSection;
 
 pub mod execution;
@@ -20,7 +21,7 @@ mod timer;
 /// # Panics
 ///
 /// If `init` is called more than once.
-pub unsafe fn init(cs: CriticalSection) {
+pub unsafe fn init(cs: CriticalSection, memory_map: &'static mut MemoryRegions) {
     gdt::init();
     log::info!("Initialized the Global Decriptor Table");
     interrupts::init(cs);
@@ -28,6 +29,7 @@ pub unsafe fn init(cs: CriticalSection) {
 
     execution::init();
 
+    mm::retyping::init(memory_map);
     // SAFETY: We only construct a PIT here.
     unsafe {
         timer::Pit8253::steal().into_timer(5966);

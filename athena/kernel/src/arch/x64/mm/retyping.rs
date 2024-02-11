@@ -1,15 +1,24 @@
 //! Memory retyping implementation
 
-use core::mem::MaybeUninit;
+use core::mem::{ManuallyDrop, MaybeUninit};
 use core::sync::atomic::{AtomicU16, AtomicU8, Ordering};
 
 use bootloader_api::info::{MemoryRegionKind, MemoryRegions};
+use once_cell::sync::OnceCell;
 use thiserror::Error;
 
 use super::frames::RawFrame;
 
 pub struct RetypeTable<'a> {
     table: &'a [Entry],
+}
+
+static RETYPE_TBL: OnceCell<RetypeTable<'static>> = OnceCell::new();
+
+pub fn init(memory_map: &'static mut MemoryRegions) {
+    RETYPE_TBL
+        .set(unsafe { RetypeTable::from_mmap(memory_map).unwrap() })
+        .unwrap_or_else(|_| panic!("Double initialization"));
 }
 
 #[derive(Error, Debug)]
@@ -26,9 +35,15 @@ pub enum RetypeError {
     OutOfBounds,
 }
 
-impl RetypeTable<'_> {
+#[derive(Error, Debug)]
+pub enum EntryError {
+    #[error("The frame extends past the end of available memory")]
+    OutOfBounds,
+}
+
+impl<'a> RetypeTable<'a> {
     pub unsafe fn from_mmap(
-        memory_map: &mut MemoryRegions,
+        memory_map: &'static mut MemoryRegions,
     ) -> Result<RetypeTable<'static>, RetypeInitError> {
         let nframes = memory_map.iter().fold(0, |last, region| {
             usize::max(last, region.end as usize / 4096)
@@ -74,7 +89,11 @@ impl RetypeTable<'_> {
         Ok(RetypeTable { table: store })
     }
 
-    pub fn entry(&self, frame: RawFrame) -> Result<UntypedFrame, RetypeError> {
+    fn raw_entry(&self, frame: RawFrame) -> Result<&'a Entry, EntryError> {
+        self.table.get(frame.index()).ok_or(EntryError::OutOfBounds)
+    }
+
+    pub fn entry(&self, frame: RawFrame) -> Result<UntypedFrame<'a>, RetypeError> {
         let entry = self
             .table
             .get(frame.index())
@@ -92,14 +111,39 @@ impl RetypeTable<'_> {
         }
     }
 }
+impl RawFrame {
+    pub fn into_untyped(self) -> Result<UntypedFrame<'static>, RetypeError> {
+        RETYPE_TBL.get().unwrap().entry(self)
+    }
 
-#[derive(Debug)]
-pub struct RetypeEntry {
-    frame: RawFrame,
-    ty: StateValue,
+    pub unsafe fn as_kernel_frame(&self) -> KernelFrame<'static> {
+        let entry = RETYPE_TBL
+            .get()
+            .unwrap()
+            .table
+            .get(self.index())
+            .expect("Frame out of bounds");
+        entry.counter.fetch_add(1, Ordering::Release);
+        KernelFrame {
+            entry,
+            frame: *self,
+        }
+    }
+
+    pub unsafe fn as_user_frame(&self) -> UserFrame<'static> {
+        let entry = RETYPE_TBL
+            .get()
+            .unwrap()
+            .table
+            .get(self.index())
+            .expect("Frame out of bounds");
+        entry.counter.fetch_add(1, Ordering::Release);
+        UserFrame {
+            entry,
+            frame: *self,
+        }
+    }
 }
-
-impl RetypeEntry {}
 
 #[derive(Debug)]
 pub struct UntypedFrame<'a> {
@@ -141,8 +185,22 @@ impl<'a> UntypedFrame<'a> {
             entry: &self.entry,
         }
     }
+
     pub fn raw(&self) -> RawFrame {
         self.frame
+    }
+}
+
+impl UntypedFrame<'static> {
+    pub fn into_raw(self) -> RawFrame {
+        // Note, we don't drop this, so the underlying type remains
+        let this = ManuallyDrop::new(self);
+        this.frame
+    }
+
+    pub unsafe fn from_raw(raw: RawFrame) -> Result<Self, EntryError> {
+        let entry = RETYPE_TBL.get().unwrap().raw_entry(raw)?;
+        Ok(Self { frame: raw, entry })
     }
 }
 
@@ -162,12 +220,38 @@ impl<'a> KernelFrame<'a> {
     }
 }
 
+impl KernelFrame<'static> {
+    pub fn into_raw(self) -> RawFrame {
+        // Note, we don't drop this, so the underlying type remains
+        let this = ManuallyDrop::new(self);
+        this.frame
+    }
+
+    pub unsafe fn from_raw(raw: RawFrame) -> Result<Self, EntryError> {
+        let entry = RETYPE_TBL.get().unwrap().raw_entry(raw)?;
+        Ok(Self { frame: raw, entry })
+    }
+}
+
 impl<'a> UserFrame<'a> {
     pub fn try_into_untyped(self) -> Result<UntypedFrame<'a>, ToUntypedError> {
         todo!();
     }
     pub fn raw(&self) -> RawFrame {
         self.frame
+    }
+}
+
+impl UserFrame<'static> {
+    pub fn into_raw(self) -> RawFrame {
+        // Note, we don't drop this, so the underlying type remains
+        let this = ManuallyDrop::new(self);
+        this.frame
+    }
+
+    pub unsafe fn from_raw(raw: RawFrame) -> Result<Self, EntryError> {
+        let entry = RETYPE_TBL.get().unwrap().raw_entry(raw)?;
+        Ok(Self { frame: raw, entry })
     }
 }
 

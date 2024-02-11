@@ -10,7 +10,9 @@ pub struct KPtr<T> {
     _value: PhantomData<T>,
 }
 
-impl<T: Copy> KPtr<T> {
+pub unsafe trait TrivialDrop {}
+
+impl<T: TrivialDrop> KPtr<T> {
     /// Creates a new kernel poiter of type `T`.
     ///
     /// # Safety
@@ -28,6 +30,22 @@ impl<T: Copy> KPtr<T> {
             frame,
             _value: PhantomData,
         }
+    }
+}
+
+impl<T> KPtr<T> {
+    pub fn as_ptr(&self) -> *const T {
+        self.frame.raw().as_ptr()
+    }
+
+    pub fn as_ptr_mut(&self) -> *mut T {
+        self.frame.raw().as_ptr_mut()
+    }
+}
+
+impl<T> AsRef<T> for KPtr<T> {
+    fn as_ref(&self) -> &T {
+        &*self
     }
 }
 

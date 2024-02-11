@@ -12,6 +12,7 @@ use x86_64::structures::paging::{
 use x86_64::{PhysAddr, VirtAddr};
 
 use super::frames::RawFrame;
+use super::retyping::{KernelFrame, UntypedFrame};
 
 /// Flags for page mapping.
 pub type PageTableFlags = x86_64::structures::paging::PageTableFlags;
@@ -42,22 +43,24 @@ pub(super) fn init(pmo: VirtAddr, _cs: CriticalSection) {
 }
 
 /// An isolated virtual memory space.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 #[repr(transparent)]
 pub struct AddrSpace {
     l4_frame: RawFrame,
 }
 
+// FIXME: Better frame management here!
 impl AddrSpace {
     /// Creates a virtual space.
     ///
     /// The virtual space will only include the kernel pages.
     ///
     /// Note that kernel pages are not user-accessible (i.e. from Ring 3).
-    pub fn new(l4_frame: RawFrame) -> Self {
+    pub fn new(l4_frame: UntypedFrame<'static>) -> Self {
+        let frame = l4_frame.into_kernel().into_raw();
         let l4_table: &mut MaybeUninit<PageTable> =
             // SAFETY: Size and alignment are valid for MaybeUninit<PageTable>
-            unsafe { &mut *l4_frame.as_ptr_mut() };
+            unsafe { &mut *frame.as_ptr_mut() };
 
         let l4_table = l4_table.write(PageTable::new());
         let current_table =
@@ -67,13 +70,13 @@ impl AddrSpace {
             l4_table[i] = current_table[i].clone();
         }
         // SAFETY: Table is initialized and memory is exclusively allocated.
-        Self { l4_frame }
+        Self { l4_frame: frame }
     }
 
     /// Returns the current virtual address space.
     pub fn current() -> Self {
         AddrSpace {
-            l4_frame: Cr3::read().0.into(),
+            l4_frame: unsafe { RawFrame::from(Cr3::read().0) },
         }
     }
 
@@ -84,7 +87,7 @@ impl AddrSpace {
     /// Obvious perils of changing memory spaces.
     pub unsafe fn activate(&mut self) -> Self {
         let (old_frame, flags) = Cr3::read();
-        let old_frame = old_frame.into();
+        let old_frame = unsafe { RawFrame::from(old_frame) };
         if self.l4_frame != old_frame {
             // SAFETY: Precondition.
             unsafe { Cr3::write(self.l4_frame.into(), flags) }

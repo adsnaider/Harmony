@@ -44,7 +44,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 /// # Safety
 ///
 /// `bootinfo` must be correct.
-unsafe fn init(bootinfo: &mut BootInfo) {
+unsafe fn init(bootinfo: &'static mut BootInfo) {
     crate::arch::interrupts::disable();
     critical_section::with(|cs| {
         // SAFETY: The bootinfo is directly provided by the bootloader.
@@ -62,7 +62,7 @@ fn kmain(bootinfo: &'static mut BootInfo) -> ! {
     }
     log::info!("System initialization complete");
 
-    let mut fallocator = FrameBumpAllocator::new(&mut bootinfo.memory_regions);
+    let mut fallocator = FrameBumpAllocator::new();
     let mut init = Process::load(INIT, 10, &mut fallocator).unwrap();
     init.exec();
 }

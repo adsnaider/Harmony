@@ -1,14 +1,14 @@
-use core::ptr::NonNull;
-
 use elain::Align;
 use tailcall::tailcall;
 
 use super::caps::Capability;
+use crate::arch::mm::kptr::KPtr;
 use crate::arch::PAGE_SIZE;
 
 const NODE_SIZE: usize = 64;
 const NUM_NODES_PER_ENTRY: usize = PAGE_SIZE / NODE_SIZE;
 
+#[derive(Debug, Clone)]
 pub struct CapabilityEntry {
     nodes: [CapabilityNode; NUM_NODES_PER_ENTRY],
     _align: Align<PAGE_SIZE>,
@@ -18,14 +18,14 @@ pub struct CapabilityEntry {
 #[derive(Debug, Clone)]
 struct CapabilityNode {
     capability: Capability,
-    child: Option<NonNull<CapabilityEntry>>,
+    child: Option<KPtr<CapabilityEntry>>,
     _align: Align<NODE_SIZE>,
 }
 
 #[repr(transparent)]
 #[derive(Debug, Clone)]
 pub struct CapabilityTable {
-    root: Option<NonNull<CapabilityEntry>>,
+    root: Option<KPtr<CapabilityEntry>>,
 }
 
 #[repr(transparent)]
@@ -37,7 +37,7 @@ impl CapabilityTable {
     }
 
     pub fn get(&self, id: CapId) -> Option<&Capability> {
-        CapabilityEntry::get(unsafe { self.root?.as_ref() }, id.0)
+        CapabilityEntry::get(self.root.as_ref()?.as_ref(), id.0)
     }
 }
 
@@ -57,7 +57,7 @@ impl CapabilityEntry {
         if id == 0 {
             Some(&node.capability)
         } else {
-            let child = unsafe { this.nodes[offset].child?.as_ref() };
+            let child = this.nodes[offset].child.as_ref()?.as_ref();
             Self::get(child, id)
         }
     }
@@ -70,11 +70,11 @@ impl CapabilityEntry {
         todo!();
     }
 
-    pub fn link(&mut self, offset: usize, entry: NonNull<CapabilityEntry>) {
+    pub fn link(&mut self, offset: usize, entry: KPtr<CapabilityEntry>) {
         todo!();
     }
 
-    pub fn unlink(&mut self, offset: usize) -> Option<NonNull<CapabilityEntry>> {
+    pub fn unlink(&mut self, offset: usize) -> Option<KPtr<CapabilityEntry>> {
         todo!();
     }
 }

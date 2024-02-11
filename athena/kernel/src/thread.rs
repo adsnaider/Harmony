@@ -1,23 +1,47 @@
-use core::ptr::NonNull;
+use core::ptr::{addr_of, addr_of_mut};
+use core::sync::atomic::{AtomicPtr, Ordering};
 
 use elain::Align;
 
 use crate::arch::execution::ExecutionContext;
+use crate::arch::mm::kptr::{KPtr, TrivialDrop};
 use crate::arch::PAGE_SIZE;
-use crate::components::Component;
+use crate::capabilities::trie::CapabilityTable;
 
+static ACTIVE: AtomicPtr<Thread> = AtomicPtr::new(core::ptr::null_mut());
+
+#[repr(C)]
+#[derive(Debug)]
 pub struct Thread {
     execution_context: ExecutionContext,
-    resources: Component,
+    capabilities: CapabilityTable,
     _align: Align<PAGE_SIZE>,
 }
 
 impl Thread {
-    pub fn new(context: ExecutionContext, resources: NonNull<Component>) -> Self {
-        todo!();
+    pub fn new(capabilities: CapabilityTable, execution_context: ExecutionContext) -> Self {
+        Self {
+            capabilities,
+            execution_context,
+            _align: Align::default(),
+        }
     }
 
-    pub fn activate(&self) {
-        todo!();
+    pub fn activate(this: &KPtr<Self>) {
+        let new = this.as_ptr_mut();
+        let old = ACTIVE.swap(new, Ordering::Release);
+
+        unsafe {
+            if old.is_null() {
+                ExecutionContext::jump(addr_of!((*new).execution_context))
+            } else {
+                ExecutionContext::switch(
+                    addr_of!((*new).execution_context),
+                    addr_of_mut!((*old).execution_context),
+                )
+            }
+        }
     }
 }
+
+unsafe impl TrivialDrop for Thread {}
