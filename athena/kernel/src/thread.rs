@@ -1,15 +1,15 @@
 use core::ptr::NonNull;
 
-use crate::arch::execution::ExecutionContext;
-use crate::components::Component;
+use elain::Align;
 
-#[repr(transparent)]
-#[derive(Debug, Copy, Clone)]
-pub struct Tid(u64);
+use crate::arch::execution::ExecutionContext;
+use crate::arch::PAGE_SIZE;
+use crate::components::Component;
 
 pub struct Thread {
     execution_context: ExecutionContext,
     resources: Component,
+    _align: Align<PAGE_SIZE>,
 }
 
 impl Thread {

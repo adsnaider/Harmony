@@ -1,22 +1,25 @@
 use core::ptr::NonNull;
 
+use elain::Align;
 use tailcall::tailcall;
 
 use super::caps::Capability;
+use crate::arch::PAGE_SIZE;
 
-const NUM_NODES_PER_ENTRY: usize = 4096 / 64;
+const NODE_SIZE: usize = 64;
+const NUM_NODES_PER_ENTRY: usize = PAGE_SIZE / NODE_SIZE;
 
-#[repr(align(4096))]
 pub struct CapabilityEntry {
     nodes: [CapabilityNode; NUM_NODES_PER_ENTRY],
+    _align: Align<PAGE_SIZE>,
 }
 
 // TODO: Padding of this is likely not ideal...
-#[repr(align(64))]
 #[derive(Debug, Clone)]
 struct CapabilityNode {
     capability: Capability,
     child: Option<NonNull<CapabilityEntry>>,
+    _align: Align<NODE_SIZE>,
 }
 
 #[repr(transparent)]
@@ -42,6 +45,7 @@ impl CapabilityEntry {
     pub fn empty() -> Self {
         Self {
             nodes: core::array::from_fn(|_| CapabilityNode::empty()),
+            _align: Default::default(),
         }
     }
 
@@ -58,7 +62,7 @@ impl CapabilityEntry {
         }
     }
 
-    pub fn insert(&mut self, offset: usize, capability: Capability) -> Result<(), Capability> {
+    pub fn set(&mut self, offset: usize, capability: Capability) -> Option<Capability> {
         todo!()
     }
 
@@ -80,13 +84,26 @@ impl CapabilityNode {
         Self {
             capability: Capability::Empty,
             child: None,
+            _align: Default::default(),
         }
     }
 }
 
 const _SIZE_AND_ALIGNMENT_REQUIRED: () = {
-    assert!(core::mem::size_of::<CapabilityEntry>() == 4096);
-    assert!(core::mem::align_of::<CapabilityEntry>() == 4096);
-    assert!(core::mem::size_of::<CapabilityNode>() == 64);
-    assert!(core::mem::align_of::<CapabilityNode>() == 64);
+    assert!(core::mem::size_of::<CapabilityEntry>() == PAGE_SIZE);
+    assert!(core::mem::align_of::<CapabilityEntry>() == PAGE_SIZE);
+    assert!(core::mem::size_of::<CapabilityNode>() == NODE_SIZE);
+    assert!(core::mem::align_of::<CapabilityNode>() == NODE_SIZE);
 };
+
+impl From<usize> for CapId {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+impl From<CapId> for usize {
+    fn from(value: CapId) -> Self {
+        value.0
+    }
+}

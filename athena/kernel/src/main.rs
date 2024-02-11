@@ -5,10 +5,13 @@
 #![feature(naked_functions)]
 #![feature(error_in_core)]
 #![feature(abi_x86_interrupt)]
+#![feature(inline_const)]
 #![deny(absolute_paths_not_starting_with_crate)]
 #![deny(unsafe_op_in_unsafe_fn)]
 // #![warn(missing_docs)]
 #![warn(clippy::undocumented_unsafe_blocks)]
+
+pub(crate) mod util;
 
 mod sys;
 

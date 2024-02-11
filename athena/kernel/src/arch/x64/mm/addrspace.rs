@@ -11,7 +11,7 @@ use x86_64::structures::paging::{
 };
 use x86_64::{PhysAddr, VirtAddr};
 
-use super::frames::Frame;
+use super::frames::RawFrame;
 
 /// Flags for page mapping.
 pub type PageTableFlags = x86_64::structures::paging::PageTableFlags;
@@ -45,7 +45,7 @@ pub(super) fn init(pmo: VirtAddr, _cs: CriticalSection) {
 #[derive(Debug, Eq, PartialEq)]
 #[repr(transparent)]
 pub struct AddrSpace {
-    l4_frame: Frame,
+    l4_frame: RawFrame,
 }
 
 impl AddrSpace {
@@ -54,7 +54,7 @@ impl AddrSpace {
     /// The virtual space will only include the kernel pages.
     ///
     /// Note that kernel pages are not user-accessible (i.e. from Ring 3).
-    pub fn new(l4_frame: Frame) -> Self {
+    pub fn new(l4_frame: RawFrame) -> Self {
         let l4_table: &mut MaybeUninit<PageTable> =
             // SAFETY: Size and alignment are valid for MaybeUninit<PageTable>
             unsafe { &mut *l4_frame.as_ptr_mut() };
@@ -104,7 +104,7 @@ impl AddrSpace {
     pub unsafe fn map_to(
         &mut self,
         page: VirtPage,
-        frame: Frame,
+        frame: RawFrame,
         flags: PageTableFlags,
         allocator: &mut impl FrameAllocator<Size4KiB>,
     ) -> Result<(), MapToError<Size4KiB>> {
@@ -123,7 +123,7 @@ impl AddrSpace {
     /// # Safety
     ///
     /// You are fundamentally changing memory.
-    pub unsafe fn unmap(&mut self, page: VirtPage) -> Result<Frame, UnmapError> {
+    pub unsafe fn unmap(&mut self, page: VirtPage) -> Result<RawFrame, UnmapError> {
         // SAFETY: critical section and non-reentrant function prevednt mutable aliasing
         critical_section::with(|_cs| unsafe {
             let mut page_table = self.page_table();

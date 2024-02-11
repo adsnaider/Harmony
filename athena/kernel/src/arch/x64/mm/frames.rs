@@ -13,16 +13,16 @@ pub static PHYSICAL_MEMORY_OFFSET: VirtAddr = {
 /// A physical frame.
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 #[repr(transparent)]
-pub struct Frame(PhysFrame<Size4KiB>);
+pub struct RawFrame(PhysFrame<Size4KiB>);
 
-impl From<PhysFrame<Size4KiB>> for Frame {
+impl From<PhysFrame<Size4KiB>> for RawFrame {
     fn from(value: PhysFrame<Size4KiB>) -> Self {
         Self(value)
     }
 }
 
-impl From<Frame> for PhysFrame<Size4KiB> {
-    fn from(value: Frame) -> Self {
+impl From<RawFrame> for PhysFrame<Size4KiB> {
+    fn from(value: RawFrame) -> Self {
         value.0
     }
 }
@@ -48,7 +48,7 @@ impl<'a> FrameBumpAllocator<'a> {
         Self { mmap, index: 0 }
     }
 
-    pub fn alloc_frame(&mut self) -> Result<Frame, AllocError> {
+    pub fn alloc_frame(&mut self) -> Result<RawFrame, AllocError> {
         let (idx, region) = self
             .mmap
             .iter_mut()
@@ -62,7 +62,7 @@ impl<'a> FrameBumpAllocator<'a> {
         let start = region.start;
         region.start += Size4KiB::SIZE;
         assert!(region.start <= region.end);
-        Ok(Frame(
+        Ok(RawFrame(
             PhysFrame::from_start_address(PhysAddr::new(start))
                 .expect("Regions should be 4k aligned"),
         ))
@@ -75,12 +75,24 @@ unsafe impl FrameAllocator<Size4KiB> for FrameBumpAllocator<'_> {
     }
 }
 
-impl Frame {
+impl RawFrame {
+    pub const fn size() -> usize {
+        4096
+    }
+
+    pub const fn align() -> usize {
+        4096
+    }
+
     pub fn as_ptr<T>(&self) -> *const T {
         (PHYSICAL_MEMORY_OFFSET + self.0.start_address().as_u64()).as_ptr()
     }
 
     pub fn as_ptr_mut<T>(&self) -> *mut T {
         (PHYSICAL_MEMORY_OFFSET + self.0.start_address().as_u64()).as_mut_ptr()
+    }
+
+    pub fn index(&self) -> usize {
+        self.0.start_address().as_u64() as usize / Self::size()
     }
 }

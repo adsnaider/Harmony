@@ -1,20 +1,21 @@
 #![no_std]
 
-use core::arch::asm;
 use core::panic::PanicInfo;
 
-pub unsafe fn syscall(cap: u64, a: u64, b: u64, c: u64) -> u64 {
-    let mut out: u64;
-    unsafe {
-        asm!(
-            "int 0x80",
-            in("rdi") a,
-            in("rsi") b,
-            in("rdx") c,
-            inlateout("rax") cap => out,
-        )
+pub mod caps {
+    use core::arch::asm;
+
+    pub unsafe fn syscall(cap: u64, op: u64) -> u64 {
+        let mut out: u64;
+        unsafe {
+            asm!(
+                "int 0x80",
+                in("rdi") op,
+                inlateout("rax") cap => out,
+            )
+        }
+        out
     }
-    out
 }
 
 #[panic_handler]
