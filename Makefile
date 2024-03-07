@@ -5,6 +5,7 @@ QEMU_ARGS ?=
 ARTIFACTS = .build/
 BUILD_DIR=$(ARTIFACTS)/$(PROFILE)
 IMAGE_NAME=$(BUILD_DIR)/athena.iso
+TEST_IMAGE_NAME=$(BUILD_DIR)/athena-test.iso
 ISO_ROOT="$(BUILD_DIR)/iso_root"
 
 ifeq "$(DEBUGGER)" "yes"
@@ -33,7 +34,7 @@ $(eval $(call DEFAULT_VAR,HOST_LDFLAGS,$(DEFAULT_HOST_LDFLAGS)))
 override DEFAULT_HOST_LIBS :=
 $(eval $(call DEFAULT_VAR,HOST_LIBS,$(DEFAULT_HOST_LIBS)))
 
-.PHONY: build emulate iso setup clean
+.PHONY: build emulate iso setup clean test-iso ktest
 
 all: build
 
@@ -44,6 +45,8 @@ setup:
 build: setup
 	$(eval KERNEL_BIN=`cargo build --profile ${PROFILE} --target $(TARGET) --message-format=json | ./extract_exec.sh`)
 	@cp "$(KERNEL_BIN)" "$(BUILD_DIR)/kernel"
+	$(eval KERNEL_TEST_BIN=`cargo build --profile ${PROFILE} --target $(TARGET) --tests --message-format=json | ./extract_exec.sh`)
+	@cp "$(KERNEL_TEST_BIN)" "$(BUILD_DIR)/kernel_test"
 
 emulate: iso
 	@./go.sh 33 qemu-system-x86_64 \
@@ -78,6 +81,34 @@ iso: limine build
 		$(ISO_ROOT) -o $(IMAGE_NAME)
 	./limine/limine bios-install $(IMAGE_NAME)
 	rm -rf $(ISO_ROOT)
+
+test-iso: limine build
+	rm -rf $(ISO_ROOT)
+	mkdir -p $(ISO_ROOT)/boot
+	cp -v $(BUILD_DIR)/kernel_test $(ISO_ROOT)/boot/kernel
+	mkdir -p $(ISO_ROOT)/boot/limine
+	cp -v limine-test.cfg $(ISO_ROOT)/boot/limine/limine.cfg
+	cp -v limine/limine-bios.sys limine/limine-bios-cd.bin limine/limine-uefi-cd.bin $(ISO_ROOT)/boot/limine/
+	mkdir -p $(ISO_ROOT)/EFI/BOOT
+	cp -v limine/BOOTX64.EFI $(ISO_ROOT)/EFI/BOOT/
+	cp -v limine/BOOTIA32.EFI $(ISO_ROOT)/EFI/BOOT/
+	xorriso -as mkisofs -b boot/limine/limine-bios-cd.bin \
+		-no-emul-boot -boot-load-size 4 -boot-info-table \
+		--efi-boot boot/limine/limine-uefi-cd.bin \
+		-efi-boot-part --efi-boot-image --protective-msdos-label \
+		$(ISO_ROOT) -o $(TEST_IMAGE_NAME)
+	./limine/limine bios-install $(TEST_IMAGE_NAME)
+	rm -rf $(ISO_ROOT)
+
+ktest: test-iso
+	@./go.sh 33 qemu-system-x86_64 \
+		-cdrom $(TEST_IMAGE_NAME) \
+		-bios /usr/share/ovmf/OVMF.fd \
+		-chardev stdio,id=char0,logfile=serial.log,signal=off \
+		-serial chardev:char0 \
+		-device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+		-display none \
+		$(QEMU_ARGS)
 		
 clean:
 	rm -rf $(ARTIFACTS)/*
