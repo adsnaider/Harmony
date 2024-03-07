@@ -1,5 +1,11 @@
 #![no_std]
 #![no_main]
+#![cfg_attr(
+    test,
+    feature(custom_test_frameworks),
+    test_runner(crate::tests::runner),
+    reexport_test_harness_main = "test_main"
+)]
 
 use limine::request::FramebufferRequest;
 use limine::BaseRevision;
@@ -7,6 +13,8 @@ use limine::BaseRevision;
 pub mod arch;
 
 mod serial;
+#[cfg(test)]
+mod tests;
 
 /// Sets the base revision to the latest revision supported by the crate.
 /// See specification for further info.
@@ -17,18 +25,24 @@ static BASE_REVISION: BaseRevision = BaseRevision::new();
 static FRAMEBUFFER_REQUEST: FramebufferRequest = FramebufferRequest::new();
 
 #[cfg(target_os = "none")]
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     // TODO: Reboot
     loop {}
 }
 
+fn init() {
+    serial::init();
+    sprintln!("Serial logging initialized");
+
+    assert!(BASE_REVISION.is_supported());
+}
+
+#[cfg(not(test))]
 #[no_mangle]
 unsafe extern "C" fn kmain() -> ! {
-    serial::init();
-    sprintln!("Hello serial");
-    assert!(BASE_REVISION.is_supported());
-
+    init();
     loop {}
 }
 
