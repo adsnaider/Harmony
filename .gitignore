@@ -1,3 +1,4 @@
+/limine/
 target/
 .build/
 gdb.txt
