@@ -4,9 +4,9 @@ use core::sync::atomic::{AtomicPtr, Ordering};
 use elain::Align;
 
 use crate::arch::execution::ExecutionContext;
-use crate::arch::mm::kptr::{KPtr, TrivialDrop};
+use crate::arch::mm::kptr::KPtr;
 use crate::arch::PAGE_SIZE;
-use crate::capabilities::trie::CapabilityTable;
+use crate::capabilities::trie::CapabilityEntry;
 
 static ACTIVE: AtomicPtr<Thread> = AtomicPtr::new(core::ptr::null_mut());
 
@@ -14,12 +14,12 @@ static ACTIVE: AtomicPtr<Thread> = AtomicPtr::new(core::ptr::null_mut());
 #[derive(Debug)]
 pub struct Thread {
     execution_context: ExecutionContext,
-    capabilities: CapabilityTable,
+    capabilities: KPtr<CapabilityEntry>,
     _align: Align<PAGE_SIZE>,
 }
 
 impl Thread {
-    pub fn new(capabilities: CapabilityTable, execution_context: ExecutionContext) -> Self {
+    pub fn new(capabilities: KPtr<CapabilityEntry>, execution_context: ExecutionContext) -> Self {
         Self {
             capabilities,
             execution_context,
@@ -43,5 +43,3 @@ impl Thread {
         }
     }
 }
-
-unsafe impl TrivialDrop for Thread {}

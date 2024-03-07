@@ -23,23 +23,7 @@ struct CapabilityNode {
 }
 
 #[repr(transparent)]
-#[derive(Debug, Clone)]
-pub struct CapabilityTable {
-    root: Option<KPtr<CapabilityEntry>>,
-}
-
-#[repr(transparent)]
 pub struct CapId(usize);
-
-impl CapabilityTable {
-    pub fn new() -> Self {
-        Self { root: None }
-    }
-
-    pub fn get(&self, id: CapId) -> Option<&Capability> {
-        CapabilityEntry::get(self.root.as_ref()?.as_ref(), id.0)
-    }
-}
 
 impl CapabilityEntry {
     pub fn empty() -> Self {
@@ -49,8 +33,12 @@ impl CapabilityEntry {
         }
     }
 
+    pub fn get(&self, id: CapId) -> Option<&Capability> {
+        Self::get_inner(self, id.0)
+    }
+
     #[tailcall]
-    pub fn get(this: &Self, id: usize) -> Option<&Capability> {
+    fn get_inner(this: &Self, id: usize) -> Option<&Capability> {
         let offset = id % NUM_NODES_PER_ENTRY;
         let id = id / NUM_NODES_PER_ENTRY;
         let node = &this.nodes[offset];
@@ -58,23 +46,23 @@ impl CapabilityEntry {
             Some(&node.capability)
         } else {
             let child = this.nodes[offset].child.as_ref()?.as_ref();
-            Self::get(child, id)
+            Self::get_inner(child, id)
         }
     }
 
-    pub fn set(&mut self, offset: usize, capability: Capability) -> Option<Capability> {
-        todo!()
+    pub fn set(&self, offset: usize, capability: Capability) -> Option<Capability> {
+        critical_section::with(|cs| {})
     }
 
-    pub fn delete(&mut self, offset: usize) -> Option<Capability> {
+    pub fn delete(&self, offset: usize) -> Option<Capability> {
         todo!();
     }
 
-    pub fn link(&mut self, offset: usize, entry: KPtr<CapabilityEntry>) {
+    pub fn link(&self, offset: usize, entry: KPtr<CapabilityEntry>) {
         todo!();
     }
 
-    pub fn unlink(&mut self, offset: usize) -> Option<KPtr<CapabilityEntry>> {
+    pub fn unlink(&self, offset: usize) -> Option<KPtr<CapabilityEntry>> {
         todo!();
     }
 }

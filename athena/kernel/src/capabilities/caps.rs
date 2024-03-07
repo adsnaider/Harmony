@@ -1,7 +1,7 @@
 use super::trie::CapabilityTable;
 
 #[derive(Debug, Clone)]
-#[repr(C)]
+#[repr(u8)]
 pub enum Capability {
     Empty,
     Thread,

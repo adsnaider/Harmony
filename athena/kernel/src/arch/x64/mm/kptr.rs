@@ -4,16 +4,14 @@ use core::ops::Deref;
 use super::frames::RawFrame;
 use super::retyping::{KernelFrame, UntypedFrame};
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
 pub struct KPtr<T> {
     frame: KernelFrame<'static>,
     _value: PhantomData<T>,
 }
 
-pub unsafe trait TrivialDrop {}
-
-impl<T: TrivialDrop> KPtr<T> {
-    /// Creates a new kernel poiter of type `T`.
+impl<T> KPtr<T> {
+    /// Creates a new kernel pointer to a `T`.
     ///
     /// # Safety
     ///
@@ -30,6 +28,10 @@ impl<T: TrivialDrop> KPtr<T> {
             frame,
             _value: PhantomData,
         }
+    }
+
+    pub fn set(&self, to: &KPtr<T>) {
+        todo!();
     }
 }
 
@@ -53,7 +55,7 @@ impl<T> Deref for KPtr<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.frame.raw().as_ptr() }
+        unsafe { &*self.as_ptr() }
     }
 }
 
