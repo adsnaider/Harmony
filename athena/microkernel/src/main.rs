@@ -4,6 +4,10 @@
 use limine::request::FramebufferRequest;
 use limine::BaseRevision;
 
+pub mod arch;
+
+mod serial;
+
 /// Sets the base revision to the latest revision supported by the crate.
 /// See specification for further info.
 #[used]
@@ -21,25 +25,30 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 
 #[no_mangle]
 unsafe extern "C" fn kmain() -> ! {
+    serial::init();
+    sprintln!("Hello serial");
     assert!(BASE_REVISION.is_supported());
 
-    if let Some(framebuffer_response) = FRAMEBUFFER_REQUEST.get_response() {
-        if let Some(framebuffer) = framebuffer_response.framebuffers().next() {
-            for row in 0..framebuffer.height() {
-                for col in 0..framebuffer.width() {
-                    // Calculate the pixel offset using the framebuffer information we obtained above.
-                    // We skip `i` scanlines (pitch is provided in bytes) and add `i * 4` to skip `i` pixels forward.
-                    let pixel_offset = row * framebuffer.pitch() + col * 4;
+    loop {}
+}
 
-                    // Write 0xFFFFFFFF to the provided pixel offset to fill it white.
-                    core::ptr::write_volatile(
-                        framebuffer.addr().add(pixel_offset as usize) as *mut u32,
-                        0xFFFFFFFF,
-                    );
-                }
+struct SingleThreadCS();
+critical_section::set_impl!(SingleThreadCS);
+/// SAFETY: While the OS kernel is running in a single thread, then disabling interrupts is a safe
+/// to guarantee a critical section's conditions.
+unsafe impl critical_section::Impl for SingleThreadCS {
+    unsafe fn acquire() -> critical_section::RawRestoreState {
+        let interrupts_enabled = arch::interrupts::are_enabled();
+        arch::interrupts::disable();
+        interrupts_enabled
+    }
+
+    unsafe fn release(interrupts_were_enabled: critical_section::RawRestoreState) {
+        if interrupts_were_enabled {
+            // SAFETY: Precondition.
+            unsafe {
+                arch::interrupts::enable();
             }
         }
     }
-
-    loop {}
 }
