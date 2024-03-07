@@ -7,6 +7,7 @@ pub fn rflags() -> u64 {
             "pushfq",
             "pop {rflags}",
             rflags = out(reg) rflags,
+            options(readonly),
         )
     }
     rflags

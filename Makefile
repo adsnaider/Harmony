@@ -34,9 +34,15 @@ $(eval $(call DEFAULT_VAR,HOST_LDFLAGS,$(DEFAULT_HOST_LDFLAGS)))
 override DEFAULT_HOST_LIBS :=
 $(eval $(call DEFAULT_VAR,HOST_LIBS,$(DEFAULT_HOST_LIBS)))
 
-.PHONY: build emulate iso setup clean test-iso ktest
+.PHONY: build emulate iso setup clean test-iso ktest check clippy
 
-all: build
+check:
+	cargo check --target $(TARGET) --tests
+
+clippy:
+	cargo clippy --target $(TARGET) --tests
+
+all: iso
 
 setup:
 	@rm -rf $(BUILD_DIR)

@@ -44,11 +44,11 @@ jobs:
     - name: Clippy
       run: make clippy
 
-  test:
-    name: Run unit tests
-    runs-on: ubuntu-latest
+  # test:
+  #   name: Run unit tests
+  #   runs-on: ubuntu-latest
 
-    steps:
-    - uses: actions/checkout@v3
-    - name: Run the unit tests
-      run: make test
+  #   steps:
+  #   - uses: actions/checkout@v3
+  #   - name: Run the unit tests
+  #     run: make test

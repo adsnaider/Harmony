@@ -55,6 +55,7 @@ pub fn exit_qemu(exit_code: QemuExitCode) -> ! {
 }
 
 #[test_case]
+#[allow(clippy::eq_op)]
 fn trivial_assertion() {
     assert_eq!(2 + 2, 4);
 }
