@@ -1,12 +1,8 @@
 [workspace]
-members = [
-  "athena/*"
-]
+members = ["athena/microkernel"]
 
 resolver = "2"
-default-members = ["athena/kernel"]
+default-members = ["athena/microkernel"]
 
-# Need some optimizations with or it's easy to run out of memory.
-# FIXME: Once we allocate larger stacks per threads.
 [profile.dev]
-opt-level = 2
+opt-level = 1

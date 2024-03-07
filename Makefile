@@ -1,80 +1,85 @@
 TARGET ?= x86_64-unknown-none
-
 PROFILE ?= dev
-
 DEBUGGER ?= no
-
 QEMU_ARGS ?=
+ARTIFACTS = .build/
+BUILD_DIR=$(ARTIFACTS)/$(PROFILE)
+IMAGE_NAME=$(BUILD_DIR)/athena.iso
+ISO_ROOT="$(BUILD_DIR)/iso_root"
 
 ifeq "$(DEBUGGER)" "yes"
 	QEMU_ARGS += -s -S
 endif
 
-ifeq "$(PROFILE)" "dev"
-	PROFILE_DIR := debug
-else
-	PROFILE_DIR := $(PROFILE)
-endif
+# Convenience macro to reliably declare user overridable variables.
+define DEFAULT_VAR =
+    ifeq ($(origin $1),default)
+        override $(1) := $(2)
+    endif
+    ifeq ($(origin $1),undefined)
+        override $(1) := $(2)
+    endif
+endef
 
-ARTIFACTS = .build/
+# Toolchain for building the 'limine' executable for the host.
+override DEFAULT_HOST_CC := cc
+$(eval $(call DEFAULT_VAR,HOST_CC,$(DEFAULT_HOST_CC)))
+override DEFAULT_HOST_CFLAGS := -g -O2 -pipe
+$(eval $(call DEFAULT_VAR,HOST_CFLAGS,$(DEFAULT_HOST_CFLAGS)))
+override DEFAULT_HOST_CPPFLAGS :=
+$(eval $(call DEFAULT_VAR,HOST_CPPFLAGS,$(DEFAULT_HOST_CPPFLAGS)))
+override DEFAULT_HOST_LDFLAGS :=
+$(eval $(call DEFAULT_VAR,HOST_LDFLAGS,$(DEFAULT_HOST_LDFLAGS)))
+override DEFAULT_HOST_LIBS :=
+$(eval $(call DEFAULT_VAR,HOST_LIBS,$(DEFAULT_HOST_LIBS)))
 
-.PHONY: build bootimage emulate clean check ktest test
+.PHONY: build emulate iso setup clean
 
-all: bootimage
+all: build
 
-check:
-	cargo check --target $(TARGET) --tests
+setup:
+	@rm -rf $(BUILD_DIR)
+	@mkdir $(BUILD_DIR)
 
-clippy:
-	cargo clippy --target $(TARGET) --tests
-
-build: check
-	@mkdir -p $(ARTIFACTS)/tests
+build: setup
 	$(eval KERNEL_BIN=`cargo build --profile ${PROFILE} --target $(TARGET) --message-format=json | ./extract_exec.sh`)
-	@ln -fs "$(KERNEL_BIN)" $(ARTIFACTS)/kernel
-	$(eval KERNEL_TEST_BIN=`cargo test --profile ${PROFILE} --target $(TARGET) --no-run --message-format=json | ./extract_exec.sh`)
-	@ln -fs "$(KERNEL_TEST_BIN)" $(ARTIFACTS)/tests/kernel
+	@cp "$(KERNEL_BIN)" "$(BUILD_DIR)/kernel"
 
-bootimage: build
-	@mkdir -p $(ARTIFACTS)/tests
-	cargo run -p builder --profile ${PROFILE} -- -k $(ARTIFACTS)/kernel -o ${ARTIFACTS}
-	cargo run -p builder --profile ${PROFILE} -- -k $(ARTIFACTS)/tests/kernel  -o ${ARTIFACTS}/tests
-
-emulate: bootimage
+emulate: iso
 	@./go.sh 33 qemu-system-x86_64 \
-		-drive if=pflash,format=raw,readonly=on,file=/usr/share/ovmf/OVMF.fd \
-		-drive format=raw,file=$(ARTIFACTS)/uefi.img \
+		-cdrom $(IMAGE_NAME) \
+		-bios /usr/share/ovmf/OVMF.fd \
 		-chardev stdio,id=char0,logfile=serial.log,signal=off \
 		-serial chardev:char0 \
 		$(QEMU_ARGS)
 
-test:
-	cargo test --workspace --exclude kernel
+limine:
+	git clone https://github.com/limine-bootloader/limine.git --branch=v7.x-binary --depth=1
+	$(MAKE) -C limine \
+		CC="$(HOST_CC)" \
+		CFLAGS="$(HOST_CFLAGS)" \
+		CPPFLAGS="$(HOST_CPPFLAGS)" \
+		LDFLAGS="$(HOST_LDFLAGS)" \
+		LIBS="$(HOST_LIBS)"
 
-ktest: bootimage
-	@./go.sh 33 qemu-system-x86_64 \
-		-drive if=pflash,format=raw,readonly=on,file=/usr/share/ovmf/OVMF.fd \
-		-drive format=raw,file=$(ARTIFACTS)/tests/uefi.img \
-		-chardev stdio,id=char0,logfile=test.log,signal=off \
-		-serial chardev:char0 \
-		-device isa-debug-exit,iobase=0xf4,iosize=0x04 \
-		-display none \
-		$(QEMU_ARGS)
-
-
-iso: bootimage
-	@mkdir -p $(ARTIFACTS)
-	@rm -rf /tmp/iso
-	@mkdir /tmp/iso
-	@cp $(ARTIFACTS)/uefi.img /tmp/iso
-	mkisofs -R \
-			-f \
-			-e uefi.img \
-			-no-emul-boot \
-			-V "Athena OS" \
-			-o $(ARTIFACTS)/athena.iso \
-			/tmp/iso
+iso: limine build
+	rm -rf $(ISO_ROOT)
+	mkdir -p $(ISO_ROOT)/boot
+	cp -v $(BUILD_DIR)/kernel $(ISO_ROOT)/boot/
+	mkdir -p $(ISO_ROOT)/boot/limine
+	cp -v limine.cfg limine/limine-bios.sys limine/limine-bios-cd.bin limine/limine-uefi-cd.bin $(ISO_ROOT)/boot/limine/
+	mkdir -p $(ISO_ROOT)/EFI/BOOT
+	cp -v limine/BOOTX64.EFI $(ISO_ROOT)/EFI/BOOT/
+	cp -v limine/BOOTIA32.EFI $(ISO_ROOT)/EFI/BOOT/
+	xorriso -as mkisofs -b boot/limine/limine-bios-cd.bin \
+		-no-emul-boot -boot-load-size 4 -boot-info-table \
+		--efi-boot boot/limine/limine-uefi-cd.bin \
+		-efi-boot-part --efi-boot-image --protective-msdos-label \
+		$(ISO_ROOT) -o $(IMAGE_NAME)
+	./limine/limine bios-install $(IMAGE_NAME)
+	rm -rf $(ISO_ROOT)
 		
 clean:
 	rm -rf $(ARTIFACTS)/*
+	rm -rf limine/
 	cargo clean
