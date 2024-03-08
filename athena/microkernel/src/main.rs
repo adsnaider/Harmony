@@ -7,14 +7,14 @@
     reexport_test_harness_main = "test_main"
 )]
 
-use limine::request::FramebufferRequest;
-use limine::BaseRevision;
-
 pub mod arch;
 
 mod serial;
 #[cfg(test)]
 mod tests;
+
+use limine::request::FramebufferRequest;
+use limine::BaseRevision;
 
 /// Sets the base revision to the latest revision supported by the crate.
 /// See specification for further info.
@@ -28,8 +28,10 @@ static FRAMEBUFFER_REQUEST: FramebufferRequest = FramebufferRequest::new();
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
-    // TODO: Reboot
-    loop {}
+    // FIXME: Reboot?
+    loop {
+        arch::instructions::hlt();
+    }
 }
 
 fn init() {
@@ -43,7 +45,9 @@ fn init() {
 #[no_mangle]
 unsafe extern "C" fn kmain() -> ! {
     init();
-    loop {}
+    loop {
+        arch::instructions::hlt();
+    }
 }
 
 struct SingleThreadCS();
