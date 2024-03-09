@@ -2,7 +2,7 @@
 
 use limine::memory_map::{Entry, EntryType};
 
-use crate::arch::paging::{Frame, PAGE_SIZE};
+use crate::arch::paging::{RawFrame, PAGE_SIZE};
 
 pub struct FrameBumpAllocator {
     index: usize,
@@ -17,7 +17,7 @@ impl FrameBumpAllocator {
         }
     }
 
-    pub fn alloc_frame(&mut self) -> Option<Frame> {
+    pub fn alloc_frame(&mut self) -> Option<RawFrame> {
         let (idx, entry) = self
             .memory_map
             .iter_mut()
@@ -30,7 +30,7 @@ impl FrameBumpAllocator {
         entry.base += PAGE_SIZE as u64;
         entry.length -= PAGE_SIZE as u64;
         self.index = idx;
-        Some(Frame::from_start_address(addr))
+        Some(RawFrame::from_start_address(addr))
     }
 
     pub fn consume(self) -> &'static mut [&'static mut Entry] {
