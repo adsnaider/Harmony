@@ -10,6 +10,8 @@ mod registers;
 pub fn init() {
     log::info!("Initializing GDT");
     gdt::init();
+    log::info!("Initializing IDT");
+    interrupts::init();
 }
 
 /// Performs a `sysret` operation.

@@ -13,6 +13,7 @@ once_cell = { version = "1.19.0", default-features = false, features = [
 ] }
 uart_16550 = "0.3.0"
 log = "0.4.21"
+pic8259 = "0.10.4"
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 x86_64_impl = { package = "x86_64", version = "0.15" }
