@@ -7,6 +7,7 @@
     reexport_test_harness_main = "test_main"
 )]
 #![feature(naked_functions)]
+#![cfg_attr(target_arch = "x86_64", feature(abi_x86_interrupt))]
 
 pub mod arch;
 
