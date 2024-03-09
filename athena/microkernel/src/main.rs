@@ -6,6 +6,7 @@
     test_runner(crate::tests::runner),
     reexport_test_harness_main = "test_main"
 )]
+#![feature(naked_functions)]
 
 pub mod arch;
 
@@ -36,9 +37,12 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 
 fn init() {
     serial::init();
-    sprintln!("Serial logging initialized");
+    log::info!("Serial logging initialized");
 
     assert!(BASE_REVISION.is_supported());
+    arch::init();
+
+    log::info!("Initialization sequence complete");
 }
 
 #[cfg(not(test))]
