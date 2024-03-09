@@ -15,16 +15,12 @@ mod serial;
 #[cfg(test)]
 mod tests;
 
-use limine::request::FramebufferRequest;
 use limine::BaseRevision;
 
 /// Sets the base revision to the latest revision supported by the crate.
 /// See specification for further info.
 #[used]
 static BASE_REVISION: BaseRevision = BaseRevision::new();
-
-#[used]
-static FRAMEBUFFER_REQUEST: FramebufferRequest = FramebufferRequest::new();
 
 #[cfg(target_os = "none")]
 #[cfg(not(test))]
