@@ -9,6 +9,19 @@
 #![feature(naked_functions)]
 #![cfg_attr(target_arch = "x86_64", feature(abi_x86_interrupt))]
 
+pub static PMO: Lazy<usize> = Lazy::new(|| {
+    #[used]
+    static HHDM: HhdmRequest = HhdmRequest::new();
+
+    let pmo = HHDM
+        .get_response()
+        .expect("Missing Higher-half direct mapping response from limine")
+        .offset();
+    // PMO must be on the higher half
+    assert!(pmo > 0x0000_8000_0000_0000);
+    pmo as usize
+});
+
 pub mod arch;
 pub mod bootstrap;
 
@@ -16,15 +29,12 @@ mod serial;
 #[cfg(test)]
 mod tests;
 
-use limine::request::MemoryMapRequest;
+use limine::memory_map::Entry;
+use limine::request::{HhdmRequest, MemoryMapRequest};
 use limine::BaseRevision;
+use once_cell::sync::Lazy;
 
 use crate::bootstrap::FrameBumpAllocator;
-
-/// Sets the base revision to the latest revision supported by the crate.
-/// See specification for further info.
-#[used]
-static BASE_REVISION: BaseRevision = BaseRevision::new();
 
 #[cfg(target_os = "none")]
 #[cfg(not(test))]
@@ -37,16 +47,22 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     }
 }
 
-fn init() {
+fn init() -> &'static mut [&'static mut Entry] {
+    #[used]
+    static BASE_REVISION: BaseRevision = BaseRevision::new();
+
+    #[used]
+    static mut MEMORY_MAP: MemoryMapRequest = MemoryMapRequest::new();
+
     serial::init();
     log::info!("Serial logging initialized");
 
     assert!(BASE_REVISION.is_supported());
     arch::init();
 
-    #[used]
-    static mut MEMORY_MAP: MemoryMapRequest = MemoryMapRequest::new();
+    log::info!("Got physical memory offset from limine at {:#X}", *PMO);
 
+    // TODO: VERIFY NULL PAGE EXISTS AT 0xFFFF_FFFF_7FFF_E000.
     let memory_map = unsafe {
         MEMORY_MAP
             .get_response_mut()
@@ -54,15 +70,17 @@ fn init() {
             .entries_mut()
     };
     log::info!("Got memory map");
-    let mut allocator = FrameBumpAllocator::new(memory_map);
-
     log::info!("Initialization sequence complete");
+
+    memory_map
 }
 
 #[cfg(not(test))]
 #[no_mangle]
 unsafe extern "C" fn kmain() -> ! {
-    init();
+    let memory_map = init();
+    let mut allocator = FrameBumpAllocator::new(memory_map);
+
     loop {
         arch::instructions::hlt();
     }
