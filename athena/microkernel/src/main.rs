@@ -10,12 +10,16 @@
 #![cfg_attr(target_arch = "x86_64", feature(abi_x86_interrupt))]
 
 pub mod arch;
+pub mod bootstrap;
 
 mod serial;
 #[cfg(test)]
 mod tests;
 
+use limine::request::MemoryMapRequest;
 use limine::BaseRevision;
+
+use crate::bootstrap::FrameBumpAllocator;
 
 /// Sets the base revision to the latest revision supported by the crate.
 /// See specification for further info.
@@ -25,8 +29,9 @@ static BASE_REVISION: BaseRevision = BaseRevision::new();
 #[cfg(target_os = "none")]
 #[cfg(not(test))]
 #[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
+fn panic(info: &core::panic::PanicInfo) -> ! {
     // FIXME: Reboot?
+    log::error!("{}", info);
     loop {
         arch::instructions::hlt();
     }
@@ -38,6 +43,18 @@ fn init() {
 
     assert!(BASE_REVISION.is_supported());
     arch::init();
+
+    #[used]
+    static mut MEMORY_MAP: MemoryMapRequest = MemoryMapRequest::new();
+
+    let memory_map = unsafe {
+        MEMORY_MAP
+            .get_response_mut()
+            .expect("Missing memory map from Limine")
+            .entries_mut()
+    };
+    log::info!("Got memory map");
+    let mut allocator = FrameBumpAllocator::new(memory_map);
 
     log::info!("Initialization sequence complete");
 }
