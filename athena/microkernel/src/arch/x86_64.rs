@@ -1,9 +1,12 @@
 use core::arch::asm;
 
+use crate::arch::timer::Pit8253;
+
 pub mod instructions;
 pub mod interrupts;
 pub mod paging;
 pub mod port;
+pub mod timer;
 
 mod gdt;
 mod registers;
@@ -13,6 +16,8 @@ pub fn init() {
     gdt::init();
     log::info!("Initializing IDT");
     interrupts::init();
+    log::info!("Initializing PIT timer");
+    let mut _timer = unsafe { Pit8253::steal().into_timer(5966) };
 }
 
 /// Performs a `sysret` operation.
