@@ -34,8 +34,6 @@ use limine::request::{HhdmRequest, MemoryMapRequest};
 use limine::BaseRevision;
 use once_cell::sync::Lazy;
 
-use crate::bootstrap::FrameBumpAllocator;
-
 #[cfg(target_os = "none")]
 #[cfg(not(test))]
 #[panic_handler]
@@ -78,6 +76,8 @@ fn init() -> &'static mut [&'static mut Entry] {
 #[cfg(not(test))]
 #[no_mangle]
 unsafe extern "C" fn kmain() -> ! {
+    use crate::bootstrap::FrameBumpAllocator;
+
     let memory_map = init();
     let mut allocator = FrameBumpAllocator::new(memory_map);
 
