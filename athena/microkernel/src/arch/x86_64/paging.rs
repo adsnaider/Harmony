@@ -1,3 +1,7 @@
+use x86_64_impl::registers::control::Cr3;
+use x86_64_impl::structures::paging::{OffsetPageTable, PageTable};
+use x86_64_impl::VirtAddr;
+
 use crate::PMO;
 
 pub const PAGE_SIZE: usize = 4096;
@@ -23,12 +27,11 @@ impl RawFrame {
         (self.phys_address + *PMO as u64) as *mut T
     }
 }
-/*
 
 /// A virtual memory space suitable for user-level components.
 #[repr(transparent)]
 pub struct AddrSpace {
-    l4_table: PageTable,
+    page_table: OffsetPageTable<'static>,
 }
 
 impl AddrSpace {
@@ -70,4 +73,3 @@ impl AddrSpace {
         }
     }
 }
-*/
