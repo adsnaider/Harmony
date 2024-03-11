@@ -23,7 +23,7 @@ pub static PMO: Lazy<usize> = Lazy::new(|| {
 });
 
 pub mod arch;
-pub mod bootstrap;
+pub(crate) mod util;
 
 mod serial;
 #[cfg(test)]
@@ -70,20 +70,27 @@ fn init() -> &'static mut [&'static mut Entry] {
     log::info!("Got memory map");
     log::info!("Initialization sequence complete");
 
+    // TODO: Set up the retype tables
+
     memory_map
 }
 
 #[cfg(not(test))]
 #[no_mangle]
 unsafe extern "C" fn kmain() -> ! {
-    use crate::bootstrap::FrameBumpAllocator;
+    use arch::bootstrap::Process;
+    use include_bytes_aligned::include_bytes_aligned;
+    use util::FrameBumpAllocator;
 
     let memory_map = init();
     let mut allocator = FrameBumpAllocator::new(memory_map);
 
-    loop {
-        arch::instructions::hlt();
-    }
+    let boot_process = {
+        let proc = include_bytes_aligned!(16, "../programs/init");
+        Process::load(proc, &mut allocator).expect("Couldn't load the boot process")
+    };
+
+    boot_process.exec();
 }
 
 struct SingleThreadCS();

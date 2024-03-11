@@ -1,5 +1,3 @@
-//! Utilities used for the intialization sequence to bootstrap the init process
-
 use limine::memory_map::{Entry, EntryType};
 
 use crate::arch::paging::{RawFrame, PAGE_SIZE};
