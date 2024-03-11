@@ -86,7 +86,7 @@ unsafe extern "C" fn kmain() -> ! {
     let mut allocator = FrameBumpAllocator::new(memory_map);
 
     let boot_process = {
-        let proc = include_bytes_aligned!(16, "../programs/init");
+        let proc = include_bytes_aligned!(16, "../programs/init.bin");
         Process::load(proc, &mut allocator).expect("Couldn't load the boot process")
     };
 

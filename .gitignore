@@ -2,5 +2,6 @@
 target/
 .build/
 gdb.txt
-test.log
-serial.log
+*.log
+*.bin
+*.o
