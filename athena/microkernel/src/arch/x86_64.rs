@@ -2,6 +2,7 @@ use core::arch::asm;
 
 use crate::arch::timer::Pit8253;
 
+pub mod bootstrap;
 pub mod instructions;
 pub mod interrupts;
 pub mod paging;
@@ -18,6 +19,8 @@ pub fn init() {
     interrupts::init();
     log::info!("Initializing PIT timer");
     let mut _timer = unsafe { Pit8253::steal().into_timer(5966) };
+    log::info!("Enabling SCE Extension");
+    sce_enable();
 }
 
 /// Performs a `sysret` operation.
@@ -47,5 +50,27 @@ pub unsafe extern "C" fn sysret(rip: u64, rsp: u64) -> ! {
             "iretq",
             options(noreturn)
         )
+    }
+}
+
+fn sce_enable() {
+    // SAFETY: Nothing special, just enabling Syscall extension.
+    unsafe {
+        asm!(
+            "mov rcx, 0xc0000082",
+            "wrmsr",
+            "mov rcx, 0xc0000080",
+            "rdmsr",
+            "or eax, 1",
+            "wrmsr",
+            "mov rcx, 0xc0000081",
+            "rdmsr",
+            "mov edx, 0x00180008",
+            "wrmsr",
+            out("rcx") _,
+            out("eax") _,
+            out("edx") _,
+            options(nostack, nomem),
+        );
     }
 }
