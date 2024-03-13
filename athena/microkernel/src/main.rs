@@ -23,6 +23,8 @@ pub static PMO: Lazy<usize> = Lazy::new(|| {
 });
 
 pub mod arch;
+pub mod caps;
+pub mod resources;
 pub(crate) mod util;
 
 mod serial;
