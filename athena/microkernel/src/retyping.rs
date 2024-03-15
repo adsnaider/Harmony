@@ -218,15 +218,27 @@ impl<'a> KernelFrame<'a> {
     pub fn raw(&self) -> RawFrame {
         self.frame
     }
-}
 
-impl KernelFrame<'static> {
     pub fn into_raw(self) -> RawFrame {
         // Note, we don't drop this, so the underlying type remains
         let this = ManuallyDrop::new(self);
         this.frame
     }
 
+    pub unsafe fn inc(&self) -> u16 {
+        let counter = self.entry.counter.fetch_add(1, Ordering::AcqRel);
+        assert!(counter < MAX_REFCOUNT);
+        counter
+    }
+
+    pub unsafe fn dec(&self) -> u16 {
+        let counter = self.entry.counter.fetch_sub(1, Ordering::AcqRel);
+        assert!(counter > 0);
+        counter
+    }
+}
+
+impl KernelFrame<'static> {
     pub unsafe fn from_raw(raw: RawFrame) -> Result<Self, EntryError> {
         let entry = RETYPE_TBL.get().unwrap().raw_entry(raw)?;
         Ok(Self { frame: raw, entry })
@@ -240,15 +252,27 @@ impl<'a> UserFrame<'a> {
     pub fn raw(&self) -> RawFrame {
         self.frame
     }
-}
 
-impl UserFrame<'static> {
     pub fn into_raw(self) -> RawFrame {
         // Note, we don't drop this, so the underlying type remains
         let this = ManuallyDrop::new(self);
         this.frame
     }
 
+    pub unsafe fn inc(&self) -> u16 {
+        let counter = self.entry.counter.fetch_add(1, Ordering::AcqRel);
+        assert!(counter < MAX_REFCOUNT);
+        counter
+    }
+
+    pub unsafe fn dec(&mut self) -> u16 {
+        let counter = self.entry.counter.fetch_sub(1, Ordering::AcqRel);
+        assert!(counter > 0);
+        counter
+    }
+}
+
+impl UserFrame<'static> {
     pub unsafe fn from_raw(raw: RawFrame) -> Result<Self, EntryError> {
         let entry = RETYPE_TBL.get().unwrap().raw_entry(raw)?;
         Ok(Self { frame: raw, entry })
@@ -256,48 +280,6 @@ impl UserFrame<'static> {
 }
 
 const MAX_REFCOUNT: u16 = i16::MAX as u16;
-
-impl Clone for KernelFrame<'_> {
-    fn clone(&self) -> Self {
-        let counter = self.entry.counter.fetch_add(1, Ordering::AcqRel);
-        assert!(counter < MAX_REFCOUNT);
-        KernelFrame {
-            frame: self.frame,
-            entry: self.entry,
-        }
-    }
-}
-
-impl Drop for KernelFrame<'_> {
-    fn drop(&mut self) {
-        if self.entry.counter.fetch_sub(1, Ordering::AcqRel) == 1 {
-            self.entry
-                .state
-                .store(StateValue::untyped(), Ordering::AcqRel);
-        }
-    }
-}
-
-impl Clone for UserFrame<'_> {
-    fn clone(&self) -> Self {
-        let counter = self.entry.counter.fetch_add(1, Ordering::AcqRel);
-        assert!(counter < MAX_REFCOUNT);
-        UserFrame {
-            frame: self.frame,
-            entry: self.entry,
-        }
-    }
-}
-
-impl Drop for UserFrame<'_> {
-    fn drop(&mut self) {
-        if self.entry.counter.fetch_sub(1, Ordering::AcqRel) == 1 {
-            self.entry
-                .state
-                .store(StateValue::untyped(), Ordering::AcqRel);
-        }
-    }
-}
 
 #[repr(transparent)]
 #[derive(Debug)]
