@@ -63,7 +63,6 @@ impl<'a> RetypeTable<'a> {
         let store = (*PMO + stolen_region.base as usize) as *mut MaybeUninit<Entry>;
         stolen_region.base += frames_required as u64 * PAGE_SIZE as u64;
         stolen_region.length -= frames_required as u64 * PAGE_SIZE as u64;
-        assert!(stolen_region.length >= 0);
 
         assert!(nframes * core::mem::size_of::<StateValue>() <= frames_required * PAGE_SIZE);
         assert!(core::mem::align_of::<StateValue>() % store as usize == 0);

@@ -6,23 +6,6 @@ use core::ptr::NonNull;
 use crate::arch::paging::{RawFrame, PAGE_SIZE};
 use crate::retyping::{KernelFrame, UntypedFrame};
 
-/// The generic kernel resource.
-///
-/// Each resource must be page-aligned and must fit within a page.
-///
-/// We unfortunately use a union instead of an enum because we need
-/// to maintain the size and alignment of the kernel datastructures.
-///
-/// What we really want is a generic "fat" ResourcePtr that holds the pointer
-/// to a resource and the tag and safely provides access to the internal data.
-#[repr(C)]
-pub union Resource {}
-
-/// Tag to describe a resource.
-#[repr(u8)]
-#[derive(Debug, Clone)]
-pub enum ResourceType {}
-
 /// A "kernel" pointer to any page-aligned resource.
 ///
 /// A kernel pointer is a pointer type that may only point to a kernel object
@@ -30,6 +13,7 @@ pub enum ResourceType {}
 /// memroy retyping capabilities which use reference counts on an entire
 /// page.
 #[repr(transparent)]
+#[derive(Debug)]
 pub struct KPtr<T> {
     inner: NonNull<T>,
 }
@@ -54,6 +38,23 @@ impl<T> KPtr<T> {
         let frame = unsafe { RawFrame::from_ptr(self.inner.as_ptr()) };
         // SAFETY: Frame must be of type kernel frame since it comes from a kernel pointer.
         unsafe { frame.as_kernel_frame() }
+    }
+
+    pub fn try_into_inner(self) -> Option<T> {
+        let frame = self.frame();
+        let count = unsafe { frame.dec() };
+        if count == 1 {
+            // last one turns off the lights
+            Some(unsafe { self.inner.as_ptr().read() })
+        } else {
+            None
+        }
+    }
+}
+
+impl<T> AsRef<T> for KPtr<T> {
+    fn as_ref(&self) -> &T {
+        unsafe { self.inner.as_ref() }
     }
 }
 
@@ -85,8 +86,3 @@ impl<T> Drop for KPtr<T> {
         }
     }
 }
-
-const _RESOURCE_SIZE_AND_ALIGN: () = {
-    assert!(core::mem::size_of::<Resource>() == PAGE_SIZE);
-    assert!(core::mem::align_of::<Resource>() == PAGE_SIZE);
-};

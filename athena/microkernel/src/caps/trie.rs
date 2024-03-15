@@ -3,20 +3,21 @@ use tailcall::tailcall;
 
 use crate::arch::paging::PAGE_SIZE;
 use crate::caps::Capability;
+use crate::kptr::KPtr;
+use crate::sync::{AtomicRefCell, BorrowError};
 
-const NODE_SIZE: usize = 64;
-const NUM_NODES_PER_ENTRY: usize = PAGE_SIZE / NODE_SIZE;
+const NUM_NODES_PER_ENTRY: usize = PAGE_SIZE / core::mem::size_of::<AtomicRefCell<Slot>>();
 
+#[derive(Debug)]
 pub struct CapabilityEntry {
-    nodes: [CapabilityNode; NUM_NODES_PER_ENTRY],
+    slots: [AtomicRefCell<Slot>; NUM_NODES_PER_ENTRY],
     _align: Align<PAGE_SIZE>,
 }
 
-#[repr(C)]
-struct CapabilityNode {
+#[derive(Debug)]
+struct Slot {
     capability: Capability,
     child: Option<KPtr<CapabilityEntry>>,
-    _align: Align<NODE_SIZE>,
 }
 
 #[repr(transparent)]
@@ -25,51 +26,72 @@ pub struct CapId(usize);
 impl CapabilityEntry {
     pub fn empty() -> Self {
         Self {
-            nodes: core::array::from_fn(|_| CapabilityNode::empty()),
+            slots: core::array::from_fn(|_| AtomicRefCell::new(Slot::empty())),
             _align: Default::default(),
         }
     }
 
-    pub fn get(&self, id: CapId) -> Option<&Capability> {
+    pub fn get(&self, id: CapId) -> Result<Option<Capability>, BorrowError> {
         Self::get_inner(self, id.0)
     }
 
     #[tailcall]
-    fn get_inner(this: &Self, id: usize) -> Option<&Capability> {
+    fn get_inner(this: &Self, id: usize) -> Result<Option<Capability>, BorrowError> {
         let offset = id % NUM_NODES_PER_ENTRY;
         let id = id / NUM_NODES_PER_ENTRY;
-        let node = &this.nodes[offset];
+        let node = &this.slots[offset];
         if id == 0 {
-            Some(&node.capability)
+            Ok(Some(node.borrow()?.capability.clone()))
         } else {
-            let child = this.nodes[offset].child.as_ref()?.as_ref();
+            let slot = this.slots[offset].borrow()?;
+            let Some(child) = &slot.child else {
+                return Ok(None);
+            };
             Self::get_inner(child, id)
         }
     }
 
-    pub fn set(&self, offset: usize, capability: Capability) -> Option<Capability> {
-        todo!();
+    pub fn set(&self, offset: usize, capability: Capability) -> Result<Capability, BorrowError> {
+        let offset = offset % NUM_NODES_PER_ENTRY;
+        let slot = &self.slots[offset];
+        Ok(core::mem::replace(
+            &mut slot.borrow_mut()?.capability,
+            capability,
+        ))
     }
 
-    pub fn delete(&self, offset: usize) -> Option<Capability> {
-        todo!();
+    pub fn delete(&self, offset: usize) -> Result<Capability, BorrowError> {
+        self.set(offset, Capability::empty())
     }
 
-    pub fn link(&self, offset: usize, entry: KPtr<CapabilityEntry>) {
-        todo!();
+    pub fn link(
+        &self,
+        offset: usize,
+        entry: KPtr<CapabilityEntry>,
+    ) -> Result<Option<KPtr<CapabilityEntry>>, BorrowError> {
+        self.set_link(offset, Some(entry))
     }
 
-    pub fn unlink(&self, offset: usize) -> Option<KPtr<CapabilityEntry>> {
-        todo!();
+    pub fn unlink(&self, offset: usize) -> Result<Option<KPtr<CapabilityEntry>>, BorrowError> {
+        self.set_link(offset, None)
+    }
+
+    fn set_link(
+        &self,
+        offset: usize,
+        entry: Option<KPtr<CapabilityEntry>>,
+    ) -> Result<Option<KPtr<CapabilityEntry>>, BorrowError> {
+        let offset = offset % NUM_NODES_PER_ENTRY;
+        let slot = &self.slots[offset];
+        Ok(core::mem::replace(&mut slot.borrow_mut()?.child, entry))
     }
 }
 
-impl CapabilityNode {
+impl Slot {
     pub fn empty() -> Self {
         Self {
-            capability: Capability::Empty,
+            capability: Capability::empty(),
             child: None,
-            _align: Default::default(),
         }
     }
 }
@@ -77,8 +99,6 @@ impl CapabilityNode {
 const _SIZE_AND_ALIGNMENT_REQUIRED: () = {
     assert!(core::mem::size_of::<CapabilityEntry>() == PAGE_SIZE);
     assert!(core::mem::align_of::<CapabilityEntry>() == PAGE_SIZE);
-    assert!(core::mem::size_of::<CapabilityNode>() == NODE_SIZE);
-    assert!(core::mem::align_of::<CapabilityNode>() == NODE_SIZE);
 };
 
 impl From<usize> for CapId {
