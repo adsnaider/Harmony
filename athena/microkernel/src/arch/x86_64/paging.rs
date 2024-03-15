@@ -5,6 +5,12 @@ use crate::PMO;
 
 pub const PAGE_SIZE: usize = 4096;
 
+#[derive(Debug, Clone)]
+pub struct PhysicalRegion {
+    phys_start: u64,
+    num_frames: u64,
+}
+
 /// A physical frame that should only be used at boot time.
 #[derive(Clone, Copy, Debug)]
 pub struct RawFrame {
