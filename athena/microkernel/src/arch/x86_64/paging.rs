@@ -22,6 +22,19 @@ impl RawFrame {
         self.phys_address as usize / PAGE_SIZE
     }
 
+    /// Returns the raw frame for the sepecific PMO pointer.
+    ///
+    /// # Safety
+    ///
+    /// The pointer passed must have been created from [`RawFrame::as_ptr`] or [`RawFrame::as_ptr_mut`]
+    pub unsafe fn from_ptr<T>(addr: *mut T) -> Self {
+        let addr = addr as usize;
+        assert!(addr as usize % PAGE_SIZE == 0);
+        Self {
+            phys_address: (*PMO - addr) as u64,
+        }
+    }
+
     /// This assumes identity mapping.
     pub fn as_ptr<T>(&self) -> *const T {
         (self.phys_address + *PMO as u64) as *const T
