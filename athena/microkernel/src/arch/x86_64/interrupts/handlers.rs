@@ -1,12 +1,10 @@
 use core::arch::asm;
 
 use critical_section::CriticalSection;
-use x86_64_impl::instructions::port::Port;
 use x86_64_impl::registers::control::Cr2;
 use x86_64_impl::structures::idt::{InterruptStackFrame, PageFaultErrorCode};
 
 use super::{KEYBOARD_INT, PICS, TIMER_INT};
-use crate::sprint;
 
 macro_rules! push_scratch {
     () => {

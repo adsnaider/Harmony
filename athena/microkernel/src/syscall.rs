@@ -6,10 +6,10 @@ pub extern "sysv64" fn handle(cap: usize, op: usize, a: usize, b: usize) -> isiz
     // FIXME:
     // Use as serial print.
     if cap == usize::MAX {
-        use crate::sprintln;
+        use crate::sprint;
         let slice = unsafe { core::slice::from_raw_parts(a as *const u8, b) };
         let message = unsafe { core::str::from_utf8_unchecked(slice) };
-        sprintln!("User says: {}", message);
+        sprint!("{}", message);
         return 0;
     }
     let tcb = ThreadControlBlock::current();
