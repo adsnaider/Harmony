@@ -1,8 +1,15 @@
 [workspace]
-members = ["athena/microkernel", "athena/userspace/booter", "athena/userspace/librs"]
+members = [
+  "athena/microkernel",
+  "athena/userspace/booter",
+  "athena/userspace/librs",
+]
 
 resolver = "2"
 default-members = ["athena/microkernel"]
 
 [profile.dev]
 opt-level = 1
+
+[profile.release]
+debug = 1

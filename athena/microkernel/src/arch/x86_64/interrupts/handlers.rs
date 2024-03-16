@@ -6,6 +6,7 @@ use x86_64_impl::registers::control::Cr2;
 use x86_64_impl::structures::idt::{InterruptStackFrame, PageFaultErrorCode};
 
 use super::{KEYBOARD_INT, PICS, TIMER_INT};
+use crate::sprint;
 
 macro_rules! push_scratch {
     () => {
@@ -74,10 +75,6 @@ interrupt!(keyboard_interrupt, || {
     // SAFETY: An interrupt cannot be interrupted. This is reasonable in single threaded code.
     let cs = unsafe { CriticalSection::new() };
 
-    let mut port = Port::new(0x60);
-    // SAFETY: No side effects from reading keyboard port.
-    let _scancode: u8 = unsafe { port.read() };
-
     // SAFETY: Notify keyboard interrupt vector.
     unsafe {
         PICS.borrow_ref_mut(cs)
@@ -90,7 +87,10 @@ pub(super) extern "x86-interrupt" fn syscall_interrupt(stack_frame: InterruptSta
     // SAFETY: Very thin wrapper over a syscall. We don't need to do callee saved since sysv64 abi will
     // take care of that.
     unsafe {
-        asm!("call {handle_syscall}",
+        asm!(
+            "push rbp",
+            "call {handle_syscall}",
+            "pop rbp",
             "iretq",
             handle_syscall = sym crate::syscall::handle,
             options(noreturn));
