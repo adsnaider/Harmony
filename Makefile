@@ -56,7 +56,7 @@ setup:
 	@mkdir -p $(BUILD_DIR)
 
 build-booter:
-	cargo build -p booter --profile $(PROFILE) --target $(TARGET)
+	RUSTFLAGS="-Clink-arg=-no-pie -Crelocation-model=static" cargo build -p booter --profile $(PROFILE) --target $(TARGET)
 	cp target/$(TARGET)/$(PROFILE_DIR)/booter $(ARTIFACTS)/booter
 
 
