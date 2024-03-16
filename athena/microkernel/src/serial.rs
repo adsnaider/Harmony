@@ -67,7 +67,7 @@ macro_rules! sdbg {
         }
     };
     ($($val:expr),+ $(,)?) => {
-        ($($crate::dbg!($val)),+,)
+        ($($crate::sdbg!($val)),+,)
     };
 }
 

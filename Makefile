@@ -8,6 +8,12 @@ IMAGE_NAME=$(BUILD_DIR)/athena.iso
 TEST_IMAGE_NAME=$(BUILD_DIR)/athena-test.iso
 ISO_ROOT="$(BUILD_DIR)/iso_root"
 
+PROFILE_DIR_release="release"
+PROFILE_DIR_dev="debug"
+
+PROFILE_DIR=$(PROFILE_DIR_$(PROFILE))
+
+
 ifeq "$(DEBUGGER)" "yes"
 	QEMU_ARGS += -s -S
 endif
@@ -47,17 +53,18 @@ clippy:
 
 setup:
 	@rm -rf $(BUILD_DIR)
-	@mkdir $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
 
 build-booter:
-	cargo build -p booter --profile release --target $(TARGET)
+	cargo build -p booter --profile $(PROFILE) --target $(TARGET)
+	cp target/$(TARGET)/$(PROFILE_DIR)/booter $(ARTIFACTS)/booter
 
 
-build-kernel: build-booter
-	$(eval KERNEL_BIN=`cargo build --profile ${PROFILE} --target $(TARGET) --message-format=json | ./extract_exec.sh`)
-	@cp "$(KERNEL_BIN)" "$(BUILD_DIR)/kernel"
-	$(eval KERNEL_TEST_BIN=`cargo build --profile ${PROFILE} --target $(TARGET) --tests --message-format=json | ./extract_exec.sh`)
-	@cp "$(KERNEL_TEST_BIN)" "$(BUILD_DIR)/kernel_test"
+build-kernel: setup build-booter
+	cargo build --profile ${PROFILE} --target $(TARGET)
+	@cp target/$(TARGET)/$(PROFILE_DIR)/microkernel "$(BUILD_DIR)/kernel"
+	cargo build --profile ${PROFILE} --target $(TARGET) --tests
+	@cp target/$(TARGET)/$(PROFILE_DIR)/microkernel "$(BUILD_DIR)/kernel_test"
 
 build: build-kernel
 

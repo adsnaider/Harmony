@@ -43,7 +43,7 @@ impl RawFrame {
         let addr = addr as usize;
         assert!(addr as usize % PAGE_SIZE == 0);
         Self {
-            phys_address: (*PMO - addr) as u64,
+            phys_address: (addr - *PMO) as u64,
         }
     }
 
