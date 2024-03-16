@@ -23,7 +23,7 @@ impl State {
     const FREE: u8 = 0;
     const BORROWED: u8 = 1;
 
-    pub fn free() -> Self {
+    pub const fn free() -> Self {
         Self(AtomicU8::new(Self::FREE))
     }
 
@@ -49,7 +49,7 @@ pub enum BorrowError {
 }
 
 impl<T> AtomicRefCell<T> {
-    pub fn new(value: T) -> Self {
+    pub const fn new(value: T) -> Self {
         Self {
             data: UnsafeCell::new(value),
             state: State::free(),

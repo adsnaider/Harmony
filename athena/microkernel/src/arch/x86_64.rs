@@ -3,6 +3,7 @@ use core::arch::asm;
 use crate::arch::timer::Pit8253;
 
 pub mod bootstrap;
+pub mod execution_context;
 pub mod instructions;
 pub mod interrupts;
 pub mod paging;
