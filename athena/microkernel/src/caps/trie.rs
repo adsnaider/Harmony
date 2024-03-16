@@ -1,6 +1,7 @@
 use elain::Align;
 use tailcall::tailcall;
 
+use super::{CapError, CapId, Operation};
 use crate::arch::paging::PAGE_SIZE;
 use crate::caps::Capability;
 use crate::kptr::KPtr;
@@ -20,14 +21,20 @@ struct Slot {
     child: Option<KPtr<CapabilityEntry>>,
 }
 
-#[repr(transparent)]
-pub struct CapId(usize);
-
 impl CapabilityEntry {
     pub fn empty() -> Self {
         Self {
             slots: core::array::from_fn(|_| AtomicRefCell::new(Slot::empty())),
             _align: Default::default(),
+        }
+    }
+
+    pub fn exercise(&self, cap: CapId, op: Operation) -> Result<(), CapError> {
+        log::trace!("Exercising capability: {cap:?} with {op:?}");
+        match self.get(cap) {
+            Ok(Some(cap)) => cap.exercise(op),
+            Ok(None) => Err(CapError::NotFound),
+            Err(BorrowError::AlreadyBorrowed) => Err(CapError::BorrowError),
         }
     }
 
@@ -100,15 +107,3 @@ const _SIZE_AND_ALIGNMENT_REQUIRED: () = {
     assert!(core::mem::size_of::<CapabilityEntry>() == PAGE_SIZE);
     assert!(core::mem::align_of::<CapabilityEntry>() == PAGE_SIZE);
 };
-
-impl From<usize> for CapId {
-    fn from(value: usize) -> Self {
-        Self(value)
-    }
-}
-
-impl From<CapId> for usize {
-    fn from(value: CapId) -> Self {
-        value.0
-    }
-}
