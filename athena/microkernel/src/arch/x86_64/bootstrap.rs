@@ -22,7 +22,8 @@ pub struct Process {
 
 unsafe impl FrameAllocator<Size4KiB> for FrameBumpAllocator {
     fn allocate_frame(&mut self) -> Option<x86_64_impl::structures::paging::PhysFrame<Size4KiB>> {
-        self.alloc_frame().map(|frame| frame.into_phys_frame())
+        self.alloc_frame()
+            .map(|frame| frame.into_kernel().into_raw().into_phys_frame())
     }
 }
 
@@ -52,7 +53,7 @@ impl Process {
             "ELF must be aligned to 16 bytes"
         );
 
-        let l4_frame = fallocator.alloc_frame().unwrap();
+        let l4_frame = fallocator.alloc_frame().unwrap().into_kernel().into_raw();
         let mut addrspace = unsafe {
             let l4_table = new_l4_table(l4_frame.clone());
             OffsetPageTable::new(l4_table, VirtAddr::new(*PMO as u64))
@@ -84,7 +85,12 @@ impl Process {
         const STACK_PAGES: usize = 1;
 
         for i in 0..STACK_PAGES {
-            let frame = fallocator.alloc_frame().unwrap().into_phys_frame();
+            let frame = fallocator
+                .alloc_frame()
+                .unwrap()
+                .into_user()
+                .into_raw()
+                .into_phys_frame();
             let addr = rsp - 4096 * (i + 1);
             let page = Page::from_start_address(VirtAddr::new(addr as u64)).unwrap();
             // SAFETY: Just mapping the stack pages.
@@ -104,7 +110,12 @@ impl Process {
             }
         }
 
-        let interrupt_stack = fallocator.alloc_frame().unwrap().into_phys_frame();
+        let interrupt_stack = fallocator
+            .alloc_frame()
+            .unwrap()
+            .into_kernel()
+            .into_raw()
+            .into_phys_frame();
         let interrupt_stack_page =
             Page::from_start_address(VirtAddr::new(PRIVILEGE_STACK_ADDR)).unwrap();
         // SAFETY: Interrupt stack page in use will be unnafected since we haven't switched address spaces.
@@ -164,7 +175,7 @@ impl<'prog, 'head> Segment<'prog, 'head> {
         let mut vcurrent = vm_range.start;
         let mut fcurrent = file_range.start;
         while vcurrent < vm_range.end {
-            let frame = fallocator.alloc_frame().unwrap();
+            let frame = fallocator.alloc_frame().unwrap().into_user().into_raw();
             let page = Page::containing_address(VirtAddr::new(vcurrent));
             // SAFETY: Just mapping the elf data.
             let flags = self.header.p_flags;

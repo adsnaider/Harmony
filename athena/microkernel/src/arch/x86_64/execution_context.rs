@@ -5,7 +5,6 @@ use core::mem::MaybeUninit;
 
 use super::paging::RawFrame;
 
-// TODO: Add all the registers here and get rid of per-process interrupt stack page
 /// A generic runnable context.
 ///
 /// The context provides two methods, [`Context::jump`] and [`Context::switch`]. These can be
@@ -13,19 +12,21 @@ use super::paging::RawFrame;
 #[derive(Debug)]
 #[repr(C)]
 pub struct ExecutionContext {
+    // TODO: Add all the registers here and get rid of per-process interrupt stack page
     rsp: u64,
-    rip: u64,
     address_space: RawFrame,
 }
 
 impl ExecutionContext {
-    /// Creates a new context.
-    pub unsafe fn new(rsp: u64, rip: u64, address_space: RawFrame) -> Self {
+    pub unsafe fn uninit() -> Self {
         Self {
-            rsp,
-            rip,
-            address_space,
+            rsp: 0,
+            address_space: RawFrame::from_index(0),
         }
+    }
+    /// Creates a new context.
+    pub unsafe fn new(rsp: u64, address_space: RawFrame) -> Self {
+        Self { rsp, address_space }
     }
 
     /// Performs the context switch into this context and stores the current state into `store`.
@@ -42,17 +43,16 @@ impl ExecutionContext {
         unsafe {
             asm!(
                 // caller saved registers.
-                "pop [rsi + 8]",
                 "push rbx",
                 "push rbp",
                 "push r12",
                 "push r13",
                 "push r14",
                 "push r15",
-                "mov [rsi], rsp",      // Save stack top.
-                "mov rsp, [rdi]",      // Restore old stack
-                "mov rax, [rdi + 16]", // next task's cr3
-                "mov rbx, cr3",        // current cr3
+                "mov [rsi], rsp",     // Save stack top.
+                "mov rsp, [rdi]",     // Restore old stack
+                "mov rax, [rdi + 8]", // next task's cr3
+                "mov rbx, cr3",       // current cr3
                 "cmp rax, rbx",
                 "je 2f",
                 "mov cr3, rax",
@@ -63,7 +63,6 @@ impl ExecutionContext {
                 "pop r12",
                 "pop rbp",
                 "pop rbx",
-                "push [rdi + 8]", // Restore the rip.
                 "ret",
                 options(noreturn)
             )

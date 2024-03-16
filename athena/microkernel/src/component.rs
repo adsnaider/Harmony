@@ -25,19 +25,19 @@ impl ThreadControlBlock {
         }
     }
 
+    pub fn set_as_current(this: KPtr<Self>) {
+        assert!(unsafe { CURRENT.replace(this) }.is_none());
+    }
+
     /// Activates this thread while deactivating the previously running one
     pub fn activate(this: KPtr<Self>) {
         // NOTE That this should be per core and the kernel should run without interrupts enabled
         unsafe {
-            match CURRENT.replace(this) {
-                Some(previous) => ExecutionContext::switch(
-                    CURRENT.as_ref().unwrap_unchecked().execution_ctx.get(),
-                    previous.execution_ctx.get(),
-                ),
-                None => {
-                    ExecutionContext::jump(CURRENT.as_ref().unwrap_unchecked().execution_ctx.get())
-                }
-            }
+            let previous = CURRENT.replace(this).unwrap();
+            ExecutionContext::switch(
+                CURRENT.as_ref().unwrap_unchecked().execution_ctx.get(),
+                previous.execution_ctx.get(),
+            );
         }
     }
 }

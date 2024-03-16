@@ -24,6 +24,12 @@ impl RawFrame {
         }
     }
 
+    pub fn from_index(idx: usize) -> Self {
+        Self {
+            phys_address: idx as u64 * PAGE_SIZE as u64,
+        }
+    }
+
     pub fn index(&self) -> usize {
         self.phys_address as usize / PAGE_SIZE
     }
