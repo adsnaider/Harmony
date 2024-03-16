@@ -18,6 +18,13 @@ pub struct KPtr<T> {
     inner: NonNull<T>,
 }
 
+impl<T> PartialEq for KPtr<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner == other.inner
+    }
+}
+impl<T> Eq for KPtr<T> {}
+
 unsafe impl<T: Send> Send for KPtr<T> {}
 unsafe impl<T: Sync> Sync for KPtr<T> {}
 

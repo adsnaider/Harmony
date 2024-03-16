@@ -85,22 +85,14 @@ interrupt!(keyboard_interrupt, || {
     }
 });
 
-extern "sysv64" fn handle_syscall(code: u64) {
-    log::debug!("GOT SYSCALL {code}");
-    match code {
-        other => todo!("Syscall {other}"),
-    }
-}
-
 #[naked]
 pub(super) extern "x86-interrupt" fn syscall_interrupt(stack_frame: InterruptStackFrame) {
     // SAFETY: Very thin wrapper over a syscall. We don't need to do callee saved since sysv64 abi will
     // take care of that.
     unsafe {
-        asm!("mov rdi, rax",
-            "call {handle_syscall}",
+        asm!("call {handle_syscall}",
             "iretq",
-            handle_syscall = sym handle_syscall,
+            handle_syscall = sym crate::syscall::handle,
             options(noreturn));
     }
 }

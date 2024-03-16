@@ -73,11 +73,32 @@ dependencies = [
  "include_bytes_aligned",
  "limine",
  "log",
+ "num_enum",
  "once_cell",
  "pic8259",
  "tailcall",
  "uart_16550",
  "x86_64 0.15.0",
+]
+
+[[package]]
+name = "num_enum"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02339744ee7253741199f897151b38e72257d13802d4ee837285cc2990a90845"
+dependencies = [
+ "num_enum_derive",
+]
+
+[[package]]
+name = "num_enum_derive"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "681030a937600a36906c185595136d26abfebb4aa9c65701cefcaf8578bb982b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -162,6 +183,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "syn"
+version = "2.0.52"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b699d15b36d1f02c3e7c69f8ffef53de37aefae075d8488d4ba1a7788d574a07"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-ident",
+]
+
+[[package]]
 name = "tailcall"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -178,7 +210,7 @@ checksum = "10b7bf224f4cbce8706b34f6fd1db63bc9b1fa933a3b9e6eee2e78a660416e13"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 1.0.109",
 ]
 
 [[package]]

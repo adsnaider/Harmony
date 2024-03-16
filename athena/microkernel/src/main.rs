@@ -28,6 +28,7 @@ pub mod component;
 pub mod kptr;
 pub mod retyping;
 pub mod sync;
+pub mod syscall;
 pub(crate) mod util;
 
 mod serial;
