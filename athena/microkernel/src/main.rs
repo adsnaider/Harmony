@@ -102,7 +102,7 @@ unsafe extern "C" fn kmain() -> ! {
 
     log::info!("Loading boot process");
     let boot_process = {
-        let proc = include_bytes_aligned!(16, "../../userspace/init.bin");
+        let proc = include_bytes_aligned!(16, "../../../target/x86_64-unknown-none/release/booter");
         Process::load(proc, &mut allocator).expect("Couldn't load the boot process")
     };
     log::info!("Allocating capability tables and TCB");
