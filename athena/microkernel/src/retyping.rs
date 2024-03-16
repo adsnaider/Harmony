@@ -47,8 +47,8 @@ impl<'a> RetypeTable<'a> {
             usize::max(last, (region.base + region.length) as usize / PAGE_SIZE)
         });
 
-        let bytes_required = (nframes - 1) / core::mem::size_of::<StateValue>() + 1;
-        let frames_required = (bytes_required - 1) / 4096 + 1;
+        let bytes_required = nframes * core::mem::size_of::<Entry>();
+        let frames_required = (bytes_required - 1) / PAGE_SIZE + 1;
 
         let stolen_region = memory_map
             .iter_mut()
@@ -62,8 +62,8 @@ impl<'a> RetypeTable<'a> {
         stolen_region.base += frames_required as u64 * PAGE_SIZE as u64;
         stolen_region.length -= frames_required as u64 * PAGE_SIZE as u64;
 
-        assert!(nframes * core::mem::size_of::<StateValue>() <= frames_required * PAGE_SIZE);
-        assert!(core::mem::align_of::<StateValue>() % store as usize == 0);
+        assert!(frames_required * PAGE_SIZE / core::mem::size_of::<Entry>() >= nframes);
+        assert!(store as usize % core::mem::align_of::<Entry>() == 0);
 
         let store = unsafe { core::slice::from_raw_parts_mut(store, nframes) };
 

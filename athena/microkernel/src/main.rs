@@ -34,18 +34,11 @@ mod serial;
 #[cfg(test)]
 mod tests;
 
-use limine::memory_map::Entry;
 use limine::request::{HhdmRequest, MemoryMapRequest};
 use limine::BaseRevision;
 use once_cell::sync::Lazy;
 
-use crate::arch::execution_context::ExecutionContext;
 use crate::arch::interrupts;
-use crate::arch::paging::RawFrame;
-use crate::caps::CapabilityEntry;
-use crate::component::ThreadControlBlock;
-use crate::kptr::KPtr;
-use crate::retyping::UntypedFrame;
 
 #[cfg(target_os = "none")]
 #[cfg(not(test))]
@@ -90,27 +83,35 @@ fn init() {
     retyping::init(memory_map);
 }
 
-// #[cfg(not(test))]
+#[cfg(not(test))]
 #[no_mangle]
 unsafe extern "C" fn kmain() -> ! {
     use arch::bootstrap::Process;
     use include_bytes_aligned::include_bytes_aligned;
     use util::FrameBumpAllocator;
 
+    use crate::arch::execution_context::ExecutionContext;
+    use crate::caps::CapabilityEntry;
+    use crate::component::ThreadControlBlock;
+    use crate::kptr::KPtr;
+
     init();
 
     let mut allocator = FrameBumpAllocator::new();
 
+    log::info!("Loading boot process");
     let boot_process = {
         let proc = include_bytes_aligned!(16, "../../userspace/init.bin");
         Process::load(proc, &mut allocator).expect("Couldn't load the boot process")
     };
+    log::info!("Allocating capability tables and TCB");
     let cap_table = KPtr::new(allocator.alloc_frame().unwrap(), CapabilityEntry::empty());
     let boot_thread = KPtr::new(
         allocator.alloc_frame().unwrap(),
         ThreadControlBlock::new(cap_table, ExecutionContext::uninit()),
     );
     ThreadControlBlock::set_as_current(boot_thread);
+    log::info!("Executing boot process");
 
     boot_process.exec();
 }
