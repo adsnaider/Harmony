@@ -34,7 +34,9 @@ $(eval $(call DEFAULT_VAR,HOST_LDFLAGS,$(DEFAULT_HOST_LDFLAGS)))
 override DEFAULT_HOST_LIBS :=
 $(eval $(call DEFAULT_VAR,HOST_LIBS,$(DEFAULT_HOST_LIBS)))
 
-.PHONY: build emulate iso setup clean test-iso ktest check clippy
+.PHONY: build build-kernel build-booter emulate iso setup clean test-iso ktest check clippy
+
+all: iso
 
 check:
 	cargo check --target $(TARGET) --tests
@@ -42,17 +44,22 @@ check:
 clippy:
 	cargo clippy --target $(TARGET) --tests
 
-all: iso
 
 setup:
 	@rm -rf $(BUILD_DIR)
 	@mkdir $(BUILD_DIR)
 
-build: setup
+build-booter:
+	cargo build -p booter --profile release --target $(TARGET)
+
+
+build-kernel: build-booter
 	$(eval KERNEL_BIN=`cargo build --profile ${PROFILE} --target $(TARGET) --message-format=json | ./extract_exec.sh`)
 	@cp "$(KERNEL_BIN)" "$(BUILD_DIR)/kernel"
 	$(eval KERNEL_TEST_BIN=`cargo build --profile ${PROFILE} --target $(TARGET) --tests --message-format=json | ./extract_exec.sh`)
 	@cp "$(KERNEL_TEST_BIN)" "$(BUILD_DIR)/kernel_test"
+
+build: build-kernel
 
 emulate: iso
 	@./go.sh 33 qemu-system-x86_64 \

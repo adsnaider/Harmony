@@ -1,5 +1,5 @@
 [workspace]
-members = ["athena/microkernel"]
+members = ["athena/microkernel", "athena/userspace/booter", "athena/userspace/librs"]
 
 resolver = "2"
 default-members = ["athena/microkernel"]
