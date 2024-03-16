@@ -3,11 +3,10 @@
 use core::mem::{ManuallyDrop, MaybeUninit};
 use core::sync::atomic::{AtomicU16, AtomicU8, Ordering};
 
-use limine::memory_map::EntryType;
+use limine::memory_map::{Entry as MMapEntry, EntryType};
 use once_cell::sync::OnceCell;
 
 use crate::arch::paging::{RawFrame, PAGE_SIZE};
-use crate::util::FrameBumpAllocator;
 use crate::PMO;
 
 pub struct RetypeTable<'a> {
@@ -16,9 +15,9 @@ pub struct RetypeTable<'a> {
 
 static RETYPE_TBL: OnceCell<RetypeTable<'static>> = OnceCell::new();
 
-pub fn init(frame_allocator: FrameBumpAllocator) {
+pub fn init(memory_map: &'static mut [&'static mut MMapEntry]) {
     RETYPE_TBL
-        .set(RetypeTable::from_frame_allocator(frame_allocator).unwrap())
+        .set(RetypeTable::from_memory_map(memory_map).unwrap())
         .unwrap_or_else(|_| panic!("Double initialization"));
 }
 
@@ -40,11 +39,10 @@ pub enum EntryError {
 
 impl<'a> RetypeTable<'a> {
     /// Constructs the retype table from the bootstrap frame allocator.
-    pub fn from_frame_allocator(
-        frame_allocator: FrameBumpAllocator,
+    pub fn from_memory_map(
+        memory_map: &'a mut [&'a mut MMapEntry],
     ) -> Result<RetypeTable<'static>, RetypeInitError> {
         // TODO: Do this better by allocating multiple frames as necessary and remapping them.
-        let memory_map = frame_allocator.consume();
         let nframes = memory_map.iter().fold(0, |last, region| {
             usize::max(last, (region.base + region.length) as usize / PAGE_SIZE)
         });
@@ -198,9 +196,8 @@ impl UntypedFrame<'static> {
         this.frame
     }
 
-    pub unsafe fn from_raw(raw: RawFrame) -> Result<Self, EntryError> {
-        let entry = RETYPE_TBL.get().unwrap().raw_entry(raw)?;
-        Ok(Self { frame: raw, entry })
+    pub fn from_raw(raw: RawFrame) -> Result<Self, RetypeError> {
+        RETYPE_TBL.get().unwrap().entry(raw)
     }
 }
 

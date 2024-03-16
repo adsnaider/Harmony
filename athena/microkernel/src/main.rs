@@ -39,6 +39,14 @@ use limine::request::{HhdmRequest, MemoryMapRequest};
 use limine::BaseRevision;
 use once_cell::sync::Lazy;
 
+use crate::arch::execution_context::ExecutionContext;
+use crate::arch::interrupts;
+use crate::arch::paging::RawFrame;
+use crate::caps::CapabilityEntry;
+use crate::component::ThreadControlBlock;
+use crate::kptr::KPtr;
+use crate::retyping::UntypedFrame;
+
 #[cfg(target_os = "none")]
 #[cfg(not(test))]
 #[panic_handler]
@@ -50,12 +58,14 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     }
 }
 
-fn init() -> &'static mut [&'static mut Entry] {
+fn init() {
     #[used]
     static BASE_REVISION: BaseRevision = BaseRevision::new();
 
     #[used]
     static mut MEMORY_MAP: MemoryMapRequest = MemoryMapRequest::new();
+
+    interrupts::disable();
 
     serial::init();
     log::info!("Serial logging initialized");
@@ -77,23 +87,30 @@ fn init() -> &'static mut [&'static mut Entry] {
 
     // TODO: Set up the retype tables
 
-    memory_map
+    retyping::init(memory_map);
 }
 
-#[cfg(not(test))]
+// #[cfg(not(test))]
 #[no_mangle]
 unsafe extern "C" fn kmain() -> ! {
     use arch::bootstrap::Process;
     use include_bytes_aligned::include_bytes_aligned;
     use util::FrameBumpAllocator;
 
-    let memory_map = init();
-    let mut allocator = FrameBumpAllocator::new(memory_map);
+    init();
+
+    let mut allocator = FrameBumpAllocator::new();
 
     let boot_process = {
         let proc = include_bytes_aligned!(16, "../../userspace/init.bin");
         Process::load(proc, &mut allocator).expect("Couldn't load the boot process")
     };
+    let cap_table = KPtr::new(allocator.alloc_frame().unwrap(), CapabilityEntry::empty());
+    let boot_thread = KPtr::new(
+        allocator.alloc_frame().unwrap(),
+        ThreadControlBlock::new(cap_table, ExecutionContext::uninit()),
+    );
+    ThreadControlBlock::set_as_current(boot_thread);
 
     boot_process.exec();
 }
