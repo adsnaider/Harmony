@@ -18,6 +18,9 @@ pub struct KPtr<T> {
     inner: NonNull<T>,
 }
 
+unsafe impl<T: Send> Send for KPtr<T> {}
+unsafe impl<T: Sync> Sync for KPtr<T> {}
+
 impl<T> KPtr<T> {
     const _SIZE_AND_ALIGN: () = {
         assert!(core::mem::size_of::<T>() == PAGE_SIZE);

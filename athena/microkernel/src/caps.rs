@@ -1,6 +1,6 @@
 //! Capability-based system implementation
 
-use self::trie::CapabilityEntry;
+pub use self::trie::CapabilityEntry;
 use crate::arch::paging::PhysicalRegion;
 use crate::kptr::KPtr;
 

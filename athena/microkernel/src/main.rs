@@ -24,6 +24,7 @@ pub static PMO: Lazy<usize> = Lazy::new(|| {
 
 pub mod arch;
 pub mod caps;
+pub mod component;
 pub mod kptr;
 pub mod retyping;
 pub mod sync;
