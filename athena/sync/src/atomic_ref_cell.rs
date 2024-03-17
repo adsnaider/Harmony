@@ -31,7 +31,7 @@ impl State {
         match self.0.compare_exchange(
             Self::FREE,
             Self::BORROWED,
-            Ordering::AcqRel,
+            Ordering::Relaxed,
             Ordering::Relaxed,
         ) {
             Ok(_) => Ok(()),
@@ -40,7 +40,7 @@ impl State {
     }
 
     pub fn drop_borrow(&self) {
-        assert_eq!(self.0.swap(Self::FREE, Ordering::AcqRel), Self::BORROWED);
+        assert_eq!(self.0.swap(Self::FREE, Ordering::Relaxed), Self::BORROWED);
     }
 }
 
@@ -151,5 +151,59 @@ impl Drop for BorrowRef<'_> {
 impl Drop for BorrowRefMut<'_> {
     fn drop(&mut self) {
         self.0.drop_borrow();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn threaded_mutability() {
+        let cell = AtomicRefCell::new(0);
+
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                for i in 0..100000 {
+                    if let Ok(mut value) = cell.borrow_mut() {
+                        *value = i;
+                        std::thread::yield_now();
+                        assert_eq!(*value, i);
+                    }
+                    std::thread::yield_now();
+                }
+            });
+            s.spawn(|| {
+                for i in 100000..200000 {
+                    if let Ok(mut value) = cell.borrow_mut() {
+                        *value = i;
+                        std::thread::yield_now();
+                        assert_eq!(*value, i);
+                    }
+                    std::thread::yield_now();
+                }
+            });
+            s.spawn(|| {
+                for i in 200000..300000 {
+                    if let Ok(mut value) = cell.borrow_mut() {
+                        *value = i;
+                        std::thread::yield_now();
+                        assert_eq!(*value, i);
+                    }
+                    std::thread::yield_now();
+                }
+            });
+            s.spawn(|| {
+                for i in 300000..400000 {
+                    if let Ok(mut value) = cell.borrow_mut() {
+                        *value = i;
+                        std::thread::yield_now();
+                        assert_eq!(*value, i);
+                    }
+                    std::thread::yield_now();
+                }
+            });
+        });
     }
 }
