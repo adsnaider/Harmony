@@ -18,7 +18,7 @@ pub static PMO: Lazy<usize> = Lazy::new(|| {
         .expect("Missing Higher-half direct mapping response from limine")
         .offset();
     // PMO must be on the higher half
-    assert!(pmo > 0x0000_8000_0000_0000);
+    assert!(pmo > 0xFFFF_8000_0000_0000);
     pmo as usize
 });
 
