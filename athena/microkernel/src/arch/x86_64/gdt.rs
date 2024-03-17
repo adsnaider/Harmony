@@ -7,13 +7,15 @@ use x86_64_impl::structures::gdt::{Descriptor, GlobalDescriptorTable, SegmentSel
 use x86_64_impl::structures::tss::TaskStateSegment;
 use x86_64_impl::VirtAddr;
 
+use crate::arch::paging::PAGE_SIZE;
+
 /// The TSS stack table index to be used for the Double Fault exception.
 pub const DOUBLE_FAULT_IST_INDEX: u16 = 0;
 /// The TSS stack table index to be used for the Page Fault exception.
 pub const PAGE_FAULT_IST_INDEX: u16 = 1;
 
 /// The privilege stack for Ring 0 lives in this virtual address.
-pub const PRIVILEGE_STACK_ADDR: u64 = 0xFFFF_B000_0000_0000;
+pub const PRIVILEGE_STACK_ADDR: u64 = 0xFFFF_FFFF_7000_0000;
 
 struct Selectors {
     code_selector: SegmentSelector,
@@ -25,7 +27,7 @@ struct Selectors {
 static TSS: Lazy<TaskStateSegment> = Lazy::new(|| {
     let mut tss = TaskStateSegment::new();
     tss.interrupt_stack_table[DOUBLE_FAULT_IST_INDEX as usize] = {
-        const STACK_SIZE: usize = 4096;
+        const STACK_SIZE: usize = PAGE_SIZE;
         static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
 
         // SAFETY: Although it's a static mut, STACK is only used in this context.
@@ -33,7 +35,7 @@ static TSS: Lazy<TaskStateSegment> = Lazy::new(|| {
         stack_start + STACK_SIZE as u64 // stack end.
     };
     tss.interrupt_stack_table[PAGE_FAULT_IST_INDEX as usize] = {
-        const STACK_SIZE: usize = 4096;
+        const STACK_SIZE: usize = PAGE_SIZE;
         static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
 
         // SAFETY: Although it's a static mut, STACK is only used in this context.
@@ -43,7 +45,7 @@ static TSS: Lazy<TaskStateSegment> = Lazy::new(|| {
     // Privilege stack table used on interrupts.
     tss.privilege_stack_table[0] = {
         // Every user process will map an privilege stack page at `PRIVILEGE_STACK_ADDR`.
-        const STACK_SIZE: usize = 4096;
+        const STACK_SIZE: usize = PAGE_SIZE;
         let stack_start = VirtAddr::new(PRIVILEGE_STACK_ADDR);
         stack_start + STACK_SIZE as u64 // stack end.
     };

@@ -86,9 +86,9 @@ pub(super) extern "x86-interrupt" fn syscall_interrupt(stack_frame: InterruptSta
     // take care of that.
     unsafe {
         asm!(
-            "push rbp",
+            "sub rsp, 8",
             "call {handle_syscall}",
-            "pop rbp",
+            "add rsp, 8",
             "iretq",
             handle_syscall = sym crate::syscall::handle,
             options(noreturn));

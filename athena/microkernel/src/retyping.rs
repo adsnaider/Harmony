@@ -100,8 +100,8 @@ impl<'a> RetypeTable<'a> {
         let result = entry.state.compare_exchange(
             StateValue::untyped(),
             StateValue::retyping(),
-            Ordering::AcqRel,
-            Ordering::Acquire,
+            Ordering::SeqCst,
+            Ordering::SeqCst,
         );
         match result {
             Ok(()) => Ok(UntypedFrame { frame, entry }),
@@ -121,7 +121,7 @@ impl RawFrame {
             .table
             .get(self.index())
             .expect("Frame out of bounds");
-        entry.counter.fetch_add(1, Ordering::Release);
+        entry.counter.fetch_add(1, Ordering::SeqCst);
         KernelFrame {
             entry,
             frame: self.clone(),
@@ -135,7 +135,7 @@ impl RawFrame {
             .table
             .get(self.index())
             .expect("Frame out of bounds");
-        entry.counter.fetch_add(1, Ordering::Release);
+        entry.counter.fetch_add(1, Ordering::SeqCst);
         UserFrame {
             entry,
             frame: self.clone(),
@@ -163,10 +163,10 @@ pub struct UserFrame<'a> {
 
 impl<'a> UntypedFrame<'a> {
     pub fn into_kernel(self) -> KernelFrame<'a> {
-        self.entry.counter.store(1, Ordering::Release);
+        self.entry.counter.store(1, Ordering::SeqCst);
         self.entry
             .state
-            .store(StateValue::kernel(), Ordering::Release);
+            .store(StateValue::kernel(), Ordering::SeqCst);
         KernelFrame {
             frame: self.frame,
             entry: &self.entry,
@@ -174,10 +174,8 @@ impl<'a> UntypedFrame<'a> {
     }
 
     pub fn into_user(self) -> UserFrame<'a> {
-        self.entry.counter.store(1, Ordering::Release);
-        self.entry
-            .state
-            .store(StateValue::user(), Ordering::Release);
+        self.entry.counter.store(1, Ordering::SeqCst);
+        self.entry.state.store(StateValue::user(), Ordering::SeqCst);
         UserFrame {
             frame: self.frame,
             entry: &self.entry,
@@ -222,13 +220,13 @@ impl<'a> KernelFrame<'a> {
     }
 
     pub unsafe fn inc(&self) -> u16 {
-        let counter = self.entry.counter.fetch_add(1, Ordering::AcqRel);
+        let counter = self.entry.counter.fetch_add(1, Ordering::SeqCst);
         assert!(counter < MAX_REFCOUNT);
         counter
     }
 
     pub unsafe fn dec(&self) -> u16 {
-        let counter = self.entry.counter.fetch_sub(1, Ordering::AcqRel);
+        let counter = self.entry.counter.fetch_sub(1, Ordering::SeqCst);
         assert!(counter > 0);
         counter
     }
@@ -256,13 +254,13 @@ impl<'a> UserFrame<'a> {
     }
 
     pub unsafe fn inc(&self) -> u16 {
-        let counter = self.entry.counter.fetch_add(1, Ordering::AcqRel);
+        let counter = self.entry.counter.fetch_add(1, Ordering::SeqCst);
         assert!(counter < MAX_REFCOUNT);
         counter
     }
 
     pub unsafe fn dec(&mut self) -> u16 {
-        let counter = self.entry.counter.fetch_sub(1, Ordering::AcqRel);
+        let counter = self.entry.counter.fetch_sub(1, Ordering::SeqCst);
         assert!(counter > 0);
         counter
     }
