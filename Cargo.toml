@@ -1,6 +1,6 @@
 [workspace]
 members = [
-  "athena/microkernel",
+  "athena/microkernel", "athena/sync", "athena/trie",
   "athena/userspace/booter",
   "athena/userspace/librs",
 ]
