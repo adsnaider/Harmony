@@ -7,6 +7,14 @@ pub struct AtomicOnceCell<T> {
     init: AtomicU8,
 }
 
+// Why do we need `T: Send`?
+// Thread A creates a `OnceLock` and shares it with
+// scoped thread B, which fills the cell, which is
+// then destroyed by A. That is, destructor observes
+// a sent value.
+unsafe impl<T: Send + Sync> Sync for AtomicOnceCell<T> {}
+unsafe impl<T: Send> Send for AtomicOnceCell<T> {}
+
 pub enum OnceError {
     Initializing,
     AlreadyInit,
@@ -58,5 +66,32 @@ impl<T> AtomicOnceCell<T> {
         // SAFETY: The value is assumed to have been initialized and from then on,
         // we only provide  shared references
         unsafe { (*self.value.get()).assume_init_ref() }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn multiple_init() {
+        let cell = &AtomicOnceCell::new();
+        std::thread::scope(|s| {
+            for i in 0..10 {
+                s.spawn(move || {
+                    let _ = cell.set(i);
+                });
+            }
+        });
+
+        let value = *cell.get().unwrap();
+        assert!(value >= 0 && value < 10);
+        std::thread::scope(|s| {
+            for _ in 0..10 {
+                s.spawn(move || {
+                    assert_eq!(value, *cell.get().unwrap());
+                });
+            }
+        });
     }
 }
