@@ -1,4 +1,4 @@
-add-symbol-file .build/release/kernel -o 0xffffffff80000000
+add-symbol-file .build/release/kernel
 add-symbol-file .build/booter
 layout split
 set trace-commands on

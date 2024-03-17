@@ -9,7 +9,8 @@ resolver = "2"
 default-members = ["athena/microkernel"]
 
 [profile.dev]
-opt-level = 1
+debug = "full"
+opt-level = 2
 
 [profile.release]
-debug = 1
+debug = "full"

@@ -2,6 +2,7 @@
 
 use core::ops::Deref;
 use core::ptr::NonNull;
+use core::sync::atomic::{fence, Ordering};
 
 use crate::arch::paging::{RawFrame, PAGE_SIZE};
 use crate::retyping::{KernelFrame, UntypedFrame};
@@ -13,9 +14,14 @@ use crate::retyping::{KernelFrame, UntypedFrame};
 /// memroy retyping capabilities which use reference counts on an entire
 /// page.
 #[repr(transparent)]
-#[derive(Debug)]
 pub struct KPtr<T> {
     inner: NonNull<T>,
+}
+
+impl<T> core::fmt::Debug for KPtr<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("KPtr").field("inner", &self.inner).finish()
+    }
 }
 
 impl<T> PartialEq for KPtr<T> {
@@ -37,6 +43,7 @@ impl<T> KPtr<T> {
     pub fn new(frame: UntypedFrame<'static>, value: T) -> Self {
         let frame = frame.into_kernel().into_raw();
         let ptr: NonNull<T> = NonNull::new(frame.as_ptr_mut()).unwrap();
+        assert!(ptr.as_ptr() as usize % PAGE_SIZE == 0);
         unsafe {
             ptr.as_ptr().write(value);
         }
@@ -79,20 +86,24 @@ impl<T> Deref for KPtr<T> {
 impl<T> Clone for KPtr<T> {
     fn clone(&self) -> Self {
         let frame = self.frame();
-        unsafe {
-            frame.inc();
-        }
+        let count = unsafe { frame.inc() };
+        log::trace!("Clonning ptr with {} refernces", count + 1);
         Self { inner: self.inner }
     }
 }
 
 impl<T> Drop for KPtr<T> {
     fn drop(&mut self) {
+        log::trace!("Dropping {self:?}");
         let frame = self.frame();
-        let count = unsafe { frame.dec() };
-        if count == 1 {
-            // last one turns off the lights
-            unsafe { drop(self.inner.as_ptr().read()) }
+        if unsafe { frame.dec() } != 1 {
+            return;
+        }
+        fence(Ordering::Acquire);
+        log::trace!("Last ones! Dropping T");
+        // last one turns off the lights
+        unsafe {
+            self.inner.as_ptr().drop_in_place();
         }
     }
 }

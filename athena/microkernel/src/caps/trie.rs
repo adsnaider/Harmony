@@ -39,11 +39,13 @@ impl CapabilityEntry {
     }
 
     pub fn get(&self, id: CapId) -> Result<Option<Capability>, BorrowError> {
+        log::trace!("Getting capability: {id:?}");
         Self::get_inner(self, id.0)
     }
 
     #[tailcall]
     fn get_inner(this: &Self, id: usize) -> Result<Option<Capability>, BorrowError> {
+        log::debug!("Here 14");
         let offset = id % NUM_NODES_PER_ENTRY;
         let id = id / NUM_NODES_PER_ENTRY;
         let node = &this.slots[offset];
