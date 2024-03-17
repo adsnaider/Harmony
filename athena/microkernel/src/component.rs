@@ -26,7 +26,6 @@ impl ThreadControlBlock {
     }
 
     pub fn exercise(&self, cap: usize, op: usize) -> Result<(), CapError> {
-        log::debug!("here 10");
         let operation = Operation::try_from(op);
         log::debug!("Got operation: {operation:?}");
 

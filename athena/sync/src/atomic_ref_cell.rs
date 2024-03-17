@@ -31,7 +31,7 @@ impl State {
         match self.0.compare_exchange(
             Self::FREE,
             Self::BORROWED,
-            Ordering::Relaxed,
+            Ordering::AcqRel,
             Ordering::Relaxed,
         ) {
             Ok(_) => Ok(()),
@@ -40,7 +40,7 @@ impl State {
     }
 
     pub fn drop_borrow(&self) {
-        assert_eq!(self.0.swap(Self::FREE, Ordering::Relaxed), Self::BORROWED);
+        assert_eq!(self.0.swap(Self::FREE, Ordering::AcqRel), Self::BORROWED);
     }
 }
 
@@ -163,9 +163,14 @@ mod tests {
     fn threaded_mutability() {
         let cell = AtomicRefCell::new(0);
 
+        #[cfg(miri)]
+        const ITERS: i32 = 100;
+        #[cfg(not(miri))]
+        const ITERS: i32 = 100000;
+
         std::thread::scope(|s| {
             s.spawn(|| {
-                for i in 0..100000 {
+                for i in 0..ITERS {
                     if let Ok(mut value) = cell.borrow_mut() {
                         *value = i;
                         std::thread::yield_now();
@@ -175,7 +180,7 @@ mod tests {
                 }
             });
             s.spawn(|| {
-                for i in 100000..200000 {
+                for i in ITERS..2 * ITERS {
                     if let Ok(mut value) = cell.borrow_mut() {
                         *value = i;
                         std::thread::yield_now();
@@ -185,7 +190,7 @@ mod tests {
                 }
             });
             s.spawn(|| {
-                for i in 200000..300000 {
+                for i in 2 * ITERS..3 * ITERS {
                     if let Ok(mut value) = cell.borrow_mut() {
                         *value = i;
                         std::thread::yield_now();
@@ -195,7 +200,7 @@ mod tests {
                 }
             });
             s.spawn(|| {
-                for i in 300000..400000 {
+                for i in 3 * ITERS..4 * ITERS {
                     if let Ok(mut value) = cell.borrow_mut() {
                         *value = i;
                         std::thread::yield_now();
