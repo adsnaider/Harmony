@@ -4,20 +4,20 @@ use elain::Align;
 
 use crate::arch::execution_context::ExecutionContext;
 use crate::arch::paging::PAGE_SIZE;
-use crate::caps::{CapError, CapabilityEntry, Operation};
+use crate::caps::{CapError, CapabilityEntryPtr, Operation};
 use crate::kptr::KPtr;
 
 static mut CURRENT: Option<KPtr<ThreadControlBlock>> = None;
 
 #[derive(Debug)]
 pub struct ThreadControlBlock {
-    caps: KPtr<CapabilityEntry>,
+    caps: CapabilityEntryPtr,
     execution_ctx: UnsafeCell<ExecutionContext>,
     _align: Align<PAGE_SIZE>,
 }
 
 impl ThreadControlBlock {
-    pub fn new(caps: KPtr<CapabilityEntry>, execution_ctx: ExecutionContext) -> Self {
+    pub fn new(caps: CapabilityEntryPtr, execution_ctx: ExecutionContext) -> Self {
         Self {
             caps,
             execution_ctx: UnsafeCell::new(execution_ctx),
@@ -29,7 +29,9 @@ impl ThreadControlBlock {
         log::debug!("here 10");
         let operation = Operation::try_from(op);
         log::debug!("Got operation: {operation:?}");
-        self.caps.exercise(cap.into(), Operation::try_from(op)?)
+
+        let cap = self.caps.get(cap as u32)?;
+        cap.exercise(Operation::try_from(op)?)
     }
 
     pub fn current() -> KPtr<Self> {

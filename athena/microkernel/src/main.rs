@@ -27,7 +27,6 @@ pub mod caps;
 pub mod component;
 pub mod kptr;
 pub mod retyping;
-pub mod sync;
 pub mod syscall;
 pub(crate) mod util;
 
@@ -88,11 +87,11 @@ fn init() {
 #[no_mangle]
 unsafe extern "C" fn kmain() -> ! {
     use arch::bootstrap::Process;
+    use caps::CapabilityEntryPtr;
     use include_bytes_aligned::include_bytes_aligned;
     use util::FrameBumpAllocator;
 
     use crate::arch::execution_context::ExecutionContext;
-    use crate::caps::CapabilityEntry;
     use crate::component::ThreadControlBlock;
     use crate::kptr::KPtr;
 
@@ -106,7 +105,7 @@ unsafe extern "C" fn kmain() -> ! {
         Process::load(proc, &mut allocator).expect("Couldn't load the boot process")
     };
     log::info!("Allocating capability tables and TCB");
-    let cap_table = KPtr::new(allocator.alloc_frame().unwrap(), CapabilityEntry::empty());
+    let cap_table = CapabilityEntryPtr::new(allocator.alloc_frame().unwrap());
     let boot_thread = KPtr::new(
         allocator.alloc_frame().unwrap(),
         ThreadControlBlock::new(cap_table, ExecutionContext::uninit()),

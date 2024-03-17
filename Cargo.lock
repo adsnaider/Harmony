@@ -171,7 +171,9 @@ dependencies = [
  "num_enum",
  "once_cell",
  "pic8259",
+ "sync",
  "tailcall",
+ "trie",
  "uart_16550",
  "x86_64 0.15.0",
 ]

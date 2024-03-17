@@ -6,6 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+sync = { path = "../sync" }
+trie = { path = "../trie" }
+
 limine = { version = "0.2.0", features = ["ipaddr"] }
 critical-section = { version = "1.1", features = ["restore-state-bool"] }
 once_cell = { version = "1.19.0", default-features = false, features = [

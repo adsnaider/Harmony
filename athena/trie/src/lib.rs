@@ -24,22 +24,22 @@ impl<const COUNT: usize, S: Slot<COUNT> + Default> TrieEntry<COUNT, S> {
         core::mem::size_of::<S>()
     }
 
-    pub fn get(this: S::Ptr, id: u32) -> Option<impl Ptr<S>> {
+    pub fn get(this: S::Ptr, id: u32) -> Result<Option<impl Ptr<S>>, S::Err> {
         let id = usize::try_from(id).unwrap();
         Self::get_inner(this, id)
     }
 
     #[tailcall]
-    fn get_inner(this: S::Ptr, id: usize) -> Option<impl Ptr<S>> {
+    fn get_inner(this: S::Ptr, id: usize) -> Result<Option<impl Ptr<S>>, S::Err> {
         let offset: usize = id % COUNT;
         let id = id / COUNT;
         if id == 0 {
             let node = this.map(move |entry| &entry.slots[offset]);
-            Some(node)
+            Ok(Some(node))
         } else {
             let slot = &this.slots[offset];
-            let Some(child) = slot.child() else {
-                return None;
+            let Some(child) = slot.child()? else {
+                return Ok(None);
             };
             Self::get_inner(child, id)
         }
@@ -77,24 +77,17 @@ impl<T, P: Ptr<T>, U, F: Fn(&T) -> &U> Deref for PtrMap<T, P, U, F> {
 }
 
 pub trait Slot<const COUNT: usize>: Sized {
+    type Err;
     type Ptr: Ptr<TrieEntry<COUNT, Self>>;
 
-    fn child(&self) -> Option<Self::Ptr>;
-    fn set_child(&self, child: Option<Self::Ptr>) -> Option<Self::Ptr>;
-
-    fn link(&self, child: Self::Ptr) -> Option<Self::Ptr> {
-        self.set_child(Some(child))
-    }
-
-    fn unlink(&self) -> Option<Self::Ptr> {
-        self.set_child(None)
-    }
+    fn child(&self) -> Result<Option<Self::Ptr>, Self::Err>;
 }
 
 #[cfg(test)]
 mod tests {
 
     use core::cell::{Cell, RefCell};
+    use core::convert::Infallible;
     use std::rc::Rc;
 
     use super::*;
@@ -109,12 +102,18 @@ mod tests {
 
     impl<const COUNT: usize> Slot<COUNT> for MySlot<COUNT> {
         type Ptr = Rc<TrieEntry<COUNT, Self>>;
+        type Err = Infallible;
 
-        fn child(&self) -> Option<Self::Ptr> {
-            self.child.borrow().clone()
+        fn child(&self) -> Result<Option<Self::Ptr>, Self::Err> {
+            Ok(self.child.borrow().clone())
         }
+    }
 
-        fn set_child(&self, child: Option<Self::Ptr>) -> Option<Self::Ptr> {
+    impl<const COUNT: usize> MySlot<COUNT> {
+        fn set_child(
+            &self,
+            child: Option<<Self as Slot<COUNT>>::Ptr>,
+        ) -> Option<<Self as Slot<COUNT>>::Ptr> {
             core::mem::replace(&mut *self.child.borrow_mut(), child)
         }
     }
@@ -123,7 +122,10 @@ mod tests {
     fn smoke() {
         type MyTrie = TrieEntry<16, MySlot<16>>;
         let trie: Rc<MyTrie> = Rc::new(TrieEntry::default());
-        assert_eq!(MyTrie::get(trie.clone(), 0).unwrap().payload.get(), 0);
+        assert_eq!(
+            MyTrie::get(trie.clone(), 0).unwrap().unwrap().payload.get(),
+            0
+        );
     }
 
     #[test]
@@ -132,12 +134,12 @@ mod tests {
         let trie: Rc<MyTrie> = Rc::new(TrieEntry::default());
 
         for id in 0..64 {
-            let slot = MyTrie::get(trie.clone(), id).unwrap();
+            let slot = MyTrie::get(trie.clone(), id).unwrap().unwrap();
             slot.payload.set(id);
         }
 
         for id in 0..64 {
-            let slot = MyTrie::get(trie.clone(), id).unwrap();
+            let slot = MyTrie::get(trie.clone(), id).unwrap().unwrap();
             assert_eq!(slot.payload.get(), id);
         }
     }
@@ -147,10 +149,17 @@ mod tests {
         type MyTrie = TrieEntry<64, MySlot<64>>;
         let trie: Rc<MyTrie> = Rc::new(TrieEntry::default());
 
-        assert!(MyTrie::get(trie.clone(), 64).is_none());
-        let slot = MyTrie::get(trie.clone(), 0).unwrap();
+        assert!(MyTrie::get(trie.clone(), 64).unwrap().is_none());
+        let slot = MyTrie::get(trie.clone(), 0).unwrap().unwrap();
         let l1: Rc<MyTrie> = Rc::new(TrieEntry::default());
-        assert!(slot.link(l1).is_none());
-        assert_eq!(MyTrie::get(trie.clone(), 64).unwrap().payload.get(), 0);
+        assert!(slot.set_child(Some(l1)).is_none());
+        assert_eq!(
+            MyTrie::get(trie.clone(), 64)
+                .unwrap()
+                .unwrap()
+                .payload
+                .get(),
+            0
+        );
     }
 }
