@@ -1,7 +1,7 @@
 //! Capability-based system implementation
 
 use num_enum::TryFromPrimitive;
-use sync::{AtomicRefCell, BorrowError};
+use sync::cell::{AtomicRefCell, BorrowError};
 use trie::{Slot, TrieEntry};
 
 use crate::arch::paging::PhysicalRegion;
