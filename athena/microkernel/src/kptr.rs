@@ -107,3 +107,5 @@ impl<T> Drop for KPtr<T> {
         }
     }
 }
+
+impl<T> trie::Ptr<T> for KPtr<T> {}

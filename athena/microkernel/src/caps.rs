@@ -1,25 +1,71 @@
 //! Capability-based system implementation
 
 use num_enum::TryFromPrimitive;
+use sync::{AtomicRefCell, BorrowError};
+use trie::{Slot, TrieEntry};
 
-pub use self::trie::CapabilityEntry;
 use crate::arch::paging::PhysicalRegion;
 use crate::component::ThreadControlBlock;
 use crate::kptr::KPtr;
+use crate::retyping::UntypedFrame;
 
-mod trie;
+#[derive(Default)]
+struct CapSlot {
+    child: Option<KPtr<RawCapEntry>>,
+    capability: Capability,
+}
+#[derive(Default)]
+pub struct AtomicCapSlot(AtomicRefCell<CapSlot>);
+
+const NUM_SLOTS: usize = 64;
+
+impl Slot<NUM_SLOTS> for AtomicCapSlot {
+    type Ptr = KPtr<RawCapEntry>;
+    type Err = BorrowError;
+
+    fn child(&self) -> Result<Option<Self::Ptr>, BorrowError> {
+        Ok(self.0.borrow()?.child.clone())
+    }
+}
+
+impl From<BorrowError> for CapError {
+    fn from(value: BorrowError) -> Self {
+        match value {
+            BorrowError::AlreadyBorrowed => CapError::BorrowError,
+        }
+    }
+}
+
+pub type RawCapEntry = TrieEntry<NUM_SLOTS, AtomicCapSlot>;
+
+#[repr(transparent)]
+#[derive(Debug, Clone)]
+pub struct CapabilityEntryPtr(KPtr<RawCapEntry>);
+
+impl CapabilityEntryPtr {
+    pub fn new(frame: UntypedFrame<'static>) -> Self {
+        CapabilityEntryPtr(KPtr::new(frame, RawCapEntry::default()))
+    }
+    pub fn get(&self, cap: u32) -> Result<Capability, CapError> {
+        match RawCapEntry::get(self.0.clone(), cap)? {
+            Some(slot) => Ok(slot.0.borrow()?.capability.clone()),
+            None => Err(CapError::NotFound),
+        }
+    }
+}
 
 #[repr(u8)]
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub enum Resource {
+    #[default]
     Empty,
     Untyped(PhysicalRegion),
-    CapEntry(KPtr<CapabilityEntry>),
+    CapEntry(KPtr<RawCapEntry>),
     Thread(KPtr<ThreadControlBlock>),
 }
 
 #[repr(C)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Capability {
     resource: Resource,
     flags: CapFlags,
@@ -57,6 +103,12 @@ impl Capability {
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct CapFlags(u32);
+
+impl Default for CapFlags {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
 
 impl CapFlags {
     pub fn empty() -> Self {
