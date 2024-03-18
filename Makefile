@@ -56,16 +56,16 @@ setup:
 	@mkdir -p $(BUILD_DIR)
 
 build-booter:
-	RUSTFLAGS="-Clink-arg=-no-pie -Crelocation-model=static" cargo build -p booter --profile $(PROFILE) --target $(TARGET)
-	cp target/$(TARGET)/$(PROFILE_DIR)/booter $(ARTIFACTS)/booter
-	cp target/$(TARGET)/$(PROFILE_DIR)/booter $(BUILD_DIR)/booter
+	$(eval BOOTER_BIN=`RUSTFLAGS="-Clink-arg=-no-pie -Crelocation-model=static" cargo build -p booter --profile $(PROFILE) --target $(TARGET) --message-format=json | ./extract_exec.sh`)
+	cp "$(BOOTER_BIN)" $(BUILD_DIR)/booter
+	ln -sf $(PROFILE)/booter $(ARTIFACTS)/booter
 
 
 build-kernel: setup build-booter
-	cargo build --profile ${PROFILE} --target $(TARGET)
-	@cp target/$(TARGET)/$(PROFILE_DIR)/microkernel "$(BUILD_DIR)/kernel"
-	cargo build --profile ${PROFILE} --target $(TARGET) --tests
-	@cp target/$(TARGET)/$(PROFILE_DIR)/microkernel "$(BUILD_DIR)/kernel_test"
+	$(eval KERNEL_BIN=`cargo build --profile ${PROFILE} --target $(TARGET) --message-format=json | ./extract_exec.sh`)
+	@cp -fs "$(KERNEL_BIN)" $(BUILD_DIR)/kernel
+	$(eval KERNEL_TEST_BIN=`cargo test --profile ${PROFILE} --target $(TARGET) --no-run --message-format=json | ./extract_exec.sh`)
+	@cp "$(KERNEL_TEST_BIN)" $(BUILD_DIR)/kernel_test
 
 dbg_dir: setup build-kernel build-booter
 	@mkdir -p $(ARTIFACTS)/debugger/
