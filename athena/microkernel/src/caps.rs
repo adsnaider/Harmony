@@ -4,7 +4,6 @@ use num_enum::TryFromPrimitive;
 use sync::cell::{AtomicRefCell, BorrowError};
 use trie::{Slot, TrieEntry};
 
-use crate::arch::paging::PhysicalRegion;
 use crate::component::ThreadControlBlock;
 use crate::kptr::KPtr;
 use crate::retyping::UntypedFrame;
@@ -59,9 +58,9 @@ impl CapabilityEntryPtr {
 pub enum Resource {
     #[default]
     Empty,
-    Untyped(PhysicalRegion),
     CapEntry(KPtr<RawCapEntry>),
     Thread(KPtr<ThreadControlBlock>),
+    // PageTable
 }
 
 #[repr(C)]
@@ -75,7 +74,6 @@ impl Capability {
     pub fn exercise(self, op: Operation) -> Result<(), CapError> {
         match self.resource {
             Resource::Empty => return Err(CapError::NotFound),
-            Resource::Untyped(_) => todo!(),
             Resource::CapEntry(_) => todo!(),
             Resource::Thread(thd) => match op {
                 Operation::ThdActivate => ThreadControlBlock::activate(thd),
