@@ -40,7 +40,7 @@ $(eval $(call DEFAULT_VAR,HOST_LDFLAGS,$(DEFAULT_HOST_LDFLAGS)))
 override DEFAULT_HOST_LIBS :=
 $(eval $(call DEFAULT_VAR,HOST_LIBS,$(DEFAULT_HOST_LIBS)))
 
-.PHONY: build build-kernel build-booter emulate iso setup clean test-iso ktest check clippy
+.PHONY: dbg_dir build build-kernel build-booter emulate iso setup clean test-iso ktest check clippy
 
 all: iso
 
@@ -58,6 +58,7 @@ setup:
 build-booter:
 	RUSTFLAGS="-Clink-arg=-no-pie -Crelocation-model=static" cargo build -p booter --profile $(PROFILE) --target $(TARGET)
 	cp target/$(TARGET)/$(PROFILE_DIR)/booter $(ARTIFACTS)/booter
+	cp target/$(TARGET)/$(PROFILE_DIR)/booter $(BUILD_DIR)/booter
 
 
 build-kernel: setup build-booter
@@ -66,9 +67,15 @@ build-kernel: setup build-booter
 	cargo build --profile ${PROFILE} --target $(TARGET) --tests
 	@cp target/$(TARGET)/$(PROFILE_DIR)/microkernel "$(BUILD_DIR)/kernel_test"
 
+dbg_dir: setup build-kernel build-booter
+	@mkdir -p $(ARTIFACTS)/debugger/
+	@cp $(BUILD_DIR)/kernel $(ARTIFACTS)/debugger
+	@cp $(BUILD_DIR)/kernel_test $(ARTIFACTS)/debugger
+	@cp $(BUILD_DIR)/booter $(ARTIFACTS)/debugger
+
 build: build-kernel
 
-emulate: iso
+emulate: dbg_dir iso
 	@./go.sh 33 qemu-system-x86_64 \
 		-cdrom $(IMAGE_NAME) \
 		-bios /usr/share/ovmf/OVMF.fd \
