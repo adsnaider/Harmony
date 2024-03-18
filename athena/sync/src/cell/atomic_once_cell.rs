@@ -21,21 +21,24 @@ pub enum OnceError {
 }
 
 impl<T> AtomicOnceCell<T> {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             value: UnsafeCell::new(MaybeUninit::uninit()),
             init: AtomicU8::new(0),
         }
     }
 
-    pub fn set(&self, value: T) -> Result<(), OnceError> {
+    pub fn set_with<F>(&self, fun: F) -> Result<(), OnceError>
+    where
+        F: FnOnce() -> T,
+    {
         match self
             .init
             .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Relaxed)
         {
             // SAFETY: Okay to write while initializing because we only allow 1 reference to exist
             Ok(_) => unsafe {
-                (*self.value.get()).write(value);
+                (*self.value.get()).write(fun());
             },
             Err(1) => return Err(OnceError::Initializing),
             Err(2) => return Err(OnceError::AlreadyInit),
@@ -43,6 +46,10 @@ impl<T> AtomicOnceCell<T> {
         }
         self.init.store(2, Ordering::Release);
         Ok(())
+    }
+
+    pub fn set(&self, value: T) -> Result<(), OnceError> {
+        self.set_with(|| value)
     }
 
     pub fn get(&self) -> Option<&T> {

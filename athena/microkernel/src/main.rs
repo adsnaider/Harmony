@@ -9,19 +9,6 @@
 #![feature(naked_functions)]
 #![cfg_attr(target_arch = "x86_64", feature(abi_x86_interrupt))]
 
-pub static PMO: Lazy<usize> = Lazy::new(|| {
-    #[used]
-    static HHDM: HhdmRequest = HhdmRequest::new();
-
-    let pmo = HHDM
-        .get_response()
-        .expect("Missing Higher-half direct mapping response from limine")
-        .offset();
-    // PMO must be on the higher half
-    assert!(pmo > 0xFFFF_8000_0000_0000);
-    pmo as usize
-});
-
 pub mod arch;
 pub mod caps;
 pub mod component;
@@ -36,9 +23,22 @@ mod tests;
 
 use limine::request::{HhdmRequest, MemoryMapRequest};
 use limine::BaseRevision;
-use once_cell::sync::Lazy;
+use sync::cell::AtomicLazyCell;
 
 use crate::arch::interrupts;
+
+pub static PMO: AtomicLazyCell<usize> = AtomicLazyCell::new(|| {
+    #[used]
+    static HHDM: HhdmRequest = HhdmRequest::new();
+
+    let pmo = HHDM
+        .get_response()
+        .expect("Missing Higher-half direct mapping response from limine")
+        .offset();
+    // PMO must be on the higher half
+    assert!(pmo > 0xFFFF_8000_0000_0000);
+    pmo as usize
+});
 
 #[cfg(target_os = "none")]
 #[cfg(not(test))]

@@ -4,7 +4,7 @@ use core::mem::{ManuallyDrop, MaybeUninit};
 use core::sync::atomic::{AtomicU16, AtomicU8, Ordering};
 
 use limine::memory_map::{Entry as MMapEntry, EntryType};
-use once_cell::sync::OnceCell;
+use sync::cell::AtomicOnceCell;
 
 use crate::arch::paging::{RawFrame, PAGE_SIZE};
 use crate::PMO;
@@ -13,7 +13,7 @@ pub struct RetypeTable<'a> {
     table: &'a [Entry],
 }
 
-static RETYPE_TBL: OnceCell<RetypeTable<'static>> = OnceCell::new();
+static RETYPE_TBL: AtomicOnceCell<RetypeTable<'static>> = AtomicOnceCell::new();
 
 pub fn init(memory_map: &'static mut [&'static mut MMapEntry]) {
     RETYPE_TBL
