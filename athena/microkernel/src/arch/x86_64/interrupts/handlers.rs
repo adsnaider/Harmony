@@ -1,6 +1,5 @@
 use core::arch::asm;
 
-use critical_section::CriticalSection;
 use x86_64_impl::registers::control::Cr2;
 use x86_64_impl::structures::idt::{InterruptStackFrame, PageFaultErrorCode};
 
@@ -60,23 +59,16 @@ macro_rules! interrupt {
 }
 
 interrupt!(timer_interrupt, || {
-    // SAFETY: An interrupt cannot be interrupted. This is reasonable in single threaded code.
-    let cs = unsafe { CriticalSection::new() };
-
     // SAFETY: Notify timer interrupt vector.
     unsafe {
-        PICS.borrow_ref_mut(cs).notify_end_of_interrupt(TIMER_INT);
+        PICS.notify_end_of_interrupt(TIMER_INT);
     }
 });
 
 interrupt!(keyboard_interrupt, || {
-    // SAFETY: An interrupt cannot be interrupted. This is reasonable in single threaded code.
-    let cs = unsafe { CriticalSection::new() };
-
     // SAFETY: Notify keyboard interrupt vector.
     unsafe {
-        PICS.borrow_ref_mut(cs)
-            .notify_end_of_interrupt(KEYBOARD_INT);
+        PICS.notify_end_of_interrupt(KEYBOARD_INT);
     }
 });
 

@@ -52,11 +52,11 @@ impl PitTimer {
             ch0_port,
         };
         // SAFETY: No other side effects.
-        critical_section::with(|_cs| unsafe {
+        unsafe {
             // Set PIT to channel 0, mode 3 in low/high byte.
             this.mode_port.write(0b00110110);
             this.reset(reset_value);
-        });
+        }
         this
     }
 
@@ -68,26 +68,24 @@ impl PitTimer {
             "Reset value of 0 is currently not supported."
         );
         // SAFETY: No other side effects, the reset_value is valid.
-        critical_section::with(|_cs| unsafe {
+        unsafe {
             // Low byte
             self.ch0_port.write((reset_value & 0xFF) as u8);
             // High byte
             self.ch0_port.write(((reset_value >> 8) & 0xFF) as u8);
-        });
+        }
     }
 
     /// Read's the PIT's current count.
     pub fn read_count(&mut self) -> u16 {
-        critical_section::with(|_cs| {
-            let mut count: u16;
-            // SAFETY: No other side effects.
-            unsafe {
-                self.mode_port.write(0b00000000);
-                count = self.ch0_port.read() as u16;
-                count |= (self.ch0_port.read() as u16) << 8;
-            }
-            count
-        })
+        let mut count: u16;
+        // SAFETY: No other side effects.
+        unsafe {
+            self.mode_port.write(0b00000000);
+            count = self.ch0_port.read() as u16;
+            count |= (self.ch0_port.read() as u16) << 8;
+        }
+        count
     }
 
     /// Get's the PIT's configured reset value.
