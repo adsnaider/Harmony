@@ -5,6 +5,7 @@ use crate::{sprint, sprintln};
 #[no_mangle]
 unsafe extern "C" fn kmain() -> ! {
     crate::init();
+    log::info!("IN TEST KERNEL");
     crate::test_main();
     exit_qemu(QemuExitCode::Success)
 }
