@@ -27,7 +27,13 @@ impl<T, F: FnOnce() -> T> AtomicLazyCell<T, F> {
             Some(fun) => fun(),
             None => panic!("Lazy instance has previously been poisoned"),
         });
-        unsafe { self.inner.get_unchecked() }
+        loop {
+            match self.inner.get() {
+                Some(value) => break value,
+                // Still initializing
+                None => {}
+            }
+        }
     }
 }
 
@@ -36,5 +42,32 @@ impl<T, F: Fn() -> T> Deref for AtomicLazyCell<T, F> {
 
     fn deref(&self) -> &Self::Target {
         self.get()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use core::hint::black_box;
+    use core::time::Duration;
+
+    use super::*;
+
+    #[test]
+    fn multithreaded_evaluation() {
+        let cell = AtomicLazyCell::new(|| {
+            // Make a long running computation
+            std::thread::sleep(Duration::from_secs(1));
+            // Black box it just in case.
+            black_box(10)
+        });
+
+        std::thread::scope(|s| {
+            for _ in 0..10 {
+                s.spawn(|| {
+                    let value = cell.get();
+                    assert_eq!(*value, 10);
+                });
+            }
+        });
     }
 }
