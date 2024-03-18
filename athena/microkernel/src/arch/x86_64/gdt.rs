@@ -1,6 +1,6 @@
 //! Global descriptor table.
 
-use once_cell::sync::Lazy;
+use sync::cell::AtomicLazyCell;
 use x86_64_impl::instructions::tables::load_tss;
 use x86_64_impl::registers::segmentation::{Segment, CS, DS, ES, FS, GS, SS};
 use x86_64_impl::structures::gdt::{Descriptor, GlobalDescriptorTable, SegmentSelector};
@@ -24,7 +24,7 @@ struct Selectors {
     _user_data_selector: SegmentSelector,
     tss_selector: SegmentSelector,
 }
-static TSS: Lazy<TaskStateSegment> = Lazy::new(|| {
+static TSS: AtomicLazyCell<TaskStateSegment> = AtomicLazyCell::new(|| {
     let mut tss = TaskStateSegment::new();
     tss.interrupt_stack_table[DOUBLE_FAULT_IST_INDEX as usize] = {
         const STACK_SIZE: usize = PAGE_SIZE;
@@ -52,7 +52,7 @@ static TSS: Lazy<TaskStateSegment> = Lazy::new(|| {
     tss
 });
 
-static GDT: Lazy<(GlobalDescriptorTable, Selectors)> = Lazy::new(|| {
+static GDT: AtomicLazyCell<(GlobalDescriptorTable, Selectors)> = AtomicLazyCell::new(|| {
     let mut gdt = GlobalDescriptorTable::new();
     let code_selector = gdt.append(Descriptor::kernel_code_segment());
     let data_selector = gdt.append(Descriptor::kernel_data_segment());

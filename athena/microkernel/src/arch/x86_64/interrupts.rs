@@ -2,8 +2,8 @@ use core::arch::asm;
 use core::cell::RefCell;
 
 use critical_section::Mutex;
-use once_cell::sync::Lazy;
 use pic8259::ChainedPics;
+use sync::cell::AtomicLazyCell;
 use x86_64_impl::structures::idt::InterruptDescriptorTable;
 use x86_64_impl::PrivilegeLevel;
 
@@ -53,7 +53,7 @@ pub fn are_enabled() -> bool {
 
 /// Initializes the interrupt descriptor table.
 fn init_idt() {
-    static IDT: Lazy<InterruptDescriptorTable> = Lazy::new(|| {
+    static IDT: AtomicLazyCell<InterruptDescriptorTable> = AtomicLazyCell::new(|| {
         let mut idt = InterruptDescriptorTable::new();
         // Exceptions.
         idt.breakpoint.set_handler_fn(handlers::breakpoint);

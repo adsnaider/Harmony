@@ -4,7 +4,7 @@ use core::cell::RefCell;
 
 use critical_section::Mutex;
 use log::{LevelFilter, Metadata, Record};
-use once_cell::sync::Lazy;
+use sync::cell::AtomicLazyCell;
 use uart_16550::SerialPort;
 
 /// Initializes serial port and logger. sprint! and log macros after this.
@@ -14,7 +14,7 @@ pub(super) fn init() {
         .expect("Couldn't set the serial logger");
 }
 
-static SERIAL: Lazy<Mutex<RefCell<SerialPort>>> = Lazy::new(|| {
+static SERIAL: AtomicLazyCell<Mutex<RefCell<SerialPort>>> = AtomicLazyCell::new(|| {
     // SAFETY: Serial port address base is correct.
     let mut serial_port = unsafe { SerialPort::new(0x3F8) };
     serial_port.init();
@@ -74,7 +74,7 @@ macro_rules! sdbg {
 /// The global logger.
 static LOGGER: Logger = Logger {};
 
-static LOG_LEVEL: Lazy<LevelFilter> = Lazy::new(|| {
+static LOG_LEVEL: AtomicLazyCell<LevelFilter> = AtomicLazyCell::new(|| {
     let level = option_env!("KERNEL_LOG_LEVEL").unwrap_or("info");
     match level {
         "trace" => LevelFilter::Trace,
