@@ -1,5 +1,5 @@
 use core::cell::Cell;
-use core::ops::Deref;
+use core::ops::{Deref, DerefMut};
 
 use super::AtomicOnceCell;
 
@@ -35,6 +35,18 @@ impl<T, F: FnOnce() -> T> AtomicLazyCell<T, F> {
             }
         }
     }
+
+    pub fn get_mut(&mut self) -> &mut T {
+        let _ = self.inner.set_with(|| match self.fun.take() {
+            Some(fun) => fun(),
+            None => panic!("Lazy instance has previously been poisoned"),
+        });
+        match self.inner.get_mut() {
+            Some(value) => value,
+            // Still initializing
+            None => panic!("Lazy instance should have been initialized"),
+        }
+    }
 }
 
 impl<T, F: Fn() -> T> Deref for AtomicLazyCell<T, F> {
@@ -42,6 +54,12 @@ impl<T, F: Fn() -> T> Deref for AtomicLazyCell<T, F> {
 
     fn deref(&self) -> &Self::Target {
         self.get()
+    }
+}
+
+impl<T, F: Fn() -> T> DerefMut for AtomicLazyCell<T, F> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.get_mut()
     }
 }
 

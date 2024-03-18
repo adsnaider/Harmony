@@ -63,6 +63,17 @@ impl<T> AtomicOnceCell<T> {
         }
     }
 
+    pub fn get_mut(&mut self) -> Option<&mut T> {
+        let is_init = self.init.load(Ordering::Acquire) == 2;
+        if is_init {
+            // SAFETY: The value has been initialized and from now on, we only provide
+            // shared references
+            unsafe { Some(self.get_mut_unchecked()) }
+        } else {
+            None
+        }
+    }
+
     /// Returns a shared reference to the inner value and assumes its been initialized.
     ///
     /// # Safety
@@ -73,6 +84,18 @@ impl<T> AtomicOnceCell<T> {
         // SAFETY: The value is assumed to have been initialized and from then on,
         // we only provide  shared references
         unsafe { (*self.value.get()).assume_init_ref() }
+    }
+
+    /// Returns a shared reference to the inner value and assumes its been initialized.
+    ///
+    /// # Safety
+    ///
+    /// The inner value must be initialized at this point.
+    pub unsafe fn get_mut_unchecked(&mut self) -> &mut T {
+        fence(Ordering::Acquire);
+        // SAFETY: The value is assumed to have been initialized and from then on,
+        // we only provide  shared references
+        unsafe { (*self.value.get()).assume_init_mut() }
     }
 }
 

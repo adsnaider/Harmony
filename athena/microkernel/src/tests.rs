@@ -12,10 +12,8 @@ unsafe extern "C" fn kmain() -> ! {
 #[cfg(target_os = "none")]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    critical_section::with(|_| {
-        sprintln!("{}", info);
-        exit_qemu(QemuExitCode::Failed)
-    })
+    sprintln!("{}", info);
+    exit_qemu(QemuExitCode::Failed)
 }
 
 pub fn runner(tests: &[&dyn Testable]) {

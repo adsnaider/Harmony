@@ -1,7 +1,5 @@
 use core::arch::asm;
-use core::cell::RefCell;
 
-use critical_section::Mutex;
 use pic8259::ChainedPics;
 use sync::cell::AtomicLazyCell;
 use x86_64_impl::structures::idt::InterruptDescriptorTable;
@@ -14,10 +12,8 @@ mod handlers;
 const PIC1_OFFSET: u8 = 32;
 const PIC2_OFFSET: u8 = PIC1_OFFSET + 8;
 
-static PICS: Mutex<RefCell<ChainedPics>> = Mutex::new(
-    // SAFETY: PIC Offsets don't collide with exceptions.
-    unsafe { RefCell::new(ChainedPics::new(PIC1_OFFSET, PIC2_OFFSET)) },
-);
+// TODO: Better way to manage mutual exclusion (core local?).
+static mut PICS: ChainedPics = unsafe { ChainedPics::new(PIC1_OFFSET, PIC2_OFFSET) };
 
 const TIMER_INT: u8 = PIC1_OFFSET;
 const KEYBOARD_INT: u8 = PIC1_OFFSET + 1;
@@ -112,15 +108,12 @@ fn init_idt() {
 
 /// Initializes the IDT and sets up the 8259 PIC.
 pub fn init() {
-    critical_section::with(|cs| {
-        init_idt();
-        // SAFETY: PIC Initialization. We only initialize interrupts that we are currently handling.
-        unsafe {
-            let mut pics = PICS.borrow_ref_mut(cs);
-            pics.initialize();
-            pics.write_masks(0xFC, 0xFF);
-        }
-    })
+    init_idt();
+    // SAFETY: PIC Initialization. We only initialize interrupts that we are currently handling.
+    unsafe {
+        PICS.initialize();
+        PICS.write_masks(0xFC, 0xFF);
+    }
 }
 
 #[cfg(test)]
