@@ -87,7 +87,7 @@ fn init() {
 #[no_mangle]
 unsafe extern "C" fn kmain() -> ! {
     use arch::bootstrap::Process;
-    use caps::CapabilityEntryPtr;
+    use caps::{CapFlags, Capability, CapabilityEntryPtr};
     use include_bytes_aligned::include_bytes_aligned;
     use util::FrameBumpAllocator;
 
@@ -108,9 +108,19 @@ unsafe extern "C" fn kmain() -> ! {
     let cap_table = CapabilityEntryPtr::new(allocator.alloc_frame().unwrap());
     let boot_thread = KPtr::new(
         allocator.alloc_frame().unwrap(),
-        ThreadControlBlock::new(cap_table, ExecutionContext::uninit()),
+        ThreadControlBlock::new(cap_table.clone(), ExecutionContext::uninit()),
     );
-    ThreadControlBlock::set_as_current(boot_thread);
+    ThreadControlBlock::set_as_current(boot_thread.clone());
+
+    let cap_slot = cap_table.get_slot(0).unwrap();
+    let thd_slot = cap_table.get_slot(1).unwrap();
+    cap_slot
+        .set_capability(Capability::new(cap_table, CapFlags::empty()))
+        .unwrap();
+    thd_slot
+        .set_capability(Capability::new(boot_thread, CapFlags::empty()))
+        .unwrap();
+
     log::info!("Executing boot process");
 
     boot_process.exec();

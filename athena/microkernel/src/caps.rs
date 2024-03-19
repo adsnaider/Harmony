@@ -2,7 +2,7 @@
 
 use num_enum::TryFromPrimitive;
 use sync::cell::{AtomicRefCell, BorrowError};
-use trie::{Slot, TrieEntry};
+use trie::{Ptr, Slot, TrieEntry};
 
 use crate::component::ThreadControlBlock;
 use crate::kptr::KPtr;
@@ -15,6 +15,15 @@ struct CapSlot {
 }
 #[derive(Default)]
 pub struct AtomicCapSlot(AtomicRefCell<CapSlot>);
+
+impl AtomicCapSlot {
+    pub fn set_capability(&self, new: Capability) -> Result<Capability, BorrowError> {
+        Ok(core::mem::replace(
+            &mut self.0.borrow_mut()?.capability,
+            new,
+        ))
+    }
+}
 
 const NUM_SLOTS: usize = 64;
 
@@ -45,9 +54,14 @@ impl CapabilityEntryPtr {
     pub fn new(frame: UntypedFrame<'static>) -> Self {
         CapabilityEntryPtr(KPtr::new(frame, RawCapEntry::default()))
     }
+
     pub fn get(&self, cap: u32) -> Result<Capability, CapError> {
+        Ok(self.get_slot(cap)?.0.borrow()?.capability.clone())
+    }
+
+    pub fn get_slot(&self, cap: u32) -> Result<impl Ptr<AtomicCapSlot>, CapError> {
         match RawCapEntry::get(self.0.clone(), cap)? {
-            Some(slot) => Ok(slot.0.borrow()?.capability.clone()),
+            Some(slot) => Ok(slot),
             None => Err(CapError::NotFound),
         }
     }
@@ -63,6 +77,24 @@ pub enum Resource {
     // PageTable
 }
 
+impl From<KPtr<RawCapEntry>> for Resource {
+    fn from(value: KPtr<RawCapEntry>) -> Self {
+        Self::CapEntry(value)
+    }
+}
+
+impl From<CapabilityEntryPtr> for Resource {
+    fn from(value: CapabilityEntryPtr) -> Self {
+        Self::CapEntry(value.0)
+    }
+}
+
+impl From<KPtr<ThreadControlBlock>> for Resource {
+    fn from(value: KPtr<ThreadControlBlock>) -> Self {
+        Self::Thread(value)
+    }
+}
+
 #[repr(C)]
 #[derive(Debug, Default, Clone)]
 pub struct Capability {
@@ -71,6 +103,13 @@ pub struct Capability {
 }
 
 impl Capability {
+    pub fn new(resource: impl Into<Resource>, flags: CapFlags) -> Self {
+        Self {
+            resource: resource.into(),
+            flags,
+        }
+    }
+
     pub fn exercise(self, op: Operation) -> Result<(), CapError> {
         match self.resource {
             Resource::Empty => return Err(CapError::NotFound),

@@ -44,6 +44,7 @@ impl State {
     }
 }
 
+#[derive(Debug)]
 pub enum BorrowError {
     AlreadyBorrowed,
 }
