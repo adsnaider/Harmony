@@ -3,8 +3,8 @@ use core::cell::UnsafeCell;
 use elain::Align;
 
 use crate::arch::execution_context::ExecutionContext;
-use crate::arch::paging::PAGE_SIZE;
-use crate::caps::{CapError, CapabilityEntryPtr, Operation};
+use crate::arch::paging::{RawFrame, PAGE_SIZE};
+use crate::caps::CapabilityEntryPtr;
 use crate::kptr::KPtr;
 
 static mut CURRENT: Option<KPtr<ThreadControlBlock>> = None;
@@ -25,12 +25,12 @@ impl ThreadControlBlock {
         }
     }
 
-    pub fn exercise(&self, cap: usize, op: usize) -> Result<(), CapError> {
-        let operation = Operation::try_from(op);
-        log::debug!("Got operation: {operation:?}");
+    pub fn caps(&self) -> &CapabilityEntryPtr {
+        &self.caps
+    }
 
-        let cap = self.caps.get(cap as u32)?;
-        cap.exercise(Operation::try_from(op)?)
+    pub fn addrspace(&self) -> RawFrame {
+        unsafe { (*self.execution_ctx.get()).addrspace() }
     }
 
     pub fn current() -> KPtr<Self> {

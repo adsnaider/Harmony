@@ -21,6 +21,10 @@ pub fn init(memory_map: &'static mut [&'static mut MMapEntry]) {
         .unwrap_or_else(|_| panic!("Double initialization"));
 }
 
+pub fn memory_range() -> usize {
+    RETYPE_TBL.get().unwrap().memory_range()
+}
+
 #[derive(Debug)]
 pub enum RetypeInitError {
     NotEnoughFrames,
@@ -38,6 +42,10 @@ pub enum EntryError {
 }
 
 impl<'a> RetypeTable<'a> {
+    pub fn memory_range(&self) -> usize {
+        self.table.len() * PAGE_SIZE
+    }
+
     /// Constructs the retype table from the bootstrap frame allocator.
     pub fn from_memory_map(
         memory_map: &'a mut [&'a mut MMapEntry],

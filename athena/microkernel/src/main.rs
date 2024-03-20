@@ -102,26 +102,34 @@ unsafe extern "C" fn kmain() -> ! {
     log::info!("Loading boot process");
     let boot_process = {
         let proc = include_bytes_aligned!(16, "../../../.build/booter");
-        Process::load(proc, &mut allocator).expect("Couldn't load the boot process")
+        Process::load(
+            proc,
+            &mut allocator,
+            0x0000_7000_0000_0000,
+            retyping::memory_range(),
+        )
+        .expect("Couldn't load the boot process")
     };
-    log::info!("Allocating capability tables and TCB");
-    let cap_table = CapabilityEntryPtr::new(allocator.alloc_frame().unwrap());
-    let boot_thread = KPtr::new(
-        allocator.alloc_frame().unwrap(),
-        ThreadControlBlock::new(cap_table.clone(), ExecutionContext::uninit()),
-    );
-    ThreadControlBlock::set_as_current(boot_thread.clone());
+    // Block to drop any extra resources (e.g. KPtr), before the `exec() -> !`.
+    {
+        log::info!("Allocating capability tables and TCB");
+        let cap_table = CapabilityEntryPtr::new(allocator.alloc_frame().unwrap());
+        let boot_thread = KPtr::new(
+            allocator.alloc_frame().unwrap(),
+            ThreadControlBlock::new(cap_table.clone(), ExecutionContext::uninit()),
+        );
+        ThreadControlBlock::set_as_current(boot_thread.clone());
 
-    let cap_slot = cap_table.get_slot(0).unwrap();
-    let thd_slot = cap_table.get_slot(1).unwrap();
-    cap_slot
-        .set_capability(Capability::new(cap_table, CapFlags::empty()))
-        .unwrap();
-    thd_slot
-        .set_capability(Capability::new(boot_thread, CapFlags::empty()))
-        .unwrap();
+        let cap_slot = cap_table.get_slot(0).unwrap();
+        let thd_slot = cap_table.get_slot(1).unwrap();
+        cap_slot
+            .set_capability(Capability::new(cap_table, CapFlags::empty()))
+            .unwrap();
+        thd_slot
+            .set_capability(Capability::new(boot_thread, CapFlags::empty()))
+            .unwrap();
 
-    log::info!("Executing boot process");
-
+        log::info!("Executing boot process");
+    }
     boot_process.exec();
 }
