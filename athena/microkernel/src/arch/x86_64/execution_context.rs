@@ -18,6 +18,10 @@ pub struct ExecutionContext {
 }
 
 impl ExecutionContext {
+    pub fn addrspace(&self) -> RawFrame {
+        self.address_space
+    }
+
     pub unsafe fn uninit() -> Self {
         Self {
             rsp: 0,

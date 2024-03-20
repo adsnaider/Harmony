@@ -10,6 +10,7 @@ use x86_64_impl::structures::paging::{
 use x86_64_impl::VirtAddr;
 
 use super::paging::RawFrame;
+use crate::arch::paging::PAGE_SIZE;
 use crate::arch::sysret;
 use crate::arch::x86_64::gdt::PRIVILEGE_STACK_ADDR;
 use crate::util::FrameBumpAllocator;
@@ -17,6 +18,7 @@ use crate::PMO;
 
 pub struct Process {
     entry: u64,
+    rsp: u64,
     l4_table: RawFrame,
 }
 
@@ -47,7 +49,12 @@ fn new_l4_table<'a>(frame: RawFrame) -> &'a mut PageTable {
 }
 
 impl Process {
-    pub fn load(program: &[u8], fallocator: &mut FrameBumpAllocator) -> Result<Self, LoadError> {
+    pub fn load(
+        program: &[u8],
+        fallocator: &mut FrameBumpAllocator,
+        untyped_memory_offset: usize,
+        untyped_memory_length: usize,
+    ) -> Result<Self, LoadError> {
         assert!(
             program.as_ptr() as usize % 16 == 0,
             "ELF must be aligned to 16 bytes"
@@ -81,8 +88,8 @@ impl Process {
                 segment.load(&mut addrspace, fallocator);
             }
         }
-        let rsp = 0x0000_8000_0000_0000;
-        const STACK_PAGES: usize = 1;
+        let rsp = untyped_memory_offset;
+        const STACK_PAGES: usize = 10;
 
         for i in 0..STACK_PAGES {
             let frame = fallocator
@@ -91,7 +98,7 @@ impl Process {
                 .into_user()
                 .into_raw()
                 .into_phys_frame();
-            let addr = rsp - 4096 * (i + 1);
+            let addr = rsp - PAGE_SIZE * (i + 1);
             let page = Page::from_start_address(VirtAddr::new(addr as u64)).unwrap();
             // SAFETY: Just mapping the stack pages.
             unsafe {
@@ -132,8 +139,33 @@ impl Process {
                 .flush();
         }
         log::debug!("Mapped interrupt stack");
+
+        assert!(untyped_memory_offset % PAGE_SIZE == 0);
+        assert!(untyped_memory_offset + untyped_memory_length < 0xFFFF_8000_0000_0000);
+        let untyped_memory_pages = untyped_memory_length / PAGE_SIZE;
+        for i in 0..untyped_memory_pages {
+            let frame = RawFrame::from_index(i).into_phys_frame();
+            let page = Page::from_start_address(VirtAddr::new(
+                frame.start_address().as_u64() + untyped_memory_offset as u64,
+            ))
+            .unwrap();
+            // SAFETY: Just mapping the stack pages.
+            unsafe {
+                addrspace
+                    .map_to(
+                        page,
+                        frame,
+                        PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
+                        fallocator,
+                    )
+                    .unwrap()
+                    .flush();
+            }
+        }
+
         Ok(Self {
             entry,
+            rsp: untyped_memory_offset as u64,
             l4_table: l4_frame,
         })
     }
@@ -146,7 +178,7 @@ impl Process {
                 self.l4_table.into_phys_frame(),
                 Cr3Flags::PAGE_LEVEL_WRITETHROUGH,
             );
-            sysret(self.entry, 0x0000_8000_0000_0000);
+            sysret(self.entry, self.rsp);
         }
     }
 }
@@ -198,21 +230,21 @@ impl<'prog, 'head> Segment<'prog, 'head> {
 
             let count = usize::min(
                 (file_range.end - fcurrent) as usize,
-                4096 - vcurrent as usize % 4096,
+                PAGE_SIZE - vcurrent as usize % PAGE_SIZE,
             );
 
             // SAFETY: Hopefully no bugs here...
             unsafe {
-                core::ptr::write_bytes(offset_page, 0, 4096);
+                core::ptr::write_bytes(offset_page, 0, PAGE_SIZE);
                 if count > 0 {
                     core::ptr::copy(
                         self.program.as_ptr().add(fcurrent as usize),
-                        offset_page.add(vcurrent as usize % 4096),
+                        offset_page.add(vcurrent as usize % PAGE_SIZE),
                         count,
                     )
                 }
             }
-            vcurrent += 4096 - vcurrent % 4096;
+            vcurrent += PAGE_SIZE as u64 - vcurrent % PAGE_SIZE as u64;
             fcurrent += count as u64;
         }
     }
