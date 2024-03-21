@@ -1,10 +1,6 @@
 #![no_std]
 #![feature(naked_functions)]
 
-use core::fmt::Write;
-
-use raw::syscall;
-
 pub mod raw {
     use core::arch::asm;
 
@@ -15,35 +11,53 @@ pub mod raw {
     }
 }
 
-#[macro_export]
-macro_rules! print {
+pub mod serial {
+    use core::fmt::Write;
+
+    use crate::raw::syscall;
+
+    #[macro_export]
+    macro_rules! print {
     ($($arg:tt)*) => {
         use ::core::fmt::Write;
         write!($crate::dbg_out(), $($arg)*).unwrap();
     };
 }
 
-#[macro_export]
-macro_rules! println {
+    #[macro_export]
+    macro_rules! println {
     ($($arg:tt)*) => {{
         use ::core::fmt::Write;
-        writeln!($crate::dbg_out(), $($arg)*).unwrap();
+        writeln!($crate::serial::_dbg_out(), $($arg)*).unwrap();
     }};
 }
 
-fn write(msg: &str) {
-    let msg = msg.as_bytes();
-    unsafe { syscall(usize::MAX, 0, msg.as_ptr() as usize, msg.len()) };
+    fn write(msg: &str) {
+        let msg = msg.as_bytes();
+        unsafe { syscall(usize::MAX, 0, msg.as_ptr() as usize, msg.len()) };
+    }
+
+    struct DebugOut;
+    #[doc(hidden)]
+    pub fn _dbg_out() -> impl Write {
+        DebugOut {}
+    }
+
+    impl Write for DebugOut {
+        fn write_str(&mut self, s: &str) -> core::fmt::Result {
+            write(s);
+            Ok(())
+        }
+    }
 }
 
-pub struct DebugOut;
-pub fn dbg_out() -> DebugOut {
-    DebugOut {}
+/// A capability to a capability table
+pub struct CapTableCap {
+    cap: u32,
 }
 
-impl Write for DebugOut {
-    fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        write(s);
-        Ok(())
+impl CapTableCap {
+    pub fn new(cap: u32) -> Self {
+        Self { cap }
     }
 }

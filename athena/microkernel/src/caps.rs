@@ -4,6 +4,7 @@ use num_enum::TryFromPrimitive;
 use sync::cell::{AtomicRefCell, BorrowError};
 use trie::{Ptr, Slot, TrieEntry};
 
+use crate::arch::paging::PageTable;
 use crate::component::ThreadControlBlock;
 use crate::kptr::KPtr;
 use crate::retyping::UntypedFrame;
@@ -74,7 +75,7 @@ pub enum Resource {
     Empty,
     CapEntry(KPtr<RawCapEntry>),
     Thread(KPtr<ThreadControlBlock>),
-    // PageTable
+    PageTable(KPtr<PageTable>),
 }
 
 impl From<KPtr<RawCapEntry>> for Resource {
@@ -92,6 +93,12 @@ impl From<CapabilityEntryPtr> for Resource {
 impl From<KPtr<ThreadControlBlock>> for Resource {
     fn from(value: KPtr<ThreadControlBlock>) -> Self {
         Self::Thread(value)
+    }
+}
+
+impl From<KPtr<PageTable>> for Resource {
+    fn from(value: KPtr<PageTable>) -> Self {
+        Self::PageTable(value)
     }
 }
 
@@ -117,6 +124,7 @@ impl Capability {
             Resource::Thread(thd) => match op {
                 Operation::ThdActivate => ThreadControlBlock::activate(thd),
             },
+            Resource::PageTable(_) => todo!(),
         }
         Ok(())
     }
