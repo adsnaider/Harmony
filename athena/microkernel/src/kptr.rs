@@ -50,6 +50,13 @@ impl<T> KPtr<T> {
         Self { inner: ptr }
     }
 
+    pub unsafe fn from_frame_unchecked(frame: KernelFrame<'static>) -> Self {
+        let frame = frame.into_raw();
+        let ptr = NonNull::new(frame.as_ptr_mut()).unwrap();
+        assert!(ptr.as_ptr() as usize % PAGE_SIZE == 0);
+        Self { inner: ptr }
+    }
+
     pub fn frame(&self) -> KernelFrame<'static> {
         // SAFETY: Pointer was created from the frame.
         let frame = unsafe { RawFrame::from_ptr(self.inner.as_ptr()) };

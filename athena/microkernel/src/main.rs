@@ -87,6 +87,7 @@ fn init() {
 #[no_mangle]
 unsafe extern "C" fn kmain() -> ! {
     use arch::bootstrap::Process;
+    use arch::paging::PageTable;
     use caps::{CapFlags, Capability, CapabilityEntryPtr};
     use include_bytes_aligned::include_bytes_aligned;
     use util::FrameBumpAllocator;
@@ -122,6 +123,7 @@ unsafe extern "C" fn kmain() -> ! {
 
         let cap_slot = cap_table.get_slot(0).unwrap();
         let thd_slot = cap_table.get_slot(1).unwrap();
+        let page_table_slot = cap_table.get_slot(2).unwrap();
         cap_slot
             .set_capability(Capability::new(cap_table, CapFlags::empty()))
             .unwrap();
@@ -129,7 +131,17 @@ unsafe extern "C" fn kmain() -> ! {
             .set_capability(Capability::new(boot_thread, CapFlags::empty()))
             .unwrap();
 
+        unsafe {
+            let proc_l4_table = boot_process.l4_table.as_kernel_frame();
+            page_table_slot
+                .set_capability(Capability::new(
+                    PageTable::from_l4_frame(proc_l4_table),
+                    CapFlags::empty(),
+                ))
+                .unwrap();
+        }
         log::info!("Executing boot process");
     }
+    drop(allocator);
     boot_process.exec();
 }

@@ -1,6 +1,8 @@
 use x86_64_impl::structures::paging::PhysFrame;
 use x86_64_impl::PhysAddr;
 
+use crate::kptr::KPtr;
+use crate::retyping::KernelFrame;
 use crate::PMO;
 
 pub const PAGE_SIZE: usize = 4096;
@@ -52,5 +54,14 @@ impl RawFrame {
 
     pub(super) fn into_phys_frame(self) -> PhysFrame {
         PhysFrame::from_start_address(PhysAddr::new(self.phys_address)).unwrap()
+    }
+}
+
+#[repr(transparent)]
+pub struct PageTable(x86_64_impl::structures::paging::PageTable);
+
+impl PageTable {
+    pub unsafe fn from_l4_frame(frame: KernelFrame<'static>) -> KPtr<Self> {
+        unsafe { KPtr::from_frame_unchecked(frame) }
     }
 }

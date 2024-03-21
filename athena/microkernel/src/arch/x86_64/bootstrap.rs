@@ -19,7 +19,7 @@ use crate::PMO;
 pub struct Process {
     entry: u64,
     rsp: u64,
-    l4_table: RawFrame,
+    pub l4_table: RawFrame,
 }
 
 unsafe impl FrameAllocator<Size4KiB> for FrameBumpAllocator {
