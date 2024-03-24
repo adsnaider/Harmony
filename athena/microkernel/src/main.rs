@@ -77,7 +77,6 @@ fn init() {
     };
     log::info!("Got memory map");
     log::info!("Initialization sequence complete");
-
     // TODO: Set up the retype tables
 
     retyping::init(memory_map);

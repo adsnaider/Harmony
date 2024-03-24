@@ -40,6 +40,17 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 #[repr(usize)]
 pub enum Operation {
     ThdActivate = 0,
+
+    CapLink = 1,
+    CapUnlink = 2,
+    CapConstruct = 3,
+    CapRemove = 4,
+
+    PageTableMap = 5,
+    PageTableUnmap = 6,
+    PageTableLink = 7,
+    PageTableUnlink = 8,
+    PageTableRetype = 9,
 }
 
 #[derive(Debug, Copy, Clone, TryFromPrimitive, IntoPrimitive)]
@@ -85,6 +96,12 @@ impl SyscallArgs {
 impl From<(usize, usize, usize, usize)> for SyscallArgs {
     fn from(value: (usize, usize, usize, usize)) -> Self {
         Self(value.0, value.1, value.2, value.3)
+    }
+}
+
+impl From<SyscallArgs> for (usize, usize, usize, usize) {
+    fn from(value: SyscallArgs) -> Self {
+        (value.0, value.1, value.2, value.3)
     }
 }
 
