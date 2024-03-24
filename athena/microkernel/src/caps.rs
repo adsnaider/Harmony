@@ -93,7 +93,10 @@ impl CapabilityEntryPtr {
                         .borrow_mut()?
                         .set_child(Some(other_table));
                 }
-                Operation::CapUnlink => todo!(),
+                Operation::CapUnlink => {
+                    let (slot, ..) = args.to_tuple();
+                    cap_table.index(slot)?.borrow_mut()?.set_child(None);
+                }
                 Operation::CapConstruct => todo!(),
                 Operation::CapRemove => todo!(),
                 _ => return Err(CapError::InvalidOpForResource),
