@@ -110,6 +110,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e04cb7c34f1605722a91ca2ddf1fd071a9ce4fe1ac82d57fe36437331c87ec3b"
 
 [[package]]
+name = "kapi"
+version = "0.1.0"
+dependencies = [
+ "num_enum",
+ "sync",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -130,6 +138,9 @@ checksum = "4ec2a862134d2a7d32d7983ddcdd1c4923530833c9f2ea1a44fc5fa473989058"
 [[package]]
 name = "librs"
 version = "0.1.0"
+dependencies = [
+ "kapi",
+]
 
 [[package]]
 name = "limine"
@@ -159,12 +170,11 @@ dependencies = [
  "elain",
  "goblin",
  "include_bytes_aligned",
+ "kapi",
  "limine",
  "log",
- "num_enum",
  "pic8259",
  "sync",
- "tailcall",
  "trie",
  "uart_16550",
  "x86_64 0.15.0",
@@ -197,7 +207,7 @@ checksum = "681030a937600a36906c185595136d26abfebb4aa9c65701cefcaf8578bb982b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.52",
+ "syn 2.0.55",
 ]
 
 [[package]]
@@ -369,9 +379,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.52"
+version = "2.0.55"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b699d15b36d1f02c3e7c69f8ffef53de37aefae075d8488d4ba1a7788d574a07"
+checksum = "002a1b3dbf967edfafc32655d0f377ab0bb7b994aa1d32c8cc7e9b8bf3ebb8f0"
 dependencies = [
  "proc-macro2",
  "quote",

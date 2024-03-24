@@ -1,12 +1,20 @@
 [workspace]
 members = [
-  "athena/microkernel", "athena/sync", "athena/trie",
+  "athena/kapi",
+  "athena/microkernel",
+  "athena/sync",
+  "athena/trie",
   "athena/userspace/booter",
   "athena/userspace/librs",
 ]
 
 resolver = "2"
 default-members = ["athena/microkernel"]
+
+[workspace.dependencies]
+sync = { path = "athena/sync" }
+trie = { path = "athena/trie" }
+kapi = { path = "athena/kapi" }
 
 [profile.dev]
 debug = "full"
