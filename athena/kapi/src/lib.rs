@@ -63,6 +63,13 @@ pub enum CapError {
     InvalidArgument = 5,
 }
 
+#[derive(Debug, Copy, Clone, TryFromPrimitive, IntoPrimitive)]
+#[repr(u8)]
+pub enum ResourceType {
+    CapabilityTable = 0,
+    ThreadControlBlock = 1,
+    PageTable = 2,
+}
 impl From<<Operation as TryFrom<usize>>::Error> for CapError {
     fn from(_value: <Operation as TryFrom<usize>>::Error) -> Self {
         Self::InvalidOp
