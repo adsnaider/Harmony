@@ -112,7 +112,13 @@ impl CapabilityEntryPtr {
                         .borrow_mut()?
                         .set_capability(Capability::new(resource, CapFlags::empty()));
                 }
-                Operation::CapRemove => todo!(),
+                Operation::CapRemove => {
+                    let (slot, ..) = args.to_tuple();
+                    cap_table
+                        .index(slot)?
+                        .borrow_mut()?
+                        .set_capability(Capability::empty());
+                }
                 _ => return Err(CapError::InvalidOpForResource),
             },
             Resource::Thread(thd) => match op {
