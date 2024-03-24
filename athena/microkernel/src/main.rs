@@ -125,20 +125,23 @@ unsafe extern "C" fn kmain() -> ! {
         let thd_slot = cap_table.get_slot(CapId::from(1)).unwrap();
         let page_table_slot = cap_table.get_slot(CapId::from(2)).unwrap();
         cap_slot
-            .set_capability(Capability::new(cap_table, CapFlags::empty()))
-            .unwrap();
+            .borrow_mut()
+            .unwrap()
+            .set_capability(Capability::new(cap_table, CapFlags::empty()));
         thd_slot
-            .set_capability(Capability::new(boot_thread, CapFlags::empty()))
-            .unwrap();
+            .borrow_mut()
+            .unwrap()
+            .set_capability(Capability::new(boot_thread, CapFlags::empty()));
 
         unsafe {
             let proc_l4_table = boot_process.l4_table.as_kernel_frame();
             page_table_slot
+                .borrow_mut()
+                .unwrap()
                 .set_capability(Capability::new(
                     PageTable::from_l4_frame(proc_l4_table),
                     CapFlags::empty(),
-                ))
-                .unwrap();
+                ));
         }
         log::info!("Executing boot process");
     }

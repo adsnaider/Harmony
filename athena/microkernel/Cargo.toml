@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 sync = { workspace = true }
 trie = { workspace = true }
-kapi = { workspace = true, features = ["sync"] }
+kapi = { workspace = true, features = ["from_errors"] }
 
 limine = { version = "0.2.0", features = ["ipaddr"] }
 uart_16550 = "0.3.0"

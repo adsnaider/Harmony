@@ -19,9 +19,21 @@ impl<const COUNT: usize, S: Slot<COUNT> + Default> Default for TrieEntry<COUNT, 
     }
 }
 
+pub enum TrieIndexError {
+    OutOfBounds,
+}
+
 impl<const COUNT: usize, S: Slot<COUNT> + Default> TrieEntry<COUNT, S> {
     pub const fn slot_size() -> usize {
         core::mem::size_of::<S>()
+    }
+
+    pub fn index(this: S::Ptr, idx: usize) -> Result<impl Ptr<S>, TrieIndexError> {
+        if idx >= COUNT {
+            return Err(TrieIndexError::OutOfBounds);
+        }
+        let slot = this.map(move |entry| &entry.slots[idx]);
+        Ok(slot)
     }
 
     pub fn get(this: S::Ptr, id: u32) -> Result<Option<impl Ptr<S>>, S::Err> {
