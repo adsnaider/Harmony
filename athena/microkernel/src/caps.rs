@@ -2,7 +2,7 @@
 
 use core::ops::{Deref, DerefMut};
 
-use kapi::{CapError, CapId, Operation, SyscallArgs};
+use kapi::{CapError, CapId, Operation, ResourceType, SyscallArgs};
 use sync::cell::{AtomicRefCell, BorrowError};
 use trie::{Ptr, Slot, TrieEntry, TrieIndexError};
 
@@ -97,7 +97,21 @@ impl CapabilityEntryPtr {
                     let (slot, ..) = args.to_tuple();
                     cap_table.index(slot)?.borrow_mut()?.set_child(None);
                 }
-                Operation::CapConstruct => todo!(),
+                #[allow(unreachable_code, unused_variables)]
+                Operation::CapConstruct => {
+                    let (resource_type, _page, slot, ..) = args.to_tuple();
+                    let resource_type = ResourceType::try_from(resource_type as u8)
+                        .map_err(|_| CapError::InvalidArgument)?;
+                    let resource: Resource = match resource_type {
+                        ResourceType::CapabilityTable => todo!(),
+                        ResourceType::ThreadControlBlock => todo!(),
+                        ResourceType::PageTable => todo!(),
+                    };
+                    cap_table
+                        .index(slot)?
+                        .borrow_mut()?
+                        .set_capability(Capability::new(resource, CapFlags::empty()));
+                }
                 Operation::CapRemove => todo!(),
                 _ => return Err(CapError::InvalidOpForResource),
             },
