@@ -90,6 +90,7 @@ unsafe extern "C" fn kmain() -> ! {
     use arch::paging::PageTable;
     use caps::{CapFlags, Capability, CapabilityEntryPtr};
     use include_bytes_aligned::include_bytes_aligned;
+    use kapi::CapId;
     use util::FrameBumpAllocator;
 
     use crate::arch::execution_context::ExecutionContext;
@@ -121,9 +122,9 @@ unsafe extern "C" fn kmain() -> ! {
         );
         ThreadControlBlock::set_as_current(boot_thread.clone());
 
-        let cap_slot = cap_table.get_slot(0).unwrap();
-        let thd_slot = cap_table.get_slot(1).unwrap();
-        let page_table_slot = cap_table.get_slot(2).unwrap();
+        let cap_slot = cap_table.get_slot(CapId::from(0)).unwrap();
+        let thd_slot = cap_table.get_slot(CapId::from(1)).unwrap();
+        let page_table_slot = cap_table.get_slot(CapId::from(2)).unwrap();
         cap_slot
             .set_capability(Capability::new(cap_table, CapFlags::empty()))
             .unwrap();

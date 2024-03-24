@@ -1,6 +1,6 @@
 //! Capability-based system implementation
 
-use num_enum::TryFromPrimitive;
+use kapi::{CapError, CapId, Operation, SyscallArgs};
 use sync::cell::{AtomicRefCell, BorrowError};
 use trie::{Ptr, Slot, TrieEntry};
 
@@ -37,14 +37,6 @@ impl Slot<NUM_SLOTS> for AtomicCapSlot {
     }
 }
 
-impl From<BorrowError> for CapError {
-    fn from(value: BorrowError) -> Self {
-        match value {
-            BorrowError::AlreadyBorrowed => CapError::BorrowError,
-        }
-    }
-}
-
 pub type RawCapEntry = TrieEntry<NUM_SLOTS, AtomicCapSlot>;
 
 #[repr(transparent)]
@@ -56,12 +48,12 @@ impl CapabilityEntryPtr {
         CapabilityEntryPtr(KPtr::new(frame, RawCapEntry::default()))
     }
 
-    pub fn get(&self, cap: u32) -> Result<Capability, CapError> {
+    pub fn get(&self, cap: CapId) -> Result<Capability, CapError> {
         Ok(self.get_slot(cap)?.0.borrow()?.capability.clone())
     }
 
-    pub fn get_slot(&self, cap: u32) -> Result<impl Ptr<AtomicCapSlot>, CapError> {
-        match RawCapEntry::get(self.0.clone(), cap)? {
+    pub fn get_slot(&self, cap: CapId) -> Result<impl Ptr<AtomicCapSlot>, CapError> {
+        match RawCapEntry::get(self.0.clone(), cap.into())? {
             Some(slot) => Ok(slot),
             None => Err(CapError::NotFound),
         }
@@ -117,7 +109,7 @@ impl Capability {
         }
     }
 
-    pub fn exercise(self, op: Operation) -> Result<(), CapError> {
+    pub fn exercise(self, op: Operation, _args: SyscallArgs) -> Result<(), CapError> {
         match self.resource {
             Resource::Empty => return Err(CapError::NotFound),
             Resource::CapEntry(_) => todo!(),
@@ -128,12 +120,6 @@ impl Capability {
         }
         Ok(())
     }
-}
-
-#[derive(Debug, Copy, Clone, TryFromPrimitive)]
-#[repr(usize)]
-pub enum Operation {
-    ThdActivate = 0,
 }
 
 impl Capability {
@@ -158,43 +144,5 @@ impl Default for CapFlags {
 impl CapFlags {
     pub fn empty() -> Self {
         Self(0)
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
-#[repr(u8)]
-pub enum CapError {
-    BorrowError = 1,
-    NotFound = 2,
-    InvalidOp = 3,
-    InvalidOpForResource = 4,
-}
-
-impl From<<Operation as TryFrom<usize>>::Error> for CapError {
-    fn from(_value: <Operation as TryFrom<usize>>::Error) -> Self {
-        Self::InvalidOp
-    }
-}
-
-impl CapError {
-    pub fn to_errno(self) -> isize {
-        let errno: isize = (self as u8).into();
-        errno
-    }
-}
-
-#[repr(transparent)]
-#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
-pub struct CapId(usize);
-
-impl From<usize> for CapId {
-    fn from(value: usize) -> Self {
-        Self(value)
-    }
-}
-
-impl From<CapId> for usize {
-    fn from(value: CapId) -> Self {
-        value.0
     }
 }

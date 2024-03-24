@@ -1,20 +1,11 @@
 #![no_std]
-#![feature(naked_functions)]
 
-pub mod raw {
-    use core::arch::asm;
-
-    #[naked]
-    pub unsafe extern "sysv64" fn syscall(cap: usize, op: usize, a: usize, b: usize) -> isize {
-        // NOTE: We don't need to align the stack on an int instruction.
-        asm!("int 0x80", "ret", options(noreturn));
-    }
-}
+pub use kapi;
 
 pub mod serial {
     use core::fmt::Write;
 
-    use crate::raw::syscall;
+    use kapi::raw_syscall;
 
     #[macro_export]
     macro_rules! print {
@@ -34,7 +25,7 @@ pub mod serial {
 
     fn write(msg: &str) {
         let msg = msg.as_bytes();
-        unsafe { syscall(usize::MAX, 0, msg.as_ptr() as usize, msg.len()) };
+        unsafe { raw_syscall(usize::MAX, 0, msg.as_ptr() as usize, msg.len(), 0, 0) };
     }
 
     struct DebugOut;
@@ -48,16 +39,5 @@ pub mod serial {
             write(s);
             Ok(())
         }
-    }
-}
-
-/// A capability to a capability table
-pub struct CapTableCap {
-    cap: u32,
-}
-
-impl CapTableCap {
-    pub fn new(cap: u32) -> Self {
-        Self { cap }
     }
 }

@@ -1,0 +1,12 @@
+[package]
+name = "kapi"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sync = { workspace = true, optional = true }
+num_enum = { version = "0.7.2", default-features = false }
+
+[features]
+default = []
+sync = ["dep:sync"]
