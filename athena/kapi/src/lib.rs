@@ -56,7 +56,7 @@ pub enum Operation {
 #[derive(Debug, Copy, Clone, TryFromPrimitive, IntoPrimitive)]
 #[repr(u8)]
 pub enum CapError {
-    BorrowError = 1,
+    ResourceInUse = 1,
     NotFound = 2,
     InvalidOp = 3,
     InvalidOpForResource = 4,
@@ -79,7 +79,7 @@ impl CapError {
 impl From<sync::cell::BorrowError> for CapError {
     fn from(value: sync::cell::BorrowError) -> Self {
         match value {
-            sync::cell::BorrowError::AlreadyBorrowed => CapError::BorrowError,
+            sync::cell::BorrowError::AlreadyBorrowed => CapError::ResourceInUse,
         }
     }
 }
