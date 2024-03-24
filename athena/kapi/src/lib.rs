@@ -60,6 +60,7 @@ pub enum CapError {
     NotFound = 2,
     InvalidOp = 3,
     InvalidOpForResource = 4,
+    InvalidArgument = 5,
 }
 
 impl From<<Operation as TryFrom<usize>>::Error> for CapError {
@@ -75,11 +76,26 @@ impl CapError {
     }
 }
 
-#[cfg(feature = "sync")]
-impl From<sync::cell::BorrowError> for CapError {
-    fn from(value: sync::cell::BorrowError) -> Self {
-        match value {
-            sync::cell::BorrowError::AlreadyBorrowed => CapError::ResourceInUse,
+#[cfg(feature = "from_errors")]
+mod convert_errors {
+    use sync::cell::BorrowError;
+    use trie::TrieIndexError;
+
+    use super::*;
+
+    impl From<BorrowError> for CapError {
+        fn from(value: BorrowError) -> Self {
+            match value {
+                BorrowError::AlreadyBorrowed => CapError::ResourceInUse,
+            }
+        }
+    }
+
+    impl From<TrieIndexError> for CapError {
+        fn from(value: TrieIndexError) -> Self {
+            match value {
+                TrieIndexError::OutOfBounds => CapError::InvalidArgument,
+            }
         }
     }
 }
@@ -90,6 +106,10 @@ pub struct SyscallArgs(usize, usize, usize, usize);
 impl SyscallArgs {
     pub fn new(a: usize, b: usize, c: usize, d: usize) -> Self {
         (a, b, c, d).into()
+    }
+
+    pub fn to_tuple(self) -> (usize, usize, usize, usize) {
+        self.into()
     }
 }
 

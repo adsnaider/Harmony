@@ -1,8 +1,10 @@
 //! Capability-based system implementation
 
+use core::ops::{Deref, DerefMut};
+
 use kapi::{CapError, CapId, Operation, SyscallArgs};
 use sync::cell::{AtomicRefCell, BorrowError};
-use trie::{Ptr, Slot, TrieEntry};
+use trie::{Ptr, Slot, TrieEntry, TrieIndexError};
 
 use crate::arch::paging::PageTable;
 use crate::component::ThreadControlBlock;
@@ -10,19 +12,31 @@ use crate::kptr::KPtr;
 use crate::retyping::UntypedFrame;
 
 #[derive(Default)]
-struct CapSlot {
+pub struct CapSlot {
     child: Option<KPtr<RawCapEntry>>,
     capability: Capability,
 }
+
+impl CapSlot {
+    pub fn set_child(&mut self, child: Option<CapabilityEntryPtr>) -> Option<KPtr<RawCapEntry>> {
+        core::mem::replace(&mut self.child, child.map(|entry| entry.0))
+    }
+
+    pub fn set_capability(&mut self, new: Capability) -> Capability {
+        core::mem::replace(&mut self.capability, new)
+    }
+}
+
 #[derive(Default)]
 pub struct AtomicCapSlot(AtomicRefCell<CapSlot>);
 
 impl AtomicCapSlot {
-    pub fn set_capability(&self, new: Capability) -> Result<Capability, BorrowError> {
-        Ok(core::mem::replace(
-            &mut self.0.borrow_mut()?.capability,
-            new,
-        ))
+    pub fn borrow_mut(&self) -> Result<impl DerefMut<Target = CapSlot> + '_, BorrowError> {
+        self.0.borrow_mut()
+    }
+
+    pub fn borrow(&self) -> Result<impl Deref<Target = CapSlot> + '_, BorrowError> {
+        self.0.borrow()
     }
 }
 
@@ -59,12 +73,26 @@ impl CapabilityEntryPtr {
         }
     }
 
-    pub fn exercise(&self, cap: CapId, op: Operation, _args: SyscallArgs) -> Result<(), CapError> {
+    pub fn index(&self, offset: usize) -> Result<impl Ptr<AtomicCapSlot>, TrieIndexError> {
+        RawCapEntry::index(self.0.clone(), offset)
+    }
+
+    pub fn exercise(&self, cap: CapId, op: Operation, args: SyscallArgs) -> Result<(), CapError> {
         let cap = self.get(cap)?;
         match cap.resource {
             Resource::Empty => return Err(CapError::NotFound),
-            Resource::CapEntry(_cap_table) => match op {
-                Operation::CapLink => todo!(),
+            Resource::CapEntry(cap_table) => match op {
+                Operation::CapLink => {
+                    let (other_table_cap, slot, ..) = args.to_tuple();
+                    let other_table = self.get(CapId::from(other_table_cap as u32))?;
+                    let Resource::CapEntry(other_table) = other_table.resource else {
+                        return Err(CapError::InvalidArgument);
+                    };
+                    cap_table
+                        .index(slot)?
+                        .borrow_mut()?
+                        .set_child(Some(other_table));
+                }
                 Operation::CapUnlink => todo!(),
                 Operation::CapConstruct => todo!(),
                 Operation::CapRemove => todo!(),
@@ -92,20 +120,20 @@ impl CapabilityEntryPtr {
 pub enum Resource {
     #[default]
     Empty,
-    CapEntry(KPtr<RawCapEntry>),
+    CapEntry(CapabilityEntryPtr),
     Thread(KPtr<ThreadControlBlock>),
     PageTable(KPtr<PageTable>),
 }
 
 impl From<KPtr<RawCapEntry>> for Resource {
     fn from(value: KPtr<RawCapEntry>) -> Self {
-        Self::CapEntry(value)
+        Self::CapEntry(CapabilityEntryPtr(value))
     }
 }
 
 impl From<CapabilityEntryPtr> for Resource {
     fn from(value: CapabilityEntryPtr) -> Self {
-        Self::CapEntry(value.0)
+        Self::CapEntry(value)
     }
 }
 
