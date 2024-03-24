@@ -58,6 +58,33 @@ impl CapabilityEntryPtr {
             None => Err(CapError::NotFound),
         }
     }
+
+    pub fn exercise(&self, cap: CapId, op: Operation, _args: SyscallArgs) -> Result<(), CapError> {
+        let cap = self.get(cap)?;
+        match cap.resource {
+            Resource::Empty => return Err(CapError::NotFound),
+            Resource::CapEntry(_cap_table) => match op {
+                Operation::CapLink => todo!(),
+                Operation::CapUnlink => todo!(),
+                Operation::CapConstruct => todo!(),
+                Operation::CapRemove => todo!(),
+                _ => return Err(CapError::InvalidOpForResource),
+            },
+            Resource::Thread(thd) => match op {
+                Operation::ThdActivate => ThreadControlBlock::activate(thd),
+                _ => return Err(CapError::InvalidOpForResource),
+            },
+            Resource::PageTable(_) => match op {
+                Operation::PageTableMap => todo!(),
+                Operation::PageTableUnmap => todo!(),
+                Operation::PageTableLink => todo!(),
+                Operation::PageTableUnlink => todo!(),
+                Operation::PageTableRetype => todo!(),
+                _ => return Err(CapError::InvalidOpForResource),
+            },
+        }
+        Ok(())
+    }
 }
 
 #[repr(u8)]
@@ -107,32 +134,6 @@ impl Capability {
             resource: resource.into(),
             flags,
         }
-    }
-
-    pub fn exercise(self, op: Operation, _args: SyscallArgs) -> Result<(), CapError> {
-        match self.resource {
-            Resource::Empty => return Err(CapError::NotFound),
-            Resource::CapEntry(_cap_table) => match op {
-                Operation::CapLink => todo!(),
-                Operation::CapUnlink => todo!(),
-                Operation::CapConstruct => todo!(),
-                Operation::CapRemove => todo!(),
-                _ => return Err(CapError::InvalidOpForResource),
-            },
-            Resource::Thread(thd) => match op {
-                Operation::ThdActivate => ThreadControlBlock::activate(thd),
-                _ => return Err(CapError::InvalidOpForResource),
-            },
-            Resource::PageTable(_) => match op {
-                Operation::PageTableMap => todo!(),
-                Operation::PageTableUnmap => todo!(),
-                Operation::PageTableLink => todo!(),
-                Operation::PageTableUnlink => todo!(),
-                Operation::PageTableRetype => todo!(),
-                _ => return Err(CapError::InvalidOpForResource),
-            },
-        }
-        Ok(())
     }
 }
 

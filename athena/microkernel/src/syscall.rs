@@ -28,8 +28,7 @@ pub extern "sysv64" fn handle(
         let op = Operation::try_from(op)?;
         log::debug!("Got operation: {op:?}");
 
-        let cap = caps.get(CapId::from(cap as u32))?;
-        cap.exercise(op, args)
+        caps.exercise(CapId::from(cap as u32), op, args)
     }
 
     match inner(cap, op, SyscallArgs::new(a, b, c, d)) {
