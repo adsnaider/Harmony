@@ -6,6 +6,7 @@ use kapi::{CapError, CapId, Operation, ResourceType, SyscallArgs};
 use sync::cell::{AtomicRefCell, BorrowError};
 use trie::{Ptr, Slot, TrieEntry, TrieIndexError};
 
+use crate::arch::paging::page_table::RawPageTable;
 use crate::arch::paging::PageTable;
 use crate::component::ThreadControlBlock;
 use crate::kptr::KPtr;
@@ -110,7 +111,7 @@ impl CapabilityEntryPtr {
                     cap_table
                         .index(slot)?
                         .borrow_mut()?
-                        .set_capability(Capability::new(resource, CapFlags::empty()));
+                        .set_capability(Capability::new(resource));
                 }
                 Operation::CapRemove => {
                     let (slot, ..) = args.to_tuple();
@@ -125,13 +126,27 @@ impl CapabilityEntryPtr {
                 Operation::ThdActivate => ThreadControlBlock::activate(thd),
                 _ => return Err(CapError::InvalidOpForResource),
             },
-            Resource::PageTable(_) => match op {
-                Operation::PageTableMap => todo!(),
-                Operation::PageTableUnmap => todo!(),
-                Operation::PageTableLink => todo!(),
-                Operation::PageTableUnlink => todo!(),
-                Operation::PageTableRetype => todo!(),
-                _ => return Err(CapError::InvalidOpForResource),
+            Resource::PageTable { table, flags } => match flags.level() {
+                0 => {
+                    let table: KPtr<PageTable<0>> = unsafe { table.into_typed_table() };
+                    match op {
+                        Operation::PageTableMap => todo!(),
+                        Operation::PageTableUnmap => todo!(),
+                        _ => return Err(CapError::InvalidOpForResource),
+                    }
+                }
+                1 | 2 | 3 => match op {
+                    Operation::PageTableLink => todo!(),
+                    Operation::PageTableUnlink => todo!(),
+                    _ => return Err(CapError::InvalidOpForResource),
+                },
+                4 => match op {
+                    Operation::PageTableLink => todo!(),
+                    Operation::PageTableUnlink => todo!(),
+                    Operation::PageTableRetype => todo!(),
+                    _ => return Err(CapError::InvalidOpForResource),
+                },
+                other => panic!("Unexpected page table level"),
             },
         }
         Ok(())
@@ -145,30 +160,30 @@ pub enum Resource {
     Empty,
     CapEntry(CapabilityEntryPtr),
     Thread(KPtr<ThreadControlBlock>),
-    PageTable(KPtr<PageTable>),
+    PageTable {
+        table: KPtr<RawPageTable>,
+        flags: PageCapFlags,
+    },
 }
 
-impl From<KPtr<RawCapEntry>> for Resource {
-    fn from(value: KPtr<RawCapEntry>) -> Self {
-        Self::CapEntry(CapabilityEntryPtr(value))
+impl Resource {
+    pub const fn empty() -> Self {
+        Self::Empty
     }
-}
 
-impl From<CapabilityEntryPtr> for Resource {
-    fn from(value: CapabilityEntryPtr) -> Self {
-        Self::CapEntry(value)
+    pub const fn from_capability_table(table: CapabilityEntryPtr) -> Self {
+        Self::CapEntry(table)
     }
-}
 
-impl From<KPtr<ThreadControlBlock>> for Resource {
-    fn from(value: KPtr<ThreadControlBlock>) -> Self {
-        Self::Thread(value)
+    pub const fn from_tcb(tcb: KPtr<ThreadControlBlock>) -> Self {
+        Self::Thread(tcb)
     }
-}
 
-impl From<KPtr<PageTable>> for Resource {
-    fn from(value: KPtr<PageTable>) -> Self {
-        Self::PageTable(value)
+    pub const fn from_page_table<const L: u8>(table: KPtr<PageTable<L>>) -> Self {
+        Self::PageTable {
+            table: table.into_raw_table(),
+            flags: PageCapFlags::new(L),
+        }
     }
 }
 
@@ -176,15 +191,11 @@ impl From<KPtr<PageTable>> for Resource {
 #[derive(Debug, Default, Clone)]
 pub struct Capability {
     resource: Resource,
-    flags: CapFlags,
 }
 
 impl Capability {
-    pub fn new(resource: impl Into<Resource>, flags: CapFlags) -> Self {
-        Self {
-            resource: resource.into(),
-            flags,
-        }
+    pub const fn new(resource: Resource) -> Self {
+        Self { resource }
     }
 }
 
@@ -192,23 +203,22 @@ impl Capability {
     pub fn empty() -> Self {
         Self {
             resource: Resource::Empty,
-            flags: CapFlags::empty(),
         }
     }
 }
 
-#[repr(transparent)]
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct CapFlags(u32);
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct PageCapFlags(u32);
 
-impl Default for CapFlags {
-    fn default() -> Self {
-        Self::empty()
+impl PageCapFlags {
+    const LEVEL_BITS: u32 = 0x0000_0003;
+    pub const fn new(level: u8) -> Self {
+        debug_assert!(level <= 4);
+        Self((level as u32) & Self::LEVEL_BITS)
     }
-}
 
-impl CapFlags {
-    pub fn empty() -> Self {
-        Self(0)
+    pub const fn level(&self) -> u8 {
+        (self.0 & Self::LEVEL_BITS) as u8
     }
 }
