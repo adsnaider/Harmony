@@ -121,8 +121,15 @@ impl RawFrame {
     pub fn into_untyped(self) -> Result<UntypedFrame<'static>, RetypeError> {
         RETYPE_TBL.get().unwrap().entry(self)
     }
+    pub fn into_user(self) -> Result<UserFrame<'static>, RetypeError> {
+        todo!();
+    }
 
-    pub unsafe fn as_kernel_frame(&self) -> KernelFrame<'static> {
+    pub fn into_kernel(self) -> Result<KernelFrame<'static>, RetypeError> {
+        todo!();
+    }
+
+    pub unsafe fn into_kernel_unchecked(self) -> KernelFrame<'static> {
         let entry = RETYPE_TBL
             .get()
             .unwrap()
@@ -136,7 +143,7 @@ impl RawFrame {
         }
     }
 
-    pub unsafe fn as_user_frame(&self) -> UserFrame<'static> {
+    pub unsafe fn into_user_unchecked(self) -> UserFrame<'static> {
         let entry = RETYPE_TBL
             .get()
             .unwrap()
