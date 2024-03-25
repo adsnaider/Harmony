@@ -2,7 +2,7 @@
 
 use core::ops::{Deref, DerefMut};
 
-use kapi::{CapError, CapId, Operation, ResourceType, SyscallArgs};
+use kapi::{CapError, CapId};
 use sync::cell::{AtomicRefCell, BorrowError};
 use trie::{Ptr, Slot, TrieEntry, TrieIndexError};
 
@@ -77,80 +77,6 @@ impl CapabilityEntryPtr {
     pub fn index(&self, offset: usize) -> Result<impl Ptr<AtomicCapSlot>, TrieIndexError> {
         RawCapEntry::index(self.0.clone(), offset)
     }
-
-    pub fn exercise(&self, cap: CapId, op: Operation, args: SyscallArgs) -> Result<(), CapError> {
-        let cap = self.get(cap)?;
-        match cap.resource {
-            Resource::Empty => return Err(CapError::NotFound),
-            Resource::CapEntry(cap_table) => match op {
-                Operation::CapLink => {
-                    let (other_table_cap, slot, ..) = args.to_tuple();
-                    let other_table = self.get(CapId::from(other_table_cap as u32))?;
-                    let Resource::CapEntry(other_table) = other_table.resource else {
-                        return Err(CapError::InvalidArgument);
-                    };
-                    cap_table
-                        .index(slot)?
-                        .borrow_mut()?
-                        .set_child(Some(other_table));
-                }
-                Operation::CapUnlink => {
-                    let (slot, ..) = args.to_tuple();
-                    cap_table.index(slot)?.borrow_mut()?.set_child(None);
-                }
-                #[allow(unreachable_code, unused_variables)]
-                Operation::CapConstruct => {
-                    let (resource_type, _page, slot, ..) = args.to_tuple();
-                    let resource_type = ResourceType::try_from(resource_type as u8)
-                        .map_err(|_| CapError::InvalidArgument)?;
-                    let resource: Resource = match resource_type {
-                        ResourceType::CapabilityTable => todo!(),
-                        ResourceType::ThreadControlBlock => todo!(),
-                        ResourceType::PageTable => todo!(),
-                    };
-                    cap_table
-                        .index(slot)?
-                        .borrow_mut()?
-                        .set_capability(Capability::new(resource));
-                }
-                Operation::CapRemove => {
-                    let (slot, ..) = args.to_tuple();
-                    cap_table
-                        .index(slot)?
-                        .borrow_mut()?
-                        .set_capability(Capability::empty());
-                }
-                _ => return Err(CapError::InvalidOpForResource),
-            },
-            Resource::Thread(thd) => match op {
-                Operation::ThdActivate => ThreadControlBlock::activate(thd),
-                _ => return Err(CapError::InvalidOpForResource),
-            },
-            Resource::PageTable { table, flags } => match flags.level() {
-                0 => {
-                    let table: KPtr<PageTable<0>> = unsafe { table.into_typed_table() };
-                    match op {
-                        Operation::PageTableMap => todo!(),
-                        Operation::PageTableUnmap => todo!(),
-                        _ => return Err(CapError::InvalidOpForResource),
-                    }
-                }
-                1 | 2 | 3 => match op {
-                    Operation::PageTableLink => todo!(),
-                    Operation::PageTableUnlink => todo!(),
-                    _ => return Err(CapError::InvalidOpForResource),
-                },
-                4 => match op {
-                    Operation::PageTableLink => todo!(),
-                    Operation::PageTableUnlink => todo!(),
-                    Operation::PageTableRetype => todo!(),
-                    _ => return Err(CapError::InvalidOpForResource),
-                },
-                other => panic!("Unexpected page table level"),
-            },
-        }
-        Ok(())
-    }
 }
 
 #[repr(u8)]
@@ -190,7 +116,7 @@ impl Resource {
 #[repr(C)]
 #[derive(Debug, Default, Clone)]
 pub struct Capability {
-    resource: Resource,
+    pub resource: Resource,
 }
 
 impl Capability {

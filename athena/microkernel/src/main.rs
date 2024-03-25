@@ -27,6 +27,8 @@ use sync::cell::AtomicLazyCell;
 
 use crate::arch::interrupts;
 
+pub const USER_MAPPED_PHYS_OFFSET: usize = 0x0000_7000_0000_0000;
+
 pub static PMO: AtomicLazyCell<usize> = AtomicLazyCell::new(|| {
     #[used]
     static HHDM: HhdmRequest = HhdmRequest::new();
@@ -106,7 +108,7 @@ unsafe extern "C" fn kmain() -> ! {
         Process::load(
             proc,
             &mut allocator,
-            0x0000_7000_0000_0000,
+            USER_MAPPED_PHYS_OFFSET,
             retyping::memory_range(),
         )
         .expect("Couldn't load the boot process")
@@ -134,7 +136,7 @@ unsafe extern "C" fn kmain() -> ! {
             .set_capability(Capability::new(Resource::from_tcb(boot_thread)));
 
         unsafe {
-            let proc_l4_table = boot_process.l4_table.as_kernel_frame();
+            let proc_l4_table = boot_process.l4_table.into_kernel_unchecked();
             page_table_slot
                 .borrow_mut()
                 .unwrap()

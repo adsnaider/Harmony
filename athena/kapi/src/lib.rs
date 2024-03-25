@@ -61,6 +61,9 @@ pub enum CapError {
     InvalidOp = 3,
     InvalidOpForResource = 4,
     InvalidArgument = 5,
+    PageOffsetOutOfBounds = 6,
+    UserMappedFramePermissionError = 7,
+    FrameNotUser = 8,
 }
 
 #[derive(Debug, Copy, Clone, TryFromPrimitive, IntoPrimitive)]

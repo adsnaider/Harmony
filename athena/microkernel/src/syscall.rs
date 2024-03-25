@@ -24,11 +24,10 @@ pub extern "sysv64" fn handle(
 
     fn inner(cap: usize, op: usize, args: SyscallArgs) -> Result<(), CapError> {
         let tcb = ThreadControlBlock::current();
-        let caps = tcb.caps();
         let op = Operation::try_from(op)?;
         log::debug!("Got operation: {op:?}");
 
-        caps.exercise(CapId::from(cap as u32), op, args)
+        tcb.exercise_capability(CapId::from(cap as u32), op, args)
     }
 
     match inner(cap, op, SyscallArgs::new(a, b, c, d)) {

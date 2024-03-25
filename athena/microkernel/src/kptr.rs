@@ -61,7 +61,7 @@ impl<T> KPtr<T> {
         // SAFETY: Pointer was created from the frame.
         let frame = unsafe { RawFrame::from_ptr(self.inner.as_ptr()) };
         // SAFETY: Frame must be of type kernel frame since it comes from a kernel pointer.
-        unsafe { frame.as_kernel_frame() }
+        unsafe { frame.into_kernel_unchecked() }
     }
 
     pub fn try_into_inner(self) -> Option<T> {
