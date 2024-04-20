@@ -1,0 +1,6 @@
+[book]
+authors = ["Adam Snaider"]
+language = "en"
+multilingual = false
+src = "src"
+title = "Athena OS"
