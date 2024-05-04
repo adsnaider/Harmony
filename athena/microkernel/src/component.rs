@@ -4,14 +4,11 @@ use elain::Align;
 use kapi::{
     CapError, CapId, CapTableOp, MemoryRegionOp, PageTableOp, ResourceType, SyscallArgs, ThreadOp,
 };
-use x86_64_impl::structures::paging::PageTableFlags;
 
 use crate::arch::execution_context::ExecutionContext;
-use crate::arch::paging::page_table::PageTableOffset;
-use crate::arch::paging::{PageTable, PAGE_SIZE};
+use crate::arch::paging::{AnyPageTable, PAGE_SIZE};
 use crate::caps::{Capability, CapabilityEntryPtr, Resource};
 use crate::kptr::KPtr;
-use crate::USER_MAPPED_PHYS_OFFSET;
 
 static mut CURRENT: Option<KPtr<ThreadControlBlock>> = None;
 
@@ -35,7 +32,7 @@ impl ThreadControlBlock {
         &self.caps
     }
 
-    pub fn addrspace(&self) -> KPtr<PageTable<4>> {
+    pub fn addrspace(&self) -> KPtr<AnyPageTable> {
         unsafe { (*self.execution_ctx.get()).addrspace() }
     }
 
@@ -110,6 +107,7 @@ impl ThreadControlBlock {
                             .borrow_mut()?
                             .set_capability(Capability::empty());
                     }
+                    CapTableOp::Copy => todo!(),
                 }
             }
             Resource::Thread(thd) => {
@@ -121,47 +119,7 @@ impl ThreadControlBlock {
             }
             Resource::PageTable { table, flags } => {
                 let op = PageTableOp::try_from(op)?;
-                match flags.level() {
-                    0 => {
-                        let table: KPtr<PageTable<0>> = unsafe { table.into_typed_table() };
-                        match op {
-                            PageTableOp::Link => {
-                                let (offset, frame_addr, attributes, ..) = args.to_tuple();
-                                let offset = PageTableOffset::new(offset)
-                                    .map_err(|_| CapError::PageOffsetOutOfBounds)?;
-                                let frame = self
-                                    .addrspace()
-                                    .translate_page((frame_addr + USER_MAPPED_PHYS_OFFSET) as u64)
-                                    .ok_or(CapError::UserMappedFramePermissionError)?
-                                    .into_user()
-                                    .map_err(|_| CapError::FrameNotUser)?;
-                                table.map(
-                                    offset,
-                                    frame,
-                                    // FIXME: Custom parameter
-                                    PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE,
-                                );
-                                // FIXME: Flush and figure out how to flush the other cores too...
-                            }
-                            PageTableOp::Unlink => {
-                                let (offset, ..) = args.to_tuple();
-                                let offset = PageTableOffset::new(offset)
-                                    .map_err(|_| CapError::PageOffsetOutOfBounds)?;
-                                table.unmap(offset);
-                                // FIXME: Flush and figure out how to flush the other cores too...
-                            }
-                        }
-                    }
-                    level @ (1 | 2 | 3) => match op {
-                        PageTableOp::Link => todo!(),
-                        PageTableOp::Unlink => todo!(),
-                    },
-                    4 => match op {
-                        PageTableOp::Link => todo!(),
-                        PageTableOp::Unlink => todo!(),
-                    },
-                    other => unreachable!("Unexpected page table level"),
-                }
+                todo!();
             }
             Resource::MemoryRegion(region) => {
                 let op = MemoryRegionOp::try_from(op)?;

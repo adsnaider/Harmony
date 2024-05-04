@@ -6,8 +6,7 @@ use kapi::{CapError, CapId};
 use sync::cell::{AtomicRefCell, BorrowError};
 use trie::{Ptr, Slot, TrieEntry, TrieIndexError};
 
-use crate::arch::paging::page_table::RawPageTable;
-use crate::arch::paging::{MemoryRegion, PageTable};
+use crate::arch::paging::{AnyPageTable, MemoryRegion};
 use crate::component::ThreadControlBlock;
 use crate::kptr::KPtr;
 use crate::retyping::UntypedFrame;
@@ -87,7 +86,7 @@ pub enum Resource {
     CapEntry(CapabilityEntryPtr),
     Thread(KPtr<ThreadControlBlock>),
     PageTable {
-        table: KPtr<RawPageTable>,
+        table: KPtr<AnyPageTable>,
         flags: PageCapFlags,
     },
     MemoryRegion(MemoryRegion),
@@ -106,10 +105,10 @@ impl Resource {
         Self::Thread(tcb)
     }
 
-    pub const fn from_page_table<const L: u8>(table: KPtr<PageTable<L>>) -> Self {
+    pub const fn from_page_table(table: KPtr<AnyPageTable>, level: u8) -> Self {
         Self::PageTable {
-            table: table.into_raw_table(),
-            flags: PageCapFlags::new(L),
+            table,
+            flags: PageCapFlags::new(level),
         }
     }
 }

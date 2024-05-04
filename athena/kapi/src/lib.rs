@@ -51,45 +51,47 @@ pub enum ThreadOp {
 #[repr(usize)]
 pub enum CapTableOp {
     Link = 2,
-    Unlink = 3,
-    Construct = 4,
-    Drop = 5,
+    Unlink,
+    Construct,
+    Drop,
+    Copy,
 }
 
 #[derive(Debug, Copy, Clone, TryFromPrimitive, IntoPrimitive)]
 #[repr(usize)]
 pub enum PageTableOp {
-    Link = 5,
-    Unlink = 7,
+    Link = 7,
+    Unlink,
 }
 
 #[derive(Debug, Copy, Clone, TryFromPrimitive, IntoPrimitive)]
 #[repr(usize)]
 pub enum MemoryRegionOp {
-    Retype = 8,
-    Split = 9,
+    Retype = 9,
+    Split,
 }
 
 #[derive(Debug, Copy, Clone, TryFromPrimitive, IntoPrimitive)]
 #[repr(u8)]
 pub enum CapError {
     ResourceInUse = 1,
-    NotFound = 2,
-    InvalidOp = 3,
-    InvalidOpForResource = 4,
-    InvalidArgument = 5,
-    PageOffsetOutOfBounds = 6,
-    UserMappedFramePermissionError = 7,
-    FrameNotUser = 8,
+    NotFound,
+    InvalidOp,
+    InvalidOpForResource,
+    InvalidArgument,
+    PageOffsetOutOfBounds,
+    UserMappedFramePermissionError,
+    FrameNotUser,
 }
 
 #[derive(Debug, Copy, Clone, TryFromPrimitive, IntoPrimitive)]
 #[repr(u8)]
 pub enum ResourceType {
     CapabilityTable = 0,
-    ThreadControlBlock = 1,
-    PageTable = 2,
+    ThreadControlBlock,
+    PageTable,
 }
+
 impl<T: TryFromPrimitive> From<TryFromPrimitiveError<T>> for CapError {
     fn from(_value: TryFromPrimitiveError<T>) -> Self {
         Self::InvalidOp

@@ -3,7 +3,7 @@ use x86_64_impl::PhysAddr;
 
 pub mod page_table;
 
-pub use self::page_table::PageTable;
+pub use self::page_table::AnyPageTable;
 use crate::PMO;
 
 pub const PAGE_SIZE: usize = 4096;

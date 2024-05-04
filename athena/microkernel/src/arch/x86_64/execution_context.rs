@@ -3,7 +3,7 @@
 use core::arch::asm;
 use core::mem::MaybeUninit;
 
-use super::paging::{PageTable, RawFrame};
+use super::paging::{AnyPageTable, RawFrame};
 use crate::kptr::KPtr;
 
 /// A generic runnable context.
@@ -19,8 +19,8 @@ pub struct ExecutionContext {
 }
 
 impl ExecutionContext {
-    pub fn addrspace(&self) -> KPtr<PageTable<4>> {
-        unsafe { PageTable::from_l4_frame(self.address_space.into_kernel_unchecked()) }
+    pub fn addrspace(&self) -> KPtr<AnyPageTable> {
+        unsafe { KPtr::from_frame_unchecked(self.address_space.into_kernel_unchecked()) }
     }
 
     pub unsafe fn uninit() -> Self {
