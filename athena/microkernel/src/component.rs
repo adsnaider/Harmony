@@ -1,7 +1,9 @@
 use core::cell::UnsafeCell;
 
 use elain::Align;
-use kapi::{CapError, CapId, CapTableOp, PageTableOp, ResourceType, SyscallArgs, ThreadOp};
+use kapi::{
+    CapError, CapId, CapTableOp, MemoryRegionOp, PageTableOp, ResourceType, SyscallArgs, ThreadOp,
+};
 use x86_64_impl::structures::paging::PageTableFlags;
 
 use crate::arch::execution_context::ExecutionContext;
@@ -87,7 +89,6 @@ impl ThreadControlBlock {
                         let (slot, ..) = args.to_tuple();
                         cap_table.index(slot)?.borrow_mut()?.set_child(None);
                     }
-                    #[allow(unreachable_code, unused_variables)]
                     CapTableOp::Construct => {
                         let (resource_type, _page, slot, ..) = args.to_tuple();
                         let resource_type = ResourceType::try_from(resource_type as u8)
@@ -160,6 +161,13 @@ impl ThreadControlBlock {
                         PageTableOp::Unlink => todo!(),
                     },
                     other => unreachable!("Unexpected page table level"),
+                }
+            }
+            Resource::MemoryRegion(region) => {
+                let op = MemoryRegionOp::try_from(op)?;
+                match op {
+                    MemoryRegionOp::Retype => todo!(),
+                    MemoryRegionOp::Split => todo!(),
                 }
             }
         }
