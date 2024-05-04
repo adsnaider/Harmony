@@ -18,6 +18,8 @@ Any implementations must be thread-safe, lock-free, and wait-free. This makes th
 
 The simplest approach works with a per-frame solution. At startup, we create a *retype* table that holds an entry per physical frame in the system. The entry consists of an atomic *state* and an atomic *counter*. The state can either by *UNTYPED*, *RETYPING*, *KERNEL*, *USER*. The *RETYPING* state isn't strictly necessary but it helps with the code flow and should pose little overhead.
 
+### Frame Types
+
 An *UNTYPED* frame can be moved into a *RETYPING* state atomically. An *UNTYPED* frame has no references to it and a *RETYPING* frame only has 1 abstract reference (i.e. an owner of the frame without the frame being mapped or used in memory).
 
 A frame in a *RETYPING* state can be converted to either *KERNEL* or *USER* without the need for validation as the ownership guarantees uniqueness.
@@ -72,4 +74,4 @@ Page tables must be properly typed to their level as it should not be allowed to
 	* Change access rights
 
 
-Unfortunately, page table operations must be atomic. Even if we avoided multiple references to page table capabilities over multiple components, a component with multiple threads may try to manipulate the same page table from different threads. This is not a huge problem because page table manipulation is likely infrequent and done within non-realtime components anyway.
+Unfortunately, page table operations must be atomic. Even if we avoided multiple references to page table capabilities over multiple components, a component with multiple threads may try to manipulate the same page table from different threads. This is not a huge problem because page table manipulation is likely infrequent and done within non-real-time components anyway.
