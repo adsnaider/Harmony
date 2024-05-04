@@ -88,7 +88,7 @@ fn init() {
 #[no_mangle]
 unsafe extern "C" fn kmain() -> ! {
     use arch::bootstrap::Process;
-    use arch::paging::PageTable;
+    use arch::paging::page_table::TOP_TABLE;
     use caps::{Capability, CapabilityEntryPtr, Resource};
     use include_bytes_aligned::include_bytes_aligned;
     use kapi::CapId;
@@ -136,12 +136,14 @@ unsafe extern "C" fn kmain() -> ! {
             .set_capability(Capability::new(Resource::from_tcb(boot_thread)));
 
         unsafe {
-            let proc_l4_table = boot_process.l4_table.into_kernel_unchecked();
+            let proc_l4_table =
+                KPtr::from_frame_unchecked(boot_process.l4_table.into_kernel_unchecked());
             page_table_slot
                 .borrow_mut()
                 .unwrap()
                 .set_capability(Capability::new(Resource::from_page_table(
-                    PageTable::from_l4_frame(proc_l4_table),
+                    proc_l4_table,
+                    TOP_TABLE,
                 )));
         }
         log::info!("Executing boot process");
