@@ -1,6 +1,6 @@
 //! Syscall invocations
 
-use kapi::{CapError, CapId, Operation, SyscallArgs};
+use kapi::{CapError, CapId, SyscallArgs};
 
 use crate::component::ThreadControlBlock;
 
@@ -24,9 +24,6 @@ pub extern "sysv64" fn handle(
 
     fn inner(cap: usize, op: usize, args: SyscallArgs) -> Result<(), CapError> {
         let tcb = ThreadControlBlock::current();
-        let op = Operation::try_from(op)?;
-        log::debug!("Got operation: {op:?}");
-
         tcb.exercise_capability(CapId::from(cap as u32), op, args)
     }
 
