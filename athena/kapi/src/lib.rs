@@ -17,7 +17,11 @@ pub unsafe extern "sysv64" fn raw_syscall(
     asm!("int 0x80", "ret", options(noreturn));
 }
 
-pub unsafe fn syscall(cap: CapId, op: Operation, args: SyscallArgs) -> Result<usize, CapError> {
+pub unsafe fn syscall(
+    cap: CapId,
+    op: impl Into<usize>,
+    args: SyscallArgs,
+) -> Result<usize, CapError> {
     let result = unsafe {
         raw_syscall(
             u32::from(cap).try_into().unwrap(),
@@ -34,23 +38,36 @@ pub unsafe fn syscall(cap: CapId, op: Operation, args: SyscallArgs) -> Result<us
     }
 }
 
-use num_enum::{IntoPrimitive, TryFromPrimitive};
+use num_enum::{IntoPrimitive, TryFromPrimitive, TryFromPrimitiveError};
 
 #[derive(Debug, Copy, Clone, TryFromPrimitive, IntoPrimitive)]
 #[repr(usize)]
-pub enum Operation {
-    ThdActivate = 0,
+pub enum ThreadOp {
+    Activate = 0,
+    ChangeAffinity = 1,
+}
 
-    CapLink = 1,
-    CapUnlink = 2,
-    CapConstruct = 3,
-    CapRemove = 4,
+#[derive(Debug, Copy, Clone, TryFromPrimitive, IntoPrimitive)]
+#[repr(usize)]
+pub enum CapTableOp {
+    Link = 2,
+    Unlink = 3,
+    Construct = 4,
+    Drop = 5,
+}
 
-    PageTableMap = 5,
-    PageTableUnmap = 6,
-    PageTableLink = 7,
-    PageTableUnlink = 8,
-    PageTableRetype = 9,
+#[derive(Debug, Copy, Clone, TryFromPrimitive, IntoPrimitive)]
+#[repr(usize)]
+pub enum PageTableOp {
+    Link = 5,
+    Unlink = 7,
+}
+
+#[derive(Debug, Copy, Clone, TryFromPrimitive, IntoPrimitive)]
+#[repr(usize)]
+pub enum MemoryRegionOp {
+    Retype = 8,
+    Split = 9,
 }
 
 #[derive(Debug, Copy, Clone, TryFromPrimitive, IntoPrimitive)]
@@ -73,8 +90,8 @@ pub enum ResourceType {
     ThreadControlBlock = 1,
     PageTable = 2,
 }
-impl From<<Operation as TryFrom<usize>>::Error> for CapError {
-    fn from(_value: <Operation as TryFrom<usize>>::Error) -> Self {
+impl<T: TryFromPrimitive> From<TryFromPrimitiveError<T>> for CapError {
+    fn from(_value: TryFromPrimitiveError<T>) -> Self {
         Self::InvalidOp
     }
 }
