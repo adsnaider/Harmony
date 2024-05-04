@@ -57,3 +57,30 @@ impl RawFrame {
         PhysFrame::from_start_address(PhysAddr::new(self.phys_address)).unwrap()
     }
 }
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct MemoryRegion {
+    phys_address: u64,
+    size: u64,
+}
+
+impl MemoryRegion {
+    pub fn new(phys_address: u64, size: u64) -> Self {
+        assert!(phys_address as usize % PAGE_SIZE == 0);
+        assert!(size as usize % PAGE_SIZE == 0);
+        Self { phys_address, size }
+    }
+
+    pub fn split(self, offset: u64) -> (Self, Self) {
+        assert!(offset <= self.size);
+        let left = Self::new(self.phys_address, offset);
+        let right = Self::new(self.phys_address + offset, self.size - offset);
+        (left, right)
+    }
+
+    pub fn includes_frames(&self, frame: &RawFrame) -> bool {
+        self.phys_address <= frame.phys_address
+            && self.phys_address + self.size >= frame.phys_address + PAGE_SIZE as u64
+    }
+}

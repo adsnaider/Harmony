@@ -7,7 +7,7 @@ use sync::cell::{AtomicRefCell, BorrowError};
 use trie::{Ptr, Slot, TrieEntry, TrieIndexError};
 
 use crate::arch::paging::page_table::RawPageTable;
-use crate::arch::paging::PageTable;
+use crate::arch::paging::{MemoryRegion, PageTable};
 use crate::component::ThreadControlBlock;
 use crate::kptr::KPtr;
 use crate::retyping::UntypedFrame;
@@ -79,7 +79,7 @@ impl CapabilityEntryPtr {
     }
 }
 
-#[repr(u8)]
+#[repr(u8, C)]
 #[derive(Default, Debug, Clone)]
 pub enum Resource {
     #[default]
@@ -90,6 +90,7 @@ pub enum Resource {
         table: KPtr<RawPageTable>,
         flags: PageCapFlags,
     },
+    MemoryRegion(MemoryRegion),
 }
 
 impl Resource {
