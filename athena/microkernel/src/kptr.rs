@@ -1,5 +1,6 @@
 //! Kernel datastructures that fit into a page.
 
+use core::mem::ManuallyDrop;
 use core::ops::Deref;
 use core::ptr::NonNull;
 use core::sync::atomic::{fence, Ordering};
@@ -73,6 +74,10 @@ impl<T> KPtr<T> {
         } else {
             None
         }
+    }
+
+    pub fn into_raw(self) -> RawFrame {
+        self.frame().into_raw()
     }
 }
 

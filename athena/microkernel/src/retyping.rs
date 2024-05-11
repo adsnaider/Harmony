@@ -117,10 +117,20 @@ impl<'a> RetypeTable<'a> {
         }
     }
 }
+pub enum TypedFrame {
+    Untyped(UntypedFrame<'static>),
+    User(UserFrame<'static>),
+    Kernel(KernelFrame<'static>),
+}
 impl RawFrame {
     pub fn into_untyped(self) -> Result<UntypedFrame<'static>, RetypeError> {
         RETYPE_TBL.get().unwrap().entry(self)
     }
+
+    pub fn as_typed(self) -> TypedFrame {
+        todo!();
+    }
+
     pub fn into_user(self) -> Result<UserFrame<'static>, RetypeError> {
         todo!();
     }
