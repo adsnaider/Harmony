@@ -14,11 +14,27 @@ pub struct RawFrame {
     phys_address: u64,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum InvalidFrame {
+    AddressNotAligned,
+    InvalidPhysAddress,
+}
+
 impl RawFrame {
     pub fn from_start_address(address: u64) -> Self {
-        Self {
-            phys_address: address,
+        Self::try_from_start_address(address).unwrap()
+    }
+
+    pub fn try_from_start_address(address: u64) -> Result<Self, InvalidFrame> {
+        if PhysAddr::try_new(address).is_err() {
+            return Err(InvalidFrame::InvalidPhysAddress);
         }
+        if address % PAGE_SIZE as u64 != 0 {
+            return Err(InvalidFrame::AddressNotAligned);
+        }
+        Ok(Self {
+            phys_address: address,
+        })
     }
 
     pub fn from_index(idx: usize) -> Self {
@@ -79,7 +95,7 @@ impl MemoryRegion {
         (left, right)
     }
 
-    pub fn includes_frames(&self, frame: &RawFrame) -> bool {
+    pub fn includes_frame(&self, frame: &RawFrame) -> bool {
         self.phys_address <= frame.phys_address
             && self.phys_address + self.size >= frame.phys_address + PAGE_SIZE as u64
     }

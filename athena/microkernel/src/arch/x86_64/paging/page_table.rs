@@ -31,6 +31,10 @@ impl PageTableOffset {
             Err(PageTableOffsetError::OutOfBounds)
         }
     }
+
+    pub const fn is_lower_half(&self) -> bool {
+        self.0 < 256
+    }
 }
 
 #[repr(C, align(4096))]

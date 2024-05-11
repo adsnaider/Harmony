@@ -80,7 +80,7 @@ pub enum CapError {
     InvalidOpForResource,
     InvalidArgument,
     PageOffsetOutOfBounds,
-    UserMappedFramePermissionError,
+    FrameOutsideOfRegion,
     FrameNotUser,
 }
 
