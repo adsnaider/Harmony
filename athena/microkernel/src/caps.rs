@@ -17,13 +17,28 @@ pub struct CapSlot {
     capability: Capability,
 }
 
+pub struct InUse;
+
 impl CapSlot {
+    pub fn get_capability(&self) -> Capability {
+        self.capability.clone()
+    }
+
     pub fn set_child(&mut self, child: Option<CapabilityEntryPtr>) -> Option<KPtr<RawCapEntry>> {
         core::mem::replace(&mut self.child, child.map(|entry| entry.0))
     }
 
     pub fn set_capability(&mut self, new: Capability) -> Capability {
         core::mem::replace(&mut self.capability, new)
+    }
+
+    pub fn insert_capability(&mut self, new: Capability) -> Result<(), InUse> {
+        if self.capability.is_empty() {
+            self.capability = new;
+            Ok(())
+        } else {
+            Err(InUse)
+        }
     }
 }
 
@@ -130,6 +145,10 @@ impl Capability {
         Self {
             resource: Resource::Empty,
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        matches!(self.resource, Resource::Empty)
     }
 }
 

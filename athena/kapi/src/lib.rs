@@ -169,3 +169,11 @@ impl From<CapId> for u32 {
         value.0
     }
 }
+
+#[repr(usize)]
+#[derive(Debug, Copy, Clone, IntoPrimitive, TryFromPrimitive)]
+pub enum FrameType {
+    Untyped = 0,
+    User = 1,
+    Kernel = 2,
+}
