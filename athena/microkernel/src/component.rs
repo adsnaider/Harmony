@@ -10,7 +10,7 @@ use x86_64_impl::structures::paging::PageTableFlags;
 use crate::arch::execution_context::ExecutionContext;
 use crate::arch::paging::page_table::PageTableOffset;
 use crate::arch::paging::{AnyPageTable, RawFrame, PAGE_SIZE};
-use crate::caps::{Capability, CapabilityEntryPtr, Resource};
+use crate::caps::{Capability, CapabilityEntryPtr, PageCapFlags, Resource};
 use crate::kptr::KPtr;
 use crate::retyping::TypedFrame;
 
@@ -112,10 +112,23 @@ impl ThreadControlBlock {
                             ResourceType::CapabilityTable => {
                                 Resource::from_capability_table(CapabilityEntryPtr::new(frame))
                             }
-                            ResourceType::ThreadControlBlock => Resource::from_tcb(KPtr::new(
-                                frame,
-                                ThreadControlBlock::new(todo!(), todo!()),
-                            )),
+                            ResourceType::ThreadControlBlock => {
+                                let cap_table_cap: u32 = todo!();
+                                let l4_table_cap: u32 = todo!();
+                                let cap_table = self.caps().get(CapId::from(cap_table_cap))?;
+                                let Resource::CapEntry(cap_table) = cap_table.resource else {
+                                    return Err(CapError::InvalidArgument);
+                                };
+                                let l4_table = self.caps().get(CapId::from(l4_table_cap))?;
+                                let Resource::PageTable { table: l4_table, flags } = l4_table.resource else {
+                                    return Err(CapError::InvalidArgument);
+                                }
+                                let start_addr: usize = todo!();
+                                Resource::from_tcb(KPtr::new(
+                                    frame,
+                                    ThreadControlBlock::new(cap_table, unsafe { ExecutionContext::new(0, l4_table.into_raw()) },
+                                )))
+                            }
                             ResourceType::PageTable => Resource::from_page_table(
                                 KPtr::new(frame, AnyPageTable::new()),
                                 todo!(),
