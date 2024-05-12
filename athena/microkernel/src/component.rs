@@ -69,7 +69,7 @@ impl ThreadControlBlock {
         op: usize,
         args: SyscallArgs,
     ) -> Result<(), CapError> {
-        let mut slot = self.caps.get_slot(cap)?;
+        let slot = self.caps.get_slot(cap)?;
         let cap = slot.borrow()?.get_capability();
         match cap.resource {
             Resource::Empty => return Err(CapError::NotFound),
@@ -133,7 +133,12 @@ impl ThreadControlBlock {
                             .borrow_mut()?
                             .set_capability(Capability::empty());
                     }
-                    CapTableOp::Copy => todo!(),
+                    CapTableOp::Copy => {
+                        let (into_slot, from_slot, ..) = args.to_tuple();
+                        let into_slot = cap_table.index(into_slot)?;
+                        let cap = self.caps().get(CapId::from(from_slot as u32))?;
+                        into_slot.borrow_mut()?.set_capability(cap);
+                    }
                 }
             }
             Resource::Thread(thd) => {
