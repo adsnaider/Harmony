@@ -2,7 +2,8 @@ use core::cell::UnsafeCell;
 
 use elain::Align;
 use kapi::{
-    CapError, CapId, CapTableOp, MemoryRegionOp, PageTableOp, ResourceType, SyscallArgs, ThreadOp,
+    CapError, CapId, CapTableOp, FrameType, MemoryRegionOp, PageTableOp, ResourceType, SyscallArgs,
+    ThreadOp,
 };
 use x86_64_impl::structures::paging::PageTableFlags;
 
@@ -68,7 +69,8 @@ impl ThreadControlBlock {
         op: usize,
         args: SyscallArgs,
     ) -> Result<(), CapError> {
-        let cap = self.caps.get(cap)?;
+        let mut slot = self.caps.get_slot(cap)?;
+        let cap = slot.borrow()?.get_capability();
         match cap.resource {
             Resource::Empty => return Err(CapError::NotFound),
             Resource::CapEntry(cap_table) => {
@@ -214,8 +216,47 @@ impl ThreadControlBlock {
             Resource::MemoryRegion(region) => {
                 let op = MemoryRegionOp::try_from(op)?;
                 match op {
-                    MemoryRegionOp::Retype => todo!(),
-                    MemoryRegionOp::Split => todo!(),
+                    MemoryRegionOp::Retype => {
+                        let (frame, frame_type, ..) = args.to_tuple();
+                        let frame = RawFrame::try_from_start_address(frame as u64)
+                            .map_err(|_| CapError::InvalidArgument)?;
+                        if !region.includes_frame(&frame) {
+                            return Err(CapError::FrameOutsideOfRegion);
+                        }
+                        let frame_type = FrameType::try_from(frame_type)
+                            .map_err(|_| CapError::InvalidArgument)?;
+                        match frame_type {
+                            FrameType::Untyped => {
+                                frame
+                                    .into_untyped()
+                                    .map_err(|_| CapError::InvalidArgument)?;
+                            }
+                            FrameType::User => {
+                                frame.into_user().map_err(|_| CapError::InvalidArgument)?;
+                            }
+                            FrameType::Kernel => {
+                                frame.into_kernel().map_err(|_| CapError::InvalidArgument)?;
+                            }
+                        };
+                    }
+                    MemoryRegionOp::Split => {
+                        let (partition_size, second_table, second_slot, ..) = args.to_tuple();
+                        let (left, right) = region
+                            .split(partition_size as u64)
+                            .map_err(|_| CapError::InvalidArgument)?;
+                        let table = self.caps.get(CapId::from(second_table as u32))?;
+                        let Resource::CapEntry(table) = table.resource else {
+                            return Err(CapError::InvalidArgument);
+                        };
+                        table
+                            .get_slot(CapId::from(second_slot as u32))?
+                            .borrow_mut()?
+                            .insert_capability(Capability::new(Resource::MemoryRegion(right)))
+                            .map_err(|_| CapError::InvalidArgument)?;
+
+                        slot.borrow_mut()?
+                            .set_capability(Capability::new(Resource::MemoryRegion(left)));
+                    }
                 }
             }
         }

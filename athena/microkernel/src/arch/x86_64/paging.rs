@@ -81,6 +81,8 @@ pub struct MemoryRegion {
     size: u64,
 }
 
+pub struct OutOfBounds;
+
 impl MemoryRegion {
     pub fn new(phys_address: u64, size: u64) -> Self {
         assert!(phys_address as usize % PAGE_SIZE == 0);
@@ -88,11 +90,13 @@ impl MemoryRegion {
         Self { phys_address, size }
     }
 
-    pub fn split(self, offset: u64) -> (Self, Self) {
-        assert!(offset <= self.size);
+    pub fn split(self, offset: u64) -> Result<(Self, Self), OutOfBounds> {
+        if offset > self.size {
+            return Err(OutOfBounds);
+        }
         let left = Self::new(self.phys_address, offset);
         let right = Self::new(self.phys_address + offset, self.size - offset);
-        (left, right)
+        Ok((left, right))
     }
 
     pub fn includes_frame(&self, frame: &RawFrame) -> bool {
