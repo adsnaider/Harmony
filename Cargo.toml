@@ -1,7 +1,7 @@
 [workspace]
 members = [
   "athena/kapi",
-  "athena/microkernel",
+  "athena/kernel",
   "athena/sync",
   "athena/trie",
   "athena/userspace/booter",
@@ -9,7 +9,7 @@ members = [
 ]
 
 resolver = "2"
-default-members = ["athena/microkernel"]
+default-members = ["athena/kernel"]
 
 [workspace.dependencies]
 sync = { path = "athena/sync" }
