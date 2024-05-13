@@ -9,6 +9,7 @@
 )]
 #![cfg_attr(target_arch = "x86_64", feature(abi_x86_interrupt))]
 
+use limine::memory_map::Entry;
 use limine::request::{HhdmRequest, MemoryMapRequest};
 use limine::BaseRevision;
 use sync::cell::AtomicLazyCell;
@@ -17,6 +18,7 @@ use crate::arch::interrupts;
 
 pub mod arch;
 pub mod bump_allocator;
+pub mod retyping;
 pub mod syscall;
 
 #[cfg(test)]
@@ -36,6 +38,13 @@ pub static PMO: AtomicLazyCell<usize> = AtomicLazyCell::new(|| {
     assert!(pmo > 0xFFFF_8000_0000_0000);
     pmo as usize
 });
+
+#[cfg(not(test))]
+#[no_mangle]
+extern "C" fn kmain() -> ! {
+    init();
+    loop {}
+}
 
 pub fn init() {
     #[used]
@@ -71,9 +80,4 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
-#[cfg(not(test))]
-#[no_mangle]
-extern "C" fn kmain() -> ! {
-    init();
-    loop {}
-}
+pub type MemoryMap = &'static mut [&'static mut Entry];
