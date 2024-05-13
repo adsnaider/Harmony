@@ -27,4 +27,8 @@ impl RawFrame {
         let base = PhysAddr::new(addr.as_u64() % FRAME_SIZE);
         Self { base }
     }
+
+    pub fn addr(&self) -> PhysAddr {
+        self.base
+    }
 }
