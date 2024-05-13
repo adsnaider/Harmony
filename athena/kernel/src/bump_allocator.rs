@@ -1,7 +1,7 @@
 use limine::memory_map::{Entry, EntryType};
 use sync::cell::AtomicLazyCell;
 
-use crate::arch::paging::{RawFrame, FRAME_SIZE};
+use crate::arch::paging::{PhysAddr, RawFrame, FRAME_SIZE};
 use crate::MemoryMap;
 pub static BOOT_ALLOCATION: AtomicLazyCell<EntryType> = AtomicLazyCell::new(|| EntryType::from(8));
 pub struct BumpAllocator {
@@ -25,6 +25,7 @@ impl BumpAllocator {
                 let start_address = entry.base;
                 entry.base += FRAME_SIZE;
                 entry.length -= FRAME_SIZE;
+                let start_address = PhysAddr::new(start_address);
                 break RawFrame::from_start_address(start_address);
             }
             self.index += 1;
@@ -32,7 +33,7 @@ impl BumpAllocator {
         Some(frame)
     }
 
-    pub fn alloc_frames(&mut self, count: usize) -> Option<u64> {
+    pub fn alloc_frames(&mut self, count: usize) -> Option<PhysAddr> {
         let requested_length = count as u64 * FRAME_SIZE;
         let start_address = loop {
             let entry = self.memory_map.get_mut(self.index)?;
@@ -41,7 +42,7 @@ impl BumpAllocator {
                 let start_address = entry.base;
                 entry.base += requested_length;
                 entry.length -= requested_length;
-                break start_address;
+                break PhysAddr::new(start_address);
             }
             self.index += 1;
         };
@@ -90,7 +91,7 @@ mod tests {
         #[allow(static_mut_refs)]
         let mut allocator = BumpAllocator::new(unsafe { &mut TEST_MAP });
         for expected_frame in [0, FRAME_SIZE, FRAME_SIZE * 4, FRAME_SIZE * 6] {
-            let expected_frame = RawFrame::from_start_address(expected_frame);
+            let expected_frame = RawFrame::from_start_address(PhysAddr::new(expected_frame));
             let frame = allocator.alloc_frame().unwrap();
             assert_eq!(frame, expected_frame);
         }
@@ -126,9 +127,13 @@ mod tests {
         // SAFETY: Mutable access is unique.
         #[allow(static_mut_refs)]
         let mut allocator = BumpAllocator::new(unsafe { &mut TEST_MAP });
-        for expected_frame in [0, FRAME_SIZE * 6] {
-            let frame = allocator.alloc_frames(2).unwrap();
-            assert_eq!(frame, expected_frame);
+        for expected_start in [0, FRAME_SIZE * 6]
+            .into_iter()
+            .map(|addr| PhysAddr::new(addr))
+        {
+            let start = allocator.alloc_frames(2).unwrap();
+            assert_eq!(start, expected_start);
+            assert!(start.as_u64() % FRAME_SIZE == 0);
         }
 
         assert!(allocator.alloc_frame().is_none())
