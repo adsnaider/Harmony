@@ -2,6 +2,7 @@ use core::arch::asm;
 
 use crate::arch::timer::Pit8253;
 
+pub mod exec;
 pub mod instructions;
 pub mod interrupts;
 pub mod paging;
