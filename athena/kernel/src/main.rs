@@ -4,15 +4,13 @@
 #![cfg_attr(
     test,
     feature(custom_test_frameworks),
-    test_runner(crate::test_runner),
+    test_runner(crate::testing::runner),
     reexport_test_harness_main = "test_main"
 )]
 #![cfg_attr(target_arch = "x86_64", feature(abi_x86_interrupt))]
 
 #[cfg(test)]
-fn test_runner(_tests: &[&dyn FnOnce()]) {
-    todo!();
-}
+mod testing;
 
 mod serial;
 
