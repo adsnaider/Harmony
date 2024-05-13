@@ -9,6 +9,8 @@ pub(super) fn init() {
     log::set_logger(&LOGGER)
         .map(|()| log::set_max_level(*LOG_LEVEL))
         .expect("Couldn't set the serial logger");
+
+    log::info!("Logging initialized");
 }
 
 // TODO: Fix this to not use static mut
