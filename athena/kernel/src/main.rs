@@ -16,6 +16,7 @@ use sync::cell::AtomicLazyCell;
 
 use crate::arch::interrupts;
 use crate::arch::paging::VirtAddr;
+use crate::retyping::RetypeTable;
 
 pub mod arch;
 pub mod bump_allocator;
@@ -63,14 +64,23 @@ pub fn init() {
 
     arch::init();
 
-    log::info!("Got physical memory offset from limine at {:#X}", *PMO);
+    log::info!(
+        "Got physical memory offset from limine at {:#X}",
+        PMO.as_usize()
+    );
 
-    let _memory_map = unsafe {
+    let memory_map = unsafe {
         MEMORY_MAP
             .get_response_mut()
             .expect("Missing memory map from Limine")
             .entries_mut()
     };
+    RetypeTable::new(memory_map)
+        .unwrap()
+        .set_as_global()
+        .unwrap();
+
+    log::info!("Initialized the retype table")
 }
 
 #[cfg(all(target_os = "none", not(test)))]

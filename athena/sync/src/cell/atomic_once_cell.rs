@@ -15,6 +15,7 @@ pub struct AtomicOnceCell<T> {
 unsafe impl<T: Send + Sync> Sync for AtomicOnceCell<T> {}
 unsafe impl<T: Send> Send for AtomicOnceCell<T> {}
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum OnceError {
     Initializing,
     AlreadyInit,
