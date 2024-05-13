@@ -12,10 +12,14 @@
 #[cfg(test)]
 mod testing;
 
+pub mod arch;
+pub mod syscall;
+
 mod serial;
 
 pub fn init() {
     serial::init();
+    arch::init();
 }
 
 #[cfg(all(target_os = "none", not(test)))]
