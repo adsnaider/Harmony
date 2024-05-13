@@ -15,6 +15,7 @@ use limine::BaseRevision;
 use sync::cell::AtomicLazyCell;
 
 use crate::arch::interrupts;
+use crate::arch::paging::VirtAddr;
 
 pub mod arch;
 pub mod bump_allocator;
@@ -26,7 +27,7 @@ mod testing;
 
 mod serial;
 
-pub static PMO: AtomicLazyCell<usize> = AtomicLazyCell::new(|| {
+pub static PMO: AtomicLazyCell<VirtAddr> = AtomicLazyCell::new(|| {
     #[used]
     static HHDM: HhdmRequest = HhdmRequest::new();
 
@@ -36,7 +37,7 @@ pub static PMO: AtomicLazyCell<usize> = AtomicLazyCell::new(|| {
         .offset();
     // PMO must be on the higher half
     assert!(pmo > 0xFFFF_8000_0000_0000);
-    pmo as usize
+    VirtAddr::new(pmo as usize)
 });
 
 #[cfg(not(test))]

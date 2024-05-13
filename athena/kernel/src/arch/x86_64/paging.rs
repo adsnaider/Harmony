@@ -6,3 +6,6 @@ pub use frames::RawFrame;
 
 mod physical_address;
 pub use physical_address::PhysAddr;
+
+mod virtual_address;
+pub use virtual_address::VirtAddr;
