@@ -119,6 +119,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "kernel"
+version = "0.1.0"
+dependencies = [
+ "elain",
+ "goblin",
+ "include_bytes_aligned",
+ "kapi",
+ "limine",
+ "log",
+ "pic8259",
+ "sync",
+ "trie",
+ "uart_16550",
+ "x86_64 0.15.0",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -163,23 +180,6 @@ name = "log"
 version = "0.4.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90ed8c1e510134f979dbc4f070f87d4313098b704861a105fe34231c70a3901c"
-
-[[package]]
-name = "microkernel"
-version = "0.1.0"
-dependencies = [
- "elain",
- "goblin",
- "include_bytes_aligned",
- "kapi",
- "limine",
- "log",
- "pic8259",
- "sync",
- "trie",
- "uart_16550",
- "x86_64 0.15.0",
-]
 
 [[package]]
 name = "num-traits"
