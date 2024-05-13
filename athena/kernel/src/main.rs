@@ -16,6 +16,7 @@ use sync::cell::AtomicLazyCell;
 use crate::arch::interrupts;
 
 pub mod arch;
+pub mod bump_allocator;
 pub mod syscall;
 
 #[cfg(test)]
