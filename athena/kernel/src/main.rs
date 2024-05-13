@@ -14,7 +14,13 @@ fn test_runner(_tests: &[&dyn FnOnce()]) {
     todo!();
 }
 
-#[cfg(target_os = "none")]
+mod serial;
+
+pub fn init() {
+    serial::init();
+}
+
+#[cfg(all(target_os = "none", not(test)))]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     // TODO: Reboot
