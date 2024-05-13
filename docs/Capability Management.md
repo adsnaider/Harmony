@@ -79,9 +79,9 @@ Capabilities must be thread safe. This is an inherent need from construction as 
 
 ### Memory Regions
 
-| Operation     | Description                                       | Notes                                                   | Thread Safety                  |
-| ------------- | ------------------------------------------------- | ------------------------------------------------------- | ------------------------------ |
-| Retype region | Attempts to retype a section of the memory region | As of now, only individual pages can be retyped at once | Atomic operations for retyping |
-|               |                                                   |                                                         |                                |
+| Operation | Description                                       | Notes                                                   | Thread Safety                  |
+| --------- | ------------------------------------------------- | ------------------------------------------------------- | ------------------------------ |
+| Retype    | Attempts to retype a section of the memory region | As of now, only individual pages can be retyped at once | Atomic operations for retyping |
+| Split     | Splits a region into 2 capabilities               |                                                         | Immutable                      |
 
 
