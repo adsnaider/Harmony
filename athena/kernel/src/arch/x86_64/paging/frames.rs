@@ -16,6 +16,10 @@ impl RawFrame {
         Self::try_from_start_address(base).unwrap()
     }
 
+    pub fn base(&self) -> PhysAddr {
+        self.base
+    }
+
     pub fn try_from_start_address(base: PhysAddr) -> Result<Self, UnalignedAddress> {
         if base.as_u64() % FRAME_SIZE != 0 {
             return Err(UnalignedAddress);
