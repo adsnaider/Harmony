@@ -28,6 +28,8 @@ mod testing;
 
 mod serial;
 
+pub type MemoryMap = &'static mut [&'static mut Entry];
+
 pub static PMO: AtomicLazyCell<VirtAddr> = AtomicLazyCell::new(|| {
     #[used]
     static HHDM: HhdmRequest = HhdmRequest::new();
@@ -90,5 +92,3 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     log::error!("{}", info);
     loop {}
 }
-
-pub type MemoryMap = &'static mut [&'static mut Entry];
