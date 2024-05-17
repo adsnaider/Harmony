@@ -36,4 +36,12 @@ impl PhysAddr {
         let virt = PMO.get().as_usize() + self.0 as usize;
         VirtAddr::new(virt)
     }
+
+    /// # Safety
+    ///
+    /// The virtual address must have been created with `to_virtual`
+    pub unsafe fn from_virtual(addr: VirtAddr) -> Self {
+        let paddr = addr.as_ptr::<()>() as u64 - PMO.as_ptr::<()>() as u64;
+        Self::new(paddr)
+    }
 }

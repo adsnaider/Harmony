@@ -127,6 +127,17 @@ impl RawFrame {
         Ok(UserFrame(self))
     }
 
+    /// Unsafely turn a raw frame into a user frame.
+    ///
+    /// # Safety
+    ///
+    /// The raw frame must be typed as user
+    pub unsafe fn as_user_unchecked(self) -> UserFrame {
+        let frame = UserFrame(self);
+        frame.entry().increment().unwrap();
+        frame
+    }
+
     pub fn try_as_kernel(self) -> Result<KernelFrame, AsTypeError> {
         self.retype_entry()?
             .get_as_and_increment(State::Kernel)
@@ -139,6 +150,17 @@ impl RawFrame {
                 }
             })?;
         Ok(KernelFrame(self))
+    }
+
+    /// Unsafely turn a raw frame into a kernel frame.
+    ///
+    /// # Safety
+    ///
+    /// The raw frame must be typed as kernel
+    pub unsafe fn as_kernel_unchecked(self) -> KernelFrame {
+        let frame = KernelFrame(self);
+        frame.entry().increment().unwrap();
+        frame
     }
 
     pub fn try_into_user(self) -> Result<UserFrame, RetypeError> {
@@ -183,6 +205,11 @@ impl RawFrame {
 }
 
 impl UserFrame {
+    fn entry(&self) -> &'static RetypeEntry {
+        // SAFETY: Entry must exist if a KernelFrame exists.
+        unsafe { self.0.retype_entry().unwrap_unchecked() }
+    }
+
     pub fn frame(&self) -> RawFrame {
         self.0
     }
@@ -194,6 +221,10 @@ impl UserFrame {
     pub fn try_clone(&self) -> Option<Self> {
         self.0.retype_entry().unwrap().increment().ok()?;
         Some(Self(self.frame()))
+    }
+
+    pub fn drop(self) -> u16 {
+        self.entry().decrement().unwrap()
     }
 }
 
@@ -201,6 +232,11 @@ impl UserFrame {
 pub struct KernelFrame(RawFrame);
 
 impl KernelFrame {
+    fn entry(&self) -> &'static RetypeEntry {
+        // SAFETY: Entry must exist if a KernelFrame exists.
+        unsafe { self.0.retype_entry().unwrap_unchecked() }
+    }
+
     pub fn frame(&self) -> RawFrame {
         self.0
     }
@@ -209,21 +245,34 @@ impl KernelFrame {
         ManuallyDrop::new(self).0
     }
 
+    /// Builds back a kernel frame from the raw frame
+    ///
+    /// # Safety
+    ///
+    /// The frame must have been created with `into_raw`.
+    pub unsafe fn from_raw(frame: RawFrame) -> Self {
+        Self(frame)
+    }
+
     pub fn try_clone(&self) -> Option<Self> {
         self.0.retype_entry().unwrap().increment().ok()?;
         Some(Self(self.frame()))
+    }
+
+    pub fn drop(self) -> u16 {
+        self.entry().decrement().unwrap()
     }
 }
 
 impl Drop for KernelFrame {
     fn drop(&mut self) {
-        self.0.retype_entry().unwrap().decrement().unwrap();
+        self.entry().decrement().unwrap();
     }
 }
 
 impl Drop for UserFrame {
     fn drop(&mut self) {
-        self.0.retype_entry().unwrap().decrement().unwrap();
+        self.entry().decrement().unwrap();
     }
 }
 
@@ -255,7 +304,7 @@ impl RetypeEntry {
         Self(AtomicU16::new(Self::value_for(State::Untyped, 0)))
     }
 
-    pub fn increment(&self) -> Result<(), MaxRefs> {
+    pub fn increment(&self) -> Result<u16, MaxRefs> {
         self.0
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
                 let (_, counter) = Self::value_into(value);
@@ -265,11 +314,11 @@ impl RetypeEntry {
                     Some(value + 1)
                 }
             })
-            .map(|_| ())
+            .map(|entry| Self::value_into(entry).1)
             .map_err(|_| MaxRefs)
     }
 
-    pub fn decrement(&self) -> Result<(), NoRefs> {
+    pub fn decrement(&self) -> Result<u16, NoRefs> {
         self.0
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
                 let (_, counter) = Self::value_into(value);
@@ -279,7 +328,7 @@ impl RetypeEntry {
                     Some(value - 1)
                 }
             })
-            .map(|_| ())
+            .map(|entry| Self::value_into(entry).1)
             .map_err(|_| NoRefs)
     }
 

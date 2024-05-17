@@ -13,6 +13,10 @@ impl VirtAddr {
         }
     }
 
+    pub fn from_ptr<T>(ptr: *const T) -> Self {
+        Self::new(ptr as usize)
+    }
+
     pub const fn try_new(addr: usize) -> Result<Self, BadVirtAddr> {
         if Self::new_truncate(addr).0 == addr {
             Ok(Self::new_truncate(addr))
