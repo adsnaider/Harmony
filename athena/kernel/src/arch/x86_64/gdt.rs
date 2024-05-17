@@ -14,9 +14,6 @@ pub const DOUBLE_FAULT_IST_INDEX: u16 = 0;
 /// The TSS stack table index to be used for the Page Fault exception.
 pub const PAGE_FAULT_IST_INDEX: u16 = 1;
 
-/// The privilege stack for Ring 0 lives in this virtual address.
-pub const PRIVILEGE_STACK_ADDR: u64 = 0xFFFF_FFFF_7000_0000;
-
 struct Selectors {
     code_selector: SegmentSelector,
     data_selector: SegmentSelector,
@@ -44,9 +41,11 @@ static TSS: AtomicLazyCell<TaskStateSegment> = AtomicLazyCell::new(|| {
     };
     // Privilege stack table used on interrupts.
     tss.privilege_stack_table[0] = {
-        // Every user process will map an privilege stack page at `PRIVILEGE_STACK_ADDR`.
         const STACK_SIZE: usize = PAGE_SIZE;
-        let stack_start = VirtAddr::new(PRIVILEGE_STACK_ADDR);
+        static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
+        // Every user process will map an privilege stack page at `PRIVILEGE_STACK_ADDR`.
+        // SAFETY: Although it's a static mut, STACK is only used in this context.
+        let stack_start = VirtAddr::from_ptr(unsafe { STACK.as_slice() });
         stack_start + STACK_SIZE as u64 // stack end.
     };
     tss
