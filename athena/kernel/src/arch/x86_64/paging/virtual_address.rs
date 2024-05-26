@@ -1,3 +1,5 @@
+use super::page_table::{PageTableLevel, PageTableOffset};
+
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct VirtAddr(usize);
@@ -43,5 +45,35 @@ impl VirtAddr {
 
     pub const fn zero() -> Self {
         Self::new(0)
+    }
+
+    /// Returns the 9-bit level 1 page table index.
+    #[inline]
+    pub const fn p1_index(self) -> PageTableOffset {
+        PageTableOffset::new_truncate((self.0 >> 12) as u16)
+    }
+
+    /// Returns the 9-bit level 2 page table index.
+    #[inline]
+    pub const fn p2_index(self) -> PageTableOffset {
+        PageTableOffset::new_truncate((self.0 >> 12 >> 9) as u16)
+    }
+
+    /// Returns the 9-bit level 3 page table index.
+    #[inline]
+    pub const fn p3_index(self) -> PageTableOffset {
+        PageTableOffset::new_truncate((self.0 >> 12 >> 9 >> 9) as u16)
+    }
+
+    /// Returns the 9-bit level 4 page table index.
+    #[inline]
+    pub const fn p4_index(self) -> PageTableOffset {
+        PageTableOffset::new_truncate((self.0 >> 12 >> 9 >> 9 >> 9) as u16)
+    }
+
+    /// Returns the 9-bit level page table index.
+    #[inline]
+    pub const fn page_table_index(self, level: PageTableLevel) -> PageTableOffset {
+        PageTableOffset::new_truncate((self.0 >> 12 >> ((level.level() - 1) * 9)) as u16)
     }
 }

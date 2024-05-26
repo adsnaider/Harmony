@@ -4,6 +4,9 @@ pub const FRAME_SIZE: u64 = 4096;
 pub mod frames;
 pub use frames::RawFrame;
 
+pub mod pages;
+pub use pages::Page;
+
 pub mod page_table;
 
 mod physical_address;
