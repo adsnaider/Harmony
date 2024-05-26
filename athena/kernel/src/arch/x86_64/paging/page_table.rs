@@ -1,10 +1,75 @@
 use core::sync::atomic::{AtomicU64, Ordering};
 
+use x86_64_impl::registers::control::Cr3;
 pub use x86_64_impl::structures::paging::PageTableFlags;
 
-use super::{PhysAddr, RawFrame};
+use super::{Page, PhysAddr, RawFrame};
+use crate::bump_allocator::BumpAllocator;
+use crate::kptr::KPtr;
+use crate::retyping::RetypeError;
 
 const EXISTS_BIT: PageTableFlags = PageTableFlags::BIT_9;
+
+#[repr(transparent)]
+pub struct Addrspace(KPtr<AnyPageTable>);
+
+#[derive(Debug)]
+pub enum MapperError {
+    FrameAllocationError,
+    HugeParentEntry,
+    AlreadyMapped(RawFrame),
+}
+
+impl Addrspace {
+    pub fn new(frame: RawFrame) -> Result<Self, RetypeError> {
+        Ok(Self(AnyPageTable::new_l4(frame)?))
+    }
+
+    pub unsafe fn map_to(
+        &self,
+        page: Page,
+        frame: RawFrame,
+        flags: PageTableFlags,
+        frame_allocator: &mut BumpAllocator,
+    ) -> Result<(), MapperError> {
+        let mut level = Some(PageTableLevel::top());
+        let mut table = &*self.0;
+        let addr = page.base();
+        while let Some(current_level) = level {
+            level = current_level.lower();
+            let offset = addr.page_table_index(current_level);
+            let entry = table.get(offset);
+            match entry.get() {
+                Some((frame, flags)) => {
+                    if current_level.level() == 1 {
+                        return Err(MapperError::AlreadyMapped(frame));
+                    }
+                    if flags.contains(PageTableFlags::HUGE_PAGE) {
+                        return Err(MapperError::HugeParentEntry);
+                    }
+                    table = unsafe { &*frame.base().to_virtual().as_ptr() };
+                }
+                None => {
+                    if current_level.is_bottom() {
+                        entry.set(frame, flags);
+                    } else {
+                        let frame = frame_allocator
+                            .alloc_frame()
+                            .ok_or(MapperError::FrameAllocationError)?;
+                        let addr: *mut AnyPageTable = frame.base().to_virtual().as_mut_ptr();
+                        addr.write(AnyPageTable::new());
+                        table = unsafe { &*addr };
+                        entry.set(
+                            frame,
+                            PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE,
+                        );
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
 
 #[repr(C, align(4096))]
 pub struct AnyPageTable([PageTableEntry; 512]);
@@ -15,7 +80,32 @@ impl AnyPageTable {
         unsafe { core::mem::zeroed() }
     }
 
-    fn get(&self, offset: PageTableOffset) -> &PageTableEntry {
+    pub fn current() -> KPtr<Self> {
+        let (frame, _flags) = Cr3::read();
+        let frame = RawFrame::from_start_address(PhysAddr::new(frame.start_address().as_u64()));
+        unsafe { KPtr::from_frame_unchecked(frame.try_as_kernel().unwrap()) }
+    }
+
+    pub fn new_l4(frame: RawFrame) -> Result<KPtr<Self>, RetypeError> {
+        KPtr::new(frame, AnyPageTable::clone_kernel())
+    }
+
+    pub fn clone_kernel() -> Self {
+        let current = AnyPageTable::current();
+
+        let new = Self::new();
+        for i in 256..512 {
+            let offset = PageTableOffset::new(i).unwrap();
+            unsafe {
+                if let Some((frame, flags)) = current.get(offset).get() {
+                    new.map(offset, frame, flags);
+                }
+            }
+        }
+        new
+    }
+
+    pub fn get(&self, offset: PageTableOffset) -> &PageTableEntry {
         // SAFETY: Offset is within [0, 512)
         unsafe { self.0.get_unchecked(offset.0 as usize) }
     }
@@ -109,8 +199,51 @@ impl PageTableEntry {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
 pub struct PageTableOffset(u16);
 
+#[derive(Debug, Copy, Clone)]
+pub struct PageTableLevel(u8);
+
+#[derive(Debug)]
+pub struct InvalidLevel;
+
+impl PageTableLevel {
+    pub const fn new(level: u8) -> Self {
+        match Self::try_new(level) {
+            Ok(level) => level,
+            Err(_) => panic!("Page table level must be within 1 and 4",),
+        }
+    }
+
+    pub const fn try_new(level: u8) -> Result<Self, InvalidLevel> {
+        if level < 1 || level > 4 {
+            return Err(InvalidLevel);
+        }
+        Ok(Self(level))
+    }
+
+    pub const fn level(&self) -> u8 {
+        self.0
+    }
+
+    pub const fn top() -> Self {
+        Self(4)
+    }
+
+    pub const fn is_bottom(&self) -> bool {
+        self.level() == 1
+    }
+
+    pub const fn lower(self) -> Option<Self> {
+        match Self::try_new(self.level() - 1) {
+            Ok(l) => Some(l),
+            Err(_) => None,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub enum PageTableOffsetError {
     OutOfBounds,
 }
@@ -142,5 +275,9 @@ impl PageTableOffset {
 
     pub const fn is_lower_half(&self) -> bool {
         self.0 < 256
+    }
+
+    pub const fn new_truncate(addr: u16) -> Self {
+        Self(addr % 512)
     }
 }
