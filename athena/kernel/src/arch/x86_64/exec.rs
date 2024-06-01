@@ -67,8 +67,8 @@ impl ExecCtx {
         unsafe {
             asm!(
                 "pop rax",
-                "mov cr3, rbx",            // Current CR3
-                "mov [rdi + 8 * 17], rax", // New cr3
+                "mov rbx, cr3",            // Current CR3
+                "mov rax, [rdi + 8 * 17]", // New cr3
                 "cmp rax, rbx",
                 "je 2f",
                 "mov cr3, rax",

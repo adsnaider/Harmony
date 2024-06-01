@@ -25,6 +25,10 @@ impl Addrspace {
         Ok(Self(AnyPageTable::new_l4(frame)?))
     }
 
+    pub fn into_l4_frame(self) -> RawFrame {
+        self.0.into_raw()
+    }
+
     pub unsafe fn map_to(
         &self,
         page: Page,
@@ -54,8 +58,9 @@ impl Addrspace {
                         entry.set(frame, flags);
                     } else {
                         let frame = frame_allocator
-                            .alloc_frame()
-                            .ok_or(MapperError::FrameAllocationError)?;
+                            .alloc_kernel_frame()
+                            .ok_or(MapperError::FrameAllocationError)?
+                            .into_raw();
                         let addr: *mut AnyPageTable = frame.base().to_virtual().as_mut_ptr();
                         addr.write(AnyPageTable::new());
                         table = unsafe { &*addr };
@@ -81,9 +86,14 @@ impl AnyPageTable {
     }
 
     pub fn current() -> KPtr<Self> {
+        let frame = Self::current_raw();
+        unsafe { KPtr::from_frame_unchecked(frame.try_as_kernel().unwrap()) }
+    }
+
+    pub fn current_raw() -> RawFrame {
         let (frame, _flags) = Cr3::read();
         let frame = RawFrame::from_start_address(PhysAddr::new(frame.start_address().as_u64()));
-        unsafe { KPtr::from_frame_unchecked(frame.try_as_kernel().unwrap()) }
+        frame
     }
 
     pub fn new_l4(frame: RawFrame) -> Result<KPtr<Self>, RetypeError> {
