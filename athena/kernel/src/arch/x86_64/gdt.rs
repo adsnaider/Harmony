@@ -21,6 +21,7 @@ struct Selectors {
     _user_data_selector: SegmentSelector,
     tss_selector: SegmentSelector,
 }
+// FIXME: This needs to be per-core.
 static TSS: AtomicLazyCell<TaskStateSegment> = AtomicLazyCell::new(|| {
     let mut tss = TaskStateSegment::new();
     tss.interrupt_stack_table[DOUBLE_FAULT_IST_INDEX as usize] = {
