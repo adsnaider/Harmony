@@ -73,6 +73,12 @@ impl ExecCtx {
                 "je 2f",
                 "mov cr3, rax",
                 "2:",
+                // Setup the segment selectors
+                "mov ax, (4 * 8) | 3",
+                "mov ds, ax",
+                "mov es, ax",
+                "mov fs, ax",
+                "mov gs, ax",
                 // Restore the registers
                 "mov rax, [rdi + 8*0]",
                 "mov rbx, [rdi + 8*1]",

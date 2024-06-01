@@ -2,16 +2,10 @@
 
 use super::{PhysAddr, FRAME_SIZE};
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[repr(transparent)]
 pub struct RawFrame {
     base: PhysAddr,
-}
-
-impl core::fmt::Debug for RawFrame {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "RawFrame({:#X})", self.base.as_u64())
-    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]

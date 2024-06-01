@@ -122,6 +122,7 @@ impl Process {
             Regs {
                 rsp: self.rsp,
                 rip: self.entry,
+                rflags: 0x202,
                 ..Default::default()
             },
         );
@@ -162,6 +163,7 @@ impl<'prog, 'head> Segment<'prog, 'head> {
             if flags & PF_X == 0 {
                 pflags |= PageTableFlags::NO_EXECUTE;
             }
+            log::info!("Mapping {page:?} to {frame:?} with {pflags:?}");
             unsafe {
                 address_space
                     .map_to(page, frame, pflags, fallocator)

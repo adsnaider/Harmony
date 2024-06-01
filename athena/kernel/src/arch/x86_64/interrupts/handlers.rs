@@ -179,7 +179,6 @@ pub(super) extern "x86-interrupt" fn page_fault(
     stack_frame: InterruptStackFrame,
     error_code: PageFaultErrorCode,
 ) {
-    // FIXME: Unwrap.
     let addrs: *const () = Cr2::read().unwrap().as_ptr();
     panic!("EXCEPTION: PAGE FAULT @ {addrs:#?} - {error_code:#02X}\n{stack_frame:#?}");
 }
