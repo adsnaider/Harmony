@@ -80,6 +80,7 @@ impl Process {
                             | PageTableFlags::WRITABLE
                             | PageTableFlags::USER_ACCESSIBLE
                             | PageTableFlags::NO_EXECUTE,
+                        PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE,
                         &mut fallocator,
                     )
                     .unwrap();
@@ -153,7 +154,6 @@ impl<'prog, 'head> Segment<'prog, 'head> {
         while vcurrent < vm_range.end {
             let frame = fallocator.alloc_user_frame().unwrap().into_raw();
             let page = Page::containing_address(VirtAddr::new(vcurrent as usize));
-            // SAFETY: Just mapping the elf data.
             let flags = self.header.p_flags;
             let mut pflags = PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
             assert!(flags & PF_R != 0);
@@ -164,9 +164,16 @@ impl<'prog, 'head> Segment<'prog, 'head> {
                 pflags |= PageTableFlags::NO_EXECUTE;
             }
             log::info!("Mapping {page:?} to {frame:?} with {pflags:?}");
+            // SAFETY: Just mapping the elf data.
             unsafe {
                 address_space
-                    .map_to(page, frame, pflags, fallocator)
+                    .map_to(
+                        page,
+                        frame,
+                        pflags,
+                        PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE,
+                        fallocator,
+                    )
                     .unwrap();
             }
 

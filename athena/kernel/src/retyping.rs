@@ -1,13 +1,13 @@
 use core::mem::{ManuallyDrop, MaybeUninit};
 use core::sync::atomic::{AtomicU16, Ordering};
 
-use limine::memory_map::{Entry, EntryType};
+use limine::memory_map::EntryType;
 use sync::cell::AtomicOnceCell;
 
 use crate::arch::paging::page_table::AnyPageTable;
 use crate::arch::paging::{RawFrame, FRAME_SIZE, PAGE_SIZE};
 use crate::retyping::bump_alloc::BumpAllocator;
-use crate::{sdbg, MemoryMap};
+use crate::MemoryMap;
 
 static RETYPE_TABLE: AtomicOnceCell<RetypeTable> = AtomicOnceCell::new();
 
@@ -325,6 +325,7 @@ impl State {
     }
 }
 
+#[allow(unused)]
 impl RetypeEntry {
     const STATE_BITS: u16 = 2;
     const COUNTER_BITS: u16 = 16 - Self::STATE_BITS;
@@ -392,7 +393,7 @@ impl RetypeEntry {
     pub fn get_as_and_increment(&self, wants: State) -> Result<(), (State, u16)> {
         self.0
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
-                let (state, count) = sdbg!(Self::value_into(value));
+                let (state, count) = Self::value_into(value);
                 if wants == state && count < Self::MAX_REF_COUNT {
                     Some(Self::value_for(state, count + 1))
                 } else {

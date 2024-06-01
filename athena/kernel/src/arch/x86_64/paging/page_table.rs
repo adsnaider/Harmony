@@ -32,6 +32,7 @@ impl Addrspace {
         page: Page,
         frame: RawFrame,
         flags: PageTableFlags,
+        parent_flags: PageTableFlags,
         frame_allocator: &mut BumpAllocator,
     ) -> Result<(), MapperError> {
         let mut level = Some(PageTableLevel::top());
@@ -62,7 +63,7 @@ impl Addrspace {
                         let addr: *mut AnyPageTable = frame.base().to_virtual().as_mut_ptr();
                         addr.write(AnyPageTable::new());
                         table = unsafe { &*addr };
-                        entry.set(frame, flags);
+                        entry.set(frame, parent_flags | PageTableFlags::PRESENT);
                     }
                 }
             }

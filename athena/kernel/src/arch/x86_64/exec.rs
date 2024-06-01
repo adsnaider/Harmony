@@ -70,9 +70,7 @@ impl ExecCtx {
                 "mov rbx, cr3",            // Current CR3
                 "mov rax, [rdi + 8 * 18]", // New cr3
                 "cmp rax, rbx",
-                "je 2f",
                 "mov cr3, rax",
-                "2:",
                 // Setup the segment selectors
                 "mov ax, (4 * 8) | 3",
                 "mov ds, ax",
