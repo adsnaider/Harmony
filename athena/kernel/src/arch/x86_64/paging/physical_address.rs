@@ -2,8 +2,14 @@ use super::VirtAddr;
 use crate::PMO;
 
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub struct PhysAddr(u64);
+
+impl core::fmt::Debug for PhysAddr {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "PhysAddr({:#X})", self.0)
+    }
+}
 
 #[derive(Debug)]
 pub struct BadAddress;

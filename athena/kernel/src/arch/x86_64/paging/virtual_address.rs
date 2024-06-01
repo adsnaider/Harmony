@@ -1,8 +1,14 @@
 use super::page_table::{PageTableLevel, PageTableOffset};
 
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub struct VirtAddr(usize);
+
+impl core::fmt::Debug for VirtAddr {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "VirtAddr({:#X?})", self.0)
+    }
+}
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct BadVirtAddr;

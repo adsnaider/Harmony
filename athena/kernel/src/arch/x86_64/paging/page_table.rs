@@ -62,10 +62,7 @@ impl Addrspace {
                         let addr: *mut AnyPageTable = frame.base().to_virtual().as_mut_ptr();
                         addr.write(AnyPageTable::new());
                         table = unsafe { &*addr };
-                        entry.set(
-                            frame,
-                            PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE,
-                        );
+                        entry.set(frame, flags);
                     }
                 }
             }
