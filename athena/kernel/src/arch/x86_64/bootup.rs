@@ -4,16 +4,15 @@ use goblin::elf::program_header::{PF_R, PF_W, PF_X, PT_LOAD};
 use goblin::elf64::header::{Header, SIZEOF_EHDR};
 use goblin::elf64::program_header::ProgramHeader;
 
-use super::paging::RawFrame;
 use crate::arch::exec::{ExecCtx, Regs};
 use crate::arch::paging::page_table::{Addrspace, PageTableFlags};
-use crate::arch::paging::{Page, PhysAddr, VirtAddr, FRAME_SIZE, PAGE_SIZE};
+use crate::arch::paging::{Page, VirtAddr, PAGE_SIZE};
 use crate::bump_allocator::BumpAllocator;
 
 pub struct Process {
-    entry: u64,
-    rsp: u64,
-    pub l4_table: RawFrame,
+    pub entry: u64,
+    pub rsp: u64,
+    pub addrspace: Addrspace,
 }
 
 #[derive(Debug)]
@@ -22,22 +21,24 @@ pub enum LoadError {}
 impl Process {
     pub fn load(
         program: &[u8],
-        fallocator: &mut BumpAllocator,
+        stack_pages: usize,
         untyped_memory_offset: usize,
         untyped_memory_length: usize,
     ) -> Result<Self, LoadError> {
+        let mut fallocator = BumpAllocator::new();
+        assert!(untyped_memory_offset % PAGE_SIZE == 0);
+        assert!(untyped_memory_length % PAGE_SIZE == 0);
+        assert!(untyped_memory_offset + untyped_memory_length < 0xFFFF_8000_0000_0000);
         assert!(
             program.as_ptr() as usize % 16 == 0,
             "ELF must be aligned to 16 bytes"
         );
 
-        let l4_frame = fallocator
-            .alloc_frame()
-            .unwrap()
-            .try_into_kernel()
-            .unwrap()
-            .into_raw();
-        let addrspace = Addrspace::new(l4_frame).unwrap();
+        log::debug!("Setting up process address space");
+        let addrspace = {
+            let l4_frame = fallocator.alloc_untyped_frame().unwrap();
+            Addrspace::new(l4_frame).unwrap()
+        };
         let header = Header::from_bytes(program[..SIZEOF_EHDR].try_into().unwrap());
         let entry = header.e_entry;
         log::trace!("Entry: {:X}", entry);
@@ -57,20 +58,16 @@ impl Process {
         };
         for ph in phdrs {
             if ph.p_type == PT_LOAD {
+                log::debug!("Loading segment");
                 let segment = Segment::new(program, ph);
-                segment.load(&addrspace, fallocator);
+                segment.load(&addrspace, &mut fallocator);
             }
         }
-        let rsp = untyped_memory_offset;
-        const STACK_PAGES: usize = 10;
 
-        for i in 0..STACK_PAGES {
-            let frame = fallocator
-                .alloc_frame()
-                .unwrap()
-                .try_into_user()
-                .unwrap()
-                .into_raw();
+        log::debug!("Setting up stack pages");
+        let rsp = untyped_memory_offset;
+        for i in 0..stack_pages {
+            let frame = fallocator.alloc_user_frame().unwrap().into_raw();
             let addr = rsp - PAGE_SIZE * (i + 1);
             let page = Page::from_start_address(VirtAddr::new(addr));
             // SAFETY: Just mapping the stack pages.
@@ -83,15 +80,15 @@ impl Process {
                             | PageTableFlags::WRITABLE
                             | PageTableFlags::USER_ACCESSIBLE
                             | PageTableFlags::NO_EXECUTE,
-                        fallocator,
+                        &mut fallocator,
                     )
                     .unwrap();
             }
         }
 
-        assert!(untyped_memory_offset % PAGE_SIZE == 0);
-        assert!(untyped_memory_offset + untyped_memory_length < 0xFFFF_8000_0000_0000);
+        /*
         let untyped_memory_pages = untyped_memory_length / PAGE_SIZE;
+        log::debug!("Setting up {untyped_memory_pages} untyped memory pages");
         for i in 0..untyped_memory_pages {
             let frame = RawFrame::from_start_address(PhysAddr::new(i as u64 * FRAME_SIZE));
             let page = Page::from_start_address(VirtAddr::new(
@@ -104,22 +101,24 @@ impl Process {
                         page,
                         frame,
                         PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
-                        fallocator,
+                        &mut fallocator,
                     )
                     .unwrap();
             }
         }
+        */
 
+        log::info!("Initialized user process");
         Ok(Self {
             entry,
             rsp: untyped_memory_offset as u64,
-            l4_table: l4_frame,
+            addrspace,
         })
     }
 
     pub fn exec(self) -> ! {
         let execution_stack = ExecCtx::new(
-            self.l4_table,
+            self.addrspace.into_l4_frame(),
             Regs {
                 rsp: self.rsp,
                 rip: self.entry,
@@ -151,12 +150,7 @@ impl<'prog, 'head> Segment<'prog, 'head> {
         let mut vcurrent = vm_range.start;
         let mut fcurrent = file_range.start;
         while vcurrent < vm_range.end {
-            let frame = fallocator
-                .alloc_frame()
-                .unwrap()
-                .try_into_user()
-                .unwrap()
-                .into_raw();
+            let frame = fallocator.alloc_user_frame().unwrap().into_raw();
             let page = Page::containing_address(VirtAddr::new(vcurrent as usize));
             // SAFETY: Just mapping the elf data.
             let flags = self.header.p_flags;

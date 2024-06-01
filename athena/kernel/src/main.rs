@@ -10,7 +10,7 @@
 #![cfg_attr(target_arch = "x86_64", feature(abi_x86_interrupt))]
 
 use limine::memory_map::Entry;
-use limine::request::{HhdmRequest, MemoryMapRequest};
+use limine::request::{HhdmRequest, MemoryMapRequest, StackSizeRequest};
 use limine::BaseRevision;
 use sync::cell::AtomicLazyCell;
 
@@ -33,6 +33,8 @@ mod serial;
 
 pub type MemoryMap = &'static mut [&'static mut Entry];
 
+pub const UNTYPED_MEMORY_OFFSET: usize = 0x0000_7000_0000_0000;
+
 pub static PMO: AtomicLazyCell<VirtAddr> = AtomicLazyCell::new(|| {
     #[used]
     static HHDM: HhdmRequest = HhdmRequest::new();
@@ -42,15 +44,26 @@ pub static PMO: AtomicLazyCell<VirtAddr> = AtomicLazyCell::new(|| {
         .expect("Missing Higher-half direct mapping response from limine")
         .offset();
     // PMO must be on the higher half
-    assert!(pmo > 0xFFFF_8000_0000_0000);
+    assert!(pmo >= 0xFFFF_8000_0000_0000);
     VirtAddr::new(pmo as usize)
 });
 
 #[cfg(not(test))]
 #[no_mangle]
 extern "C" fn kmain() -> ! {
+    use arch::bootup::Process;
+    use arch::paging::RawFrame;
+
     init();
-    loop {}
+
+    let booter = {
+        let proc = include_bytes_aligned::include_bytes_aligned!(16, "../../../.build/booter");
+        let memory_size = RawFrame::memory_size();
+        log::info!("Loading user process");
+        Process::load(proc, 10, UNTYPED_MEMORY_OFFSET, memory_size).unwrap()
+    };
+    log::info!("Jumping to boot component");
+    booter.exec();
 }
 
 pub fn init() {
@@ -59,6 +72,9 @@ pub fn init() {
 
     #[used]
     static mut MEMORY_MAP: MemoryMapRequest = MemoryMapRequest::new();
+
+    #[used]
+    static STACK_SIZE: StackSizeRequest = StackSizeRequest::new().with_size(0x32000);
     interrupts::disable();
 
     serial::init();
@@ -68,6 +84,8 @@ pub fn init() {
     );
 
     arch::init();
+
+    STACK_SIZE.get_response().unwrap();
 
     log::info!(
         "Got physical memory offset from limine at {:#X}",
@@ -80,10 +98,7 @@ pub fn init() {
             .expect("Missing memory map from Limine")
             .entries_mut()
     };
-    RetypeTable::new(memory_map)
-        .unwrap()
-        .set_as_global()
-        .unwrap();
+    RetypeTable::new(memory_map).unwrap().init().unwrap();
 
     log::info!("Initialized the retype table")
 }
