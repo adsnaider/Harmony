@@ -8,8 +8,6 @@ use crate::bump_allocator::BumpAllocator;
 use crate::kptr::KPtr;
 use crate::retyping::RetypeError;
 
-const EXISTS_BIT: PageTableFlags = PageTableFlags::BIT_9;
-
 #[repr(transparent)]
 pub struct Addrspace(KPtr<AnyPageTable>);
 
@@ -108,6 +106,7 @@ impl AnyPageTable {
             let offset = PageTableOffset::new(i).unwrap();
             unsafe {
                 if let Some((frame, flags)) = current.get(offset).get() {
+                    log::debug!("Mapping kernel map: {frame:?}, {flags:?}");
                     new.map(offset, frame, flags);
                 }
             }
@@ -155,7 +154,7 @@ impl PageTableEntry {
 
     pub fn get(&self) -> Option<(RawFrame, PageTableFlags)> {
         let value = self.0.load(Ordering::Relaxed);
-        if value & EXISTS_BIT.bits() == 0 {
+        if value == 0 {
             return None;
         }
         let frame = RawFrame::from_start_address(PhysAddr::new(value & Self::FRAME_MASK));
@@ -174,7 +173,7 @@ impl PageTableEntry {
     unsafe fn set_bits(&self, bits: u64) -> Option<(RawFrame, PageTableFlags)> {
         let old = self.0.swap(bits, Ordering::Relaxed);
 
-        if old & EXISTS_BIT.bits() == 0 {
+        if old == 0 {
             return None;
         }
         let addr = old & Self::FRAME_MASK;
@@ -190,7 +189,7 @@ impl PageTableEntry {
         frame: RawFrame,
         attributes: PageTableFlags,
     ) -> Option<(RawFrame, PageTableFlags)> {
-        unsafe { self.set_bits(EXISTS_BIT.bits() | attributes.bits() | frame.base().as_u64()) }
+        unsafe { self.set_bits(attributes.bits() | frame.base().as_u64()) }
     }
 
     pub unsafe fn reset(&self) -> Option<(RawFrame, PageTableFlags)> {
@@ -201,7 +200,7 @@ impl PageTableEntry {
         let old = self
             .0
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
-                Some((value & Self::FRAME_MASK) | EXISTS_BIT.bits() | flags.bits())
+                Some((value & Self::FRAME_MASK) | flags.bits())
             })
             .unwrap();
 
