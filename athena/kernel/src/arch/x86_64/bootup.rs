@@ -6,7 +6,7 @@ use goblin::elf64::program_header::ProgramHeader;
 
 use crate::arch::exec::{ExecCtx, Regs};
 use crate::arch::paging::page_table::{Addrspace, PageTableFlags};
-use crate::arch::paging::{Page, VirtAddr, PAGE_SIZE};
+use crate::arch::paging::{Page, PhysAddr, RawFrame, VirtAddr, FRAME_SIZE, PAGE_SIZE};
 use crate::bump_allocator::BumpAllocator;
 
 pub struct Process {
@@ -87,7 +87,6 @@ impl Process {
             }
         }
 
-        /*
         let untyped_memory_pages = untyped_memory_length / PAGE_SIZE;
         log::debug!("Setting up {untyped_memory_pages} untyped memory pages");
         for i in 0..untyped_memory_pages {
@@ -95,19 +94,22 @@ impl Process {
             let page = Page::from_start_address(VirtAddr::new(
                 (frame.base().as_u64() + untyped_memory_offset as u64) as usize,
             ));
-            // SAFETY: Just mapping the stack pages.
+            // SAFETY: Mapping non-user accessible untyped pages.
+            // FIXME: Do this with huge pages? Since each l1 table can hold
+            // 256 entries, we are effectively wasting a bit over 1/256 frames
+            // in the system.
             unsafe {
                 addrspace
                     .map_to(
                         page,
                         frame,
-                        PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
+                        PageTableFlags::PRESENT,
+                        PageTableFlags::PRESENT,
                         &mut fallocator,
                     )
                     .unwrap();
             }
         }
-        */
 
         log::info!("Initialized user process");
         Ok(Self {
