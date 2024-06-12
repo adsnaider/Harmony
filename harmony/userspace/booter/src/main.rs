@@ -13,8 +13,6 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 
 #[no_mangle]
 extern "C" fn _start() -> ! {
-    println!("Hello world");
     let result = unsafe { raw_syscall(1, 2, 3, 4, 5, 6) };
-    println!("Got {}", result);
     loop {}
 }
