@@ -5,6 +5,12 @@ pub struct BumpAllocator {
     index: u64,
 }
 
+impl Default for BumpAllocator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BumpAllocator {
     pub fn new() -> Self {
         Self { index: 0 }

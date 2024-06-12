@@ -27,6 +27,12 @@ impl Addrspace {
         self.0.into_raw()
     }
 
+    /// Maps a virtual page to a physical frame.
+    ///
+    /// # Safety
+    ///
+    /// Creating virtual memory mappings is a fundamentally unsafe operation as it enables
+    /// aliasing (shared memory).
     pub unsafe fn map_to(
         &self,
         page: Page,
@@ -75,6 +81,12 @@ impl Addrspace {
 #[repr(C, align(4096))]
 pub struct AnyPageTable([PageTableEntry; 512]);
 
+impl Default for AnyPageTable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AnyPageTable {
     pub const fn new() -> Self {
         // SAFETY: This is correct for a page table
@@ -88,8 +100,7 @@ impl AnyPageTable {
 
     pub fn current_raw() -> RawFrame {
         let (frame, _flags) = Cr3::read();
-        let frame = RawFrame::from_start_address(PhysAddr::new(frame.start_address().as_u64()));
-        frame
+        RawFrame::from_start_address(PhysAddr::new(frame.start_address().as_u64()))
     }
 
     pub fn new_l4(frame: RawFrame) -> Result<KPtr<Self>, RetypeError> {
@@ -117,6 +128,12 @@ impl AnyPageTable {
         unsafe { self.0.get_unchecked(offset.0 as usize) }
     }
 
+    /// Atomically sets the frame and attributes on the page table offset provided
+    ///
+    /// # Safety
+    ///
+    /// This is one of those methods that fundamentally change memory and can cause undefined
+    /// behaviour even when the usage is semantically reasonable.
     pub unsafe fn map(
         &self,
         offset: PageTableOffset,
@@ -126,10 +143,27 @@ impl AnyPageTable {
         self.get(offset).set(frame, attributes)
     }
 
+    /// Atomically unamps the entry (leaving it available for use again).
+    ///
+    /// # Safety
+    ///
+    /// This is one of those methods that fundamentally change memory and can cause undefined
+    /// behaviour even when the usage is semantically reasonable.
     pub unsafe fn unmap(&self, offset: PageTableOffset) -> Option<(RawFrame, PageTableFlags)> {
         self.get(offset).reset()
     }
 
+    /// Atomically sets the flags on the provided entry.
+    ///
+    /// # Notes
+    ///
+    /// The operations themselves are atomic, however, there's no guarantee that another
+    /// thread hasn't modified the frame.
+    ///
+    /// # Safety
+    ///
+    /// This is one of those methods that fundamentally change memory and can cause undefined
+    /// behaviour even when the usage is semantically reasonable.
     pub unsafe fn set_flags(
         &self,
         offset: PageTableOffset,
@@ -141,6 +175,12 @@ impl AnyPageTable {
 
 #[repr(transparent)]
 pub struct PageTableEntry(AtomicU64);
+
+impl Default for PageTableEntry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl PageTableEntry {
     const FRAME_MASK: u64 = 0x000F_FFFF_FFFF_F000;
@@ -182,6 +222,11 @@ impl PageTableEntry {
         ))
     }
 
+    /// Atomically sets this entry to the frame and the attributes
+    ///
+    /// # Safety
+    ///
+    /// This could fundamentally change memory, leading to unsoundness.
     pub unsafe fn set(
         &self,
         frame: RawFrame,
@@ -190,10 +235,20 @@ impl PageTableEntry {
         unsafe { self.set_bits(attributes.bits() | frame.base().as_u64()) }
     }
 
+    /// Atomically unsets this entry, leaving it empty
+    ///
+    /// # Safety
+    ///
+    /// This could fundamentally change memory, leading to unsoundness.
     pub unsafe fn reset(&self) -> Option<(RawFrame, PageTableFlags)> {
         unsafe { self.set_bits(0) }
     }
 
+    /// Atomically sets the flags on this entry (leaving the frame unchanged)
+    ///
+    /// # Safety
+    ///
+    /// This could fundamentally change memory, leading to unsoundness.
     pub unsafe fn set_flags(&self, flags: PageTableFlags) -> PageTableFlags {
         let old = self
             .0

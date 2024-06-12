@@ -21,6 +21,12 @@ pub enum OnceError {
     AlreadyInit,
 }
 
+impl<T> Default for AtomicOnceCell<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> AtomicOnceCell<T> {
     pub const fn new() -> Self {
         Self {

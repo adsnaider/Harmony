@@ -46,15 +46,14 @@ impl Process {
             assert!(
                 program.len()
                     > usize::try_from(header.e_phoff).unwrap()
-                        + usize::try_from(header.e_phentsize).unwrap()
-                            * usize::try_from(header.e_phnum).unwrap()
+                        + usize::from(header.e_phentsize) * usize::from(header.e_phnum)
             );
             let phdr_start: *const ProgramHeader = program
                 .as_ptr()
                 .add(header.e_phoff.try_into().unwrap())
                 .cast();
             assert!(phdr_start as usize % core::mem::align_of::<ProgramHeader>() == 0);
-            ProgramHeader::from_raw_parts(phdr_start, header.e_phnum.try_into().unwrap())
+            ProgramHeader::from_raw_parts(phdr_start, header.e_phnum.into())
         };
         for ph in phdrs {
             if ph.p_type == PT_LOAD {

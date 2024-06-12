@@ -41,6 +41,7 @@ macro_rules! interrupt {
         #[naked]
         pub(super) extern "x86-interrupt" fn $name(_frame: InterruptStackFrame) {
             extern "C" fn inner() {
+                #[allow(clippy::redundant_closure_call)]
                 $handler();
             }
             // SAFETY: Following ABI with iretq and we only wrap a C call with push/pop scratch registers.
