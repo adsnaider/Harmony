@@ -5,6 +5,12 @@
 use core::arch::asm;
 
 #[naked]
+/// Performs a raw syscall
+///
+/// # Safety
+///
+/// Performing a syscall is inherently unsafe, follow the syscall
+/// documentation to guarantee proper usage and soundness.
 pub unsafe extern "sysv64" fn raw_syscall(
     _a: usize,
     _b: usize,
@@ -17,6 +23,12 @@ pub unsafe extern "sysv64" fn raw_syscall(
     asm!("int 0x80", "ret", options(noreturn));
 }
 
+/// Performs a syscall
+///
+/// # Safety
+///
+/// Performing a syscall is inherently unsafe, follow the syscall
+/// documentation to guarantee proper usage and soundness.
 pub unsafe fn syscall(
     cap: CapId,
     op: impl Into<usize>,

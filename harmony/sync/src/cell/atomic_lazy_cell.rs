@@ -28,10 +28,8 @@ impl<T, F: FnOnce() -> T> AtomicLazyCell<T, F> {
             None => panic!("Lazy instance has previously been poisoned"),
         });
         loop {
-            match self.inner.get() {
-                Some(value) => break value,
-                // Still initializing
-                None => {}
+            if let Some(value) = self.inner.get() {
+                break value;
             }
         }
     }

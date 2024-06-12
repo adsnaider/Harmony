@@ -50,7 +50,7 @@ impl RetypeTable {
             assert!(entry.length % FRAME_SIZE == 0);
             let start_idx = (entry.base / FRAME_SIZE) as usize;
             let count = (entry.length / FRAME_SIZE) as usize;
-            for i in start_idx..(start_idx + count) {
+            for slot in retype_map.iter_mut().skip(start_idx).take(count) {
                 let retype_entry = match entry.entry_type {
                     EntryType::USABLE => RetypeEntry::untyped(),
                     EntryType::BOOTLOADER_RECLAIMABLE | EntryType::KERNEL_AND_MODULES => {
@@ -58,10 +58,7 @@ impl RetypeTable {
                     }
                     _ => RetypeEntry::unavailable(),
                 };
-                if i == 0x7E34000 / PAGE_SIZE {
-                    log::info!("Retyping Cr3 as {retype_entry:?}");
-                }
-                retype_map[i] = retype_entry;
+                *slot = retype_entry;
             }
         }
         Some(Self { retype_map })
@@ -415,7 +412,7 @@ impl RetypeEntry {
         let to = Self::value_for(to_state, to_counter);
         self.0
             .compare_exchange(from, to, Ordering::Relaxed, Ordering::Relaxed)
-            .map_err(|current| Self::value_into(current))?;
+            .map_err(Self::value_into)?;
 
         Ok(())
     }
@@ -565,10 +562,7 @@ mod bump_alloc {
             // SAFETY: Mutable access is unique.
             #[allow(static_mut_refs)]
             let mut allocator = BumpAllocator::new(unsafe { &mut TEST_MAP });
-            for expected_start in [0, FRAME_SIZE * 6]
-                .into_iter()
-                .map(|addr| PhysAddr::new(addr))
-            {
+            for expected_start in [0, FRAME_SIZE * 6].into_iter().map(PhysAddr::new) {
                 let start = allocator.alloc_frames(2).unwrap();
                 assert_eq!(start, expected_start);
                 assert!(start.as_u64() % FRAME_SIZE == 0);
