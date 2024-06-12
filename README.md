@@ -1,6 +1,6 @@
-# AthenaOS
+# Harmony
 
-Athena is an experimental, hobby OS written entirely in Rust.
+Harmony OS (pronounced "harmonious") is an experimental, hobby OS written entirely in Rust.
 
 ## Getting Started
 
@@ -51,7 +51,7 @@ produce a `test.log` that contains the serial output.
 
 `make iso` or `PROFILE=release make iso`
 
-This will build the ISO image and save it to `.build/athena.iso`. You can flash this
+This will build the ISO image and save it to `.build/harmony.iso`. You can flash this
 image to a USB drive for instance and boot from it to see the OS running on
 actual hardware.
 

@@ -6,12 +6,12 @@ use core::arch::asm;
 
 #[naked]
 pub unsafe extern "sysv64" fn raw_syscall(
-    cap: usize,
-    op: usize,
-    a: usize,
-    b: usize,
-    c: usize,
-    d: usize,
+    _a: usize,
+    _b: usize,
+    _c: usize,
+    _d: usize,
+    _e: usize,
+    _f: usize,
 ) -> isize {
     // NOTE: We don't need to align the stack on an int instruction.
     asm!("int 0x80", "ret", options(noreturn));

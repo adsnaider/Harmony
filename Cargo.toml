@@ -1,20 +1,20 @@
 [workspace]
 members = [
-  "athena/kapi",
-  "athena/kernel",
-  "athena/sync",
-  "athena/trie",
-  "athena/userspace/booter",
-  "athena/userspace/librs",
+  "harmony/kapi",
+  "harmony/kernel",
+  "harmony/sync",
+  "harmony/trie",
+  "harmony/userspace/booter",
+  "harmony/userspace/librs",
 ]
 
 resolver = "2"
-default-members = ["athena/kernel"]
+default-members = ["harmony/kernel"]
 
 [workspace.dependencies]
-sync = { path = "athena/sync" }
-trie = { path = "athena/trie" }
-kapi = { path = "athena/kapi" }
+sync = { path = "harmony/sync" }
+trie = { path = "harmony/trie" }
+kapi = { path = "harmony/kapi" }
 
 [profile.dev]
 debug = "full"

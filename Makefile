@@ -4,8 +4,8 @@ DEBUGGER ?= no
 QEMU_ARGS ?=
 ARTIFACTS = .build/
 BUILD_DIR=$(ARTIFACTS)/$(PROFILE)
-IMAGE_NAME=$(BUILD_DIR)/athena.iso
-TEST_IMAGE_NAME=$(BUILD_DIR)/athena-test.iso
+IMAGE_NAME=$(BUILD_DIR)/harmony.iso
+TEST_IMAGE_NAME=$(BUILD_DIR)/harmony-test.iso
 ISO_ROOT="$(BUILD_DIR)/iso_root"
 
 PROFILE_DIR_release="release"
