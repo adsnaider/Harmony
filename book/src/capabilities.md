@@ -1,6 +1,6 @@
 # Capabilities
 
-In NAME, capabilities are the main resources used to control the system from
+In Harmony, capabilities are the main resources used to control the system from
 userspace. In fact, we only provide a single logical system call: Apply some
 operation to a capability.
 
@@ -44,7 +44,7 @@ synchronous IPC.
 ## Implementation
 
 Capabilities are implemented in the kernel as a page-wide number trie. The
-reason for this is that this data-structure plays well with NAME's memory
+reason for this is that this data-structure plays well with Harmony's memory
 management model which requires that dynamic kernel data-structures are a
 page wide. A trie also has a constant-time time complexity. For instance, in a
 system with 4k pages, assuming the trie-nodes are each 64 bytes (including the
