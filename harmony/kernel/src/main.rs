@@ -20,6 +20,7 @@ use crate::retyping::RetypeTable;
 
 pub mod arch;
 pub mod bump_allocator;
+pub mod caps;
 pub mod component;
 pub mod core_local;
 pub mod kptr;
