@@ -2,10 +2,12 @@
 
 use core::cell::RefCell;
 
+use kapi::{CapError, CapId, SyscallArgs};
 use sync::cell::AtomicOnceCell;
 
 use crate::arch::exec::{ExecCtx, Regs};
 use crate::arch::paging::page_table::AnyPageTable;
+use crate::caps::RawCapEntry;
 use crate::core_local::CoreLocal;
 use crate::kptr::KPtr;
 
@@ -25,13 +27,25 @@ pub fn init() {
 #[repr(align(4096))]
 pub struct Thread {
     exec_ctx: ExecCtx,
-    // TODO: Add capability table
+    resources: KPtr<RawCapEntry>,
 }
 
 impl Thread {
-    pub fn new(regs: Regs, l4_table: KPtr<AnyPageTable>) -> Self {
+    pub fn new(regs: Regs, l4_table: KPtr<AnyPageTable>, resources: KPtr<RawCapEntry>) -> Self {
         let exec_ctx = ExecCtx::new(l4_table.into_raw(), regs);
-        Self { exec_ctx }
+        Self {
+            exec_ctx,
+            resources,
+        }
+    }
+
+    pub fn exercise_cap(
+        &self,
+        _capability: CapId,
+        _operation: usize,
+        _args: SyscallArgs,
+    ) -> Result<usize, CapError> {
+        todo!();
     }
 
     pub fn current() -> Option<KPtr<Thread>> {

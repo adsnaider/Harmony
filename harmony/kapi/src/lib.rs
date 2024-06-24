@@ -113,7 +113,7 @@ impl<T: TryFromPrimitive> From<TryFromPrimitiveError<T>> for CapError {
 impl CapError {
     pub fn to_errno(self) -> isize {
         let errno: isize = (self as u8).into();
-        errno
+        -errno
     }
 }
 
