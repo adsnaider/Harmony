@@ -7,7 +7,7 @@ use sync::cell::AtomicOnceCell;
 
 use crate::arch::exec::{ExecCtx, Regs};
 use crate::arch::paging::page_table::AnyPageTable;
-use crate::caps::RawCapEntry;
+use crate::caps::{RawCapEntry, Resource};
 use crate::core_local::CoreLocal;
 use crate::kptr::KPtr;
 
@@ -39,15 +39,6 @@ impl Thread {
         }
     }
 
-    pub fn exercise_cap(
-        &self,
-        _capability: CapId,
-        _operation: usize,
-        _args: SyscallArgs,
-    ) -> Result<usize, CapError> {
-        todo!();
-    }
-
     pub fn current() -> Option<KPtr<Thread>> {
         ACTIVE_THREAD.get().unwrap().get().borrow().clone()
     }
@@ -56,5 +47,25 @@ impl Thread {
         let mut current = ACTIVE_THREAD.get().unwrap().get().borrow_mut();
         current.replace(this.clone());
         this.exec_ctx.dispatch()
+    }
+}
+
+impl Thread {
+    pub fn exercise_cap(
+        &self,
+        capability: CapId,
+        operation: usize,
+        args: SyscallArgs,
+    ) -> Result<usize, CapError> {
+        let slot = RawCapEntry::get(self.resources.clone(), capability.into())
+            .unwrap()
+            .ok_or(CapError::NotFound)?
+            .get();
+        match slot.resource() {
+            Resource::Empty => return Err(CapError::NotFound),
+            Resource::CapEntry(capability_table) => todo!(),
+            Resource::Thread(thread) => todo!(),
+            Resource::PageTable { table, flags } => todo!(),
+        }
     }
 }

@@ -25,8 +25,8 @@ pub struct CapSlot {
 pub struct InUse;
 
 impl CapSlot {
-    pub fn clone_resource(&self) -> Resource {
-        self.resource.clone()
+    pub fn resource(&self) -> &Resource {
+        &self.resource
     }
 
     pub fn replace_child(&mut self, child: Option<KPtr<RawCapEntry>>) -> Option<KPtr<RawCapEntry>> {
