@@ -11,6 +11,27 @@ pub struct TrieEntry<const COUNT: usize, S: Slot<COUNT>> {
     slots: [S; COUNT],
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
+pub struct SlotId<const COUNT: usize>(usize);
+
+impl<const COUNT: usize> TryFrom<usize> for SlotId<COUNT> {
+    type Error = TrieIndexError;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        if value < COUNT {
+            Ok(Self(value))
+        } else {
+            Err(TrieIndexError::OutOfBounds)
+        }
+    }
+}
+
+impl<const COUNT: usize> From<SlotId<COUNT>> for usize {
+    fn from(value: SlotId<COUNT>) -> Self {
+        value.0
+    }
+}
+
 impl<const COUNT: usize, S: Slot<COUNT> + Default> Default for TrieEntry<COUNT, S> {
     fn default() -> Self {
         Self {
@@ -28,12 +49,8 @@ impl<const COUNT: usize, S: Slot<COUNT> + Default> TrieEntry<COUNT, S> {
         core::mem::size_of::<S>()
     }
 
-    pub fn index(this: S::Ptr, idx: usize) -> Result<impl Ptr<S>, TrieIndexError> {
-        if idx >= COUNT {
-            return Err(TrieIndexError::OutOfBounds);
-        }
-        let slot = this.map(move |entry| &entry.slots[idx]);
-        Ok(slot)
+    pub fn index(this: S::Ptr, idx: SlotId<COUNT>) -> impl Ptr<S> {
+        this.map(move |entry| unsafe { entry.slots.get_unchecked(idx.0) })
     }
 
     pub fn get(this: S::Ptr, id: u32) -> Result<Option<impl Ptr<S>>, S::Err> {

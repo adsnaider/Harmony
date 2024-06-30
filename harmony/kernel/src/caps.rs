@@ -18,25 +18,13 @@ pub type RawCapEntry = TrieEntry<NUM_SLOTS, AtomicCapSlot>;
 
 #[derive(Debug, Default, Clone)]
 pub struct CapSlot {
-    child: Option<KPtr<RawCapEntry>>,
-    resource: Resource,
+    pub child: Option<KPtr<RawCapEntry>>,
+    pub resource: Resource,
 }
 
 pub struct InUse;
 
 impl CapSlot {
-    pub fn resource(&self) -> &Resource {
-        &self.resource
-    }
-
-    pub fn replace_child(&mut self, child: Option<KPtr<RawCapEntry>>) -> Option<KPtr<RawCapEntry>> {
-        core::mem::replace(&mut self.child, child)
-    }
-
-    pub fn set(&mut self, new: Resource) -> Resource {
-        core::mem::replace(&mut self.resource, new)
-    }
-
     pub fn insert(&mut self, new: Resource) -> Result<(), InUse> {
         if self.resource.is_empty() {
             self.resource = new;
