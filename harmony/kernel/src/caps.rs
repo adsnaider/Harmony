@@ -2,8 +2,9 @@
 
 use core::convert::Infallible;
 
+use kapi::raw::{CapError, CapId};
 use sync::cell::AtomicCell;
-use trie::{Slot, TrieEntry};
+use trie::{Ptr, Slot, SlotId, TrieEntry};
 
 use crate::arch::paging::page_table::AnyPageTable;
 use crate::arch::paging::PAGE_SIZE;
@@ -15,6 +16,79 @@ const NUM_SLOTS: usize = PAGE_SIZE / SLOT_SIZE;
 
 /// A page-wide trie node for the capability tables.
 pub type RawCapEntry = TrieEntry<NUM_SLOTS, AtomicCapSlot>;
+
+pub struct WrongVariant;
+impl TryFrom<Resource> for KPtr<RawCapEntry> {
+    type Error = WrongVariant;
+
+    fn try_from(value: Resource) -> Result<Self, Self::Error> {
+        match value {
+            Resource::CapEntry(entry) => Ok(entry),
+            _ => Err(WrongVariant),
+        }
+    }
+}
+impl TryFrom<Resource> for (KPtr<AnyPageTable>, PageCapFlags) {
+    type Error = WrongVariant;
+
+    fn try_from(value: Resource) -> Result<Self, Self::Error> {
+        match value {
+            Resource::PageTable { table, flags } => Ok((table, flags)),
+            _ => Err(WrongVariant),
+        }
+    }
+}
+impl TryFrom<Resource> for () {
+    type Error = WrongVariant;
+
+    fn try_from(value: Resource) -> Result<Self, Self::Error> {
+        match value {
+            Resource::Empty => Ok(()),
+            _ => Err(WrongVariant),
+        }
+    }
+}
+impl TryFrom<Resource> for KPtr<Thread> {
+    type Error = WrongVariant;
+
+    fn try_from(value: Resource) -> Result<Self, Self::Error> {
+        match value {
+            Resource::Thread(thread) => Ok(thread),
+            _ => Err(WrongVariant),
+        }
+    }
+}
+
+pub trait CapEntryExtension: Sized {
+    fn find(self, cap: CapId) -> Result<impl Ptr<AtomicCapSlot>, CapError>;
+    fn index_slot(self, slot: SlotId<NUM_SLOTS>) -> impl Ptr<AtomicCapSlot>;
+
+    fn get_capability(self, cap: CapId) -> Result<CapSlot, CapError> {
+        Ok(self.find(cap)?.get())
+    }
+
+    fn get_resource_as<T: TryFrom<Resource, Error = WrongVariant>>(
+        self,
+        cap: CapId,
+    ) -> Result<T, CapError> {
+        let cap = self.get_capability(cap)?;
+        cap.resource
+            .try_into()
+            .map_err(|_| CapError::InvalidArgument)
+    }
+}
+
+impl CapEntryExtension for KPtr<RawCapEntry> {
+    fn find(self, cap: CapId) -> Result<impl Ptr<AtomicCapSlot>, CapError> {
+        Ok(RawCapEntry::get(self, cap.into())
+            .map_err(|_| CapError::Internal)?
+            .ok_or(CapError::NotFound)?)
+    }
+
+    fn index_slot(self, slot: SlotId<NUM_SLOTS>) -> impl Ptr<AtomicCapSlot> {
+        RawCapEntry::index(self, slot)
+    }
+}
 
 #[derive(Debug, Default, Clone)]
 pub struct CapSlot {
@@ -42,6 +116,12 @@ pub struct AtomicCapSlot(AtomicCell<CapSlot>);
 impl AtomicCapSlot {
     pub fn replace(&self, slot: CapSlot) -> CapSlot {
         self.0.replace(slot)
+    }
+
+    pub fn change<F: FnOnce(&mut CapSlot)>(&self, fun: F) {
+        let mut slot = self.get();
+        fun(&mut slot);
+        self.replace(slot);
     }
 
     pub fn get(&self) -> CapSlot {

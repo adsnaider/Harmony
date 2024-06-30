@@ -26,10 +26,18 @@ pub mod cap_table {
     use crate::raw::{CapId, RawOperation, SyscallArgs};
 
     #[derive(Debug, Copy, Clone)]
-    pub enum ResourceKind {
-        CapTable = 0,
-        Thread,
-        PageTable,
+    #[repr(C)]
+    pub enum ConstructArgs {
+        CapTable,
+        Thread {
+            entry: usize,
+            stack_pointer: usize,
+            cap_table: CapId,
+            page_table: CapId,
+        },
+        PageTable {
+            level: u8,
+        },
     }
 
     #[derive(Debug, Copy, Clone)]
@@ -42,7 +50,9 @@ pub mod cap_table {
             slot: SlotId<SLOT_COUNT>,
         },
         Construct {
-            kind: ResourceKind,
+            kind: ConstructArgs,
+            region: usize,
+            slot: SlotId<SLOT_COUNT>,
         },
         Drop {
             slot: SlotId<SLOT_COUNT>,
@@ -72,7 +82,11 @@ pub mod cap_table {
                 CapTableOp::Unlink { slot } => {
                     SyscallArgs::new(RawOperation::CapTableUnlink.into(), slot.into(), 0, 0, 0)
                 }
-                CapTableOp::Construct { kind: _ } => {
+                CapTableOp::Construct {
+                    kind: _,
+                    slot: _,
+                    region: _,
+                } => {
                     todo!()
                 }
                 CapTableOp::Drop { slot: _ } => todo!(),

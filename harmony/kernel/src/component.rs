@@ -2,16 +2,18 @@
 
 use core::cell::RefCell;
 
-use kapi::ops::cap_table::CapTableOp;
+use kapi::ops::cap_table::{CapTableOp, ConstructArgs};
 use kapi::ops::SyscallOp as _;
 use kapi::raw::{CapError, CapId, SyscallArgs};
 use sync::cell::AtomicOnceCell;
 
 use crate::arch::exec::{ExecCtx, Regs};
-use crate::arch::paging::page_table::AnyPageTable;
-use crate::caps::{RawCapEntry, Resource};
+use crate::arch::paging::page_table::{Addrspace, AnyPageTable, PageTableFlags};
+use crate::arch::paging::{Page, RawFrame, VirtAddr};
+use crate::caps::{CapEntryExtension as _, PageCapFlags, RawCapEntry, Resource};
 use crate::core_local::CoreLocal;
 use crate::kptr::KPtr;
+use crate::UNTYPED_MEMORY_OFFSET;
 
 static ACTIVE_THREAD: AtomicOnceCell<CoreLocal<RefCell<Option<KPtr<Thread>>>>> =
     AtomicOnceCell::new();
@@ -41,6 +43,10 @@ impl Thread {
         }
     }
 
+    pub fn addrspace(&self) -> Addrspace<'_> {
+        unsafe { Addrspace::from_frame(self.exec_ctx.l4_frame()) }
+    }
+
     pub fn current() -> Option<KPtr<Thread>> {
         ACTIVE_THREAD.get().unwrap().get().borrow().clone()
     }
@@ -54,10 +60,7 @@ impl Thread {
 
 impl Thread {
     pub fn exercise_cap(&self, capability: CapId, args: SyscallArgs) -> Result<usize, CapError> {
-        let slot = RawCapEntry::get(self.resources.clone(), capability.into())
-            .map_err(|_| CapError::Internal)?
-            .ok_or(CapError::NotFound)?
-            .get();
+        let slot = self.resources.clone().find(capability)?.get();
         match slot.resource {
             Resource::Empty => return Err(CapError::NotFound),
             Resource::CapEntry(capability_table) => {
@@ -68,28 +71,91 @@ impl Thread {
                         other_table_cap,
                         slot,
                     } => {
-                        let other_table =
-                            RawCapEntry::get(self.resources.clone(), other_table_cap.into())
-                                .map_err(|_| CapError::Internal)?
-                                .ok_or(CapError::NotFound)?
-                                .get();
-                        let Resource::CapEntry(other_table) = other_table.resource else {
-                            return Err(CapError::InvalidArgument);
-                        };
-                        let slot = RawCapEntry::index(capability_table, slot.into());
-                        let mut current = slot.get();
-                        current.child = Some(other_table);
-                        slot.replace(current);
+                        let other_table: KPtr<RawCapEntry> =
+                            self.resources.clone().get_resource_as(other_table_cap)?;
+                        let slot = capability_table.index_slot(slot);
+                        slot.change(|cap| {
+                            cap.child = Some(other_table);
+                        });
                         Ok(0)
                     }
                     CapTableOp::Unlink { slot } => {
-                        let slot = RawCapEntry::index(capability_table, slot);
-                        let mut current = slot.get();
-                        current.child = None;
-                        slot.replace(current);
+                        let slot = capability_table.index_slot(slot);
+                        slot.change(|cap| {
+                            cap.child = None;
+                        });
                         Ok(0)
                     }
-                    CapTableOp::Construct { kind: _ } => todo!(),
+                    CapTableOp::Construct { kind, region, slot } => {
+                        if region > RawFrame::memory_limit() {
+                            return Err(CapError::InvalidArgument);
+                        }
+                        let page_address = region + UNTYPED_MEMORY_OFFSET;
+                        let region = Page::try_from_start_address(
+                            VirtAddr::try_new(page_address)
+                                .map_err(|_| CapError::InvalidArgument)?,
+                        )
+                        .map_err(|_| CapError::InvalidArgument)?;
+
+                        let (frame, flags) = self
+                            .addrspace()
+                            .get(region)
+                            .ok_or(CapError::InvalidArgument)?;
+                        if !flags.contains(PageTableFlags::PRESENT) {
+                            return Err(CapError::InvalidArgument);
+                        }
+                        let resource = match kind {
+                            ConstructArgs::CapTable => {
+                                let ptr = KPtr::new(frame, RawCapEntry::default())
+                                    .map_err(|_| CapError::InvalidArgument)?;
+                                Resource::CapEntry(ptr.into())
+                            }
+                            ConstructArgs::Thread {
+                                entry,
+                                stack_pointer,
+                                cap_table,
+                                page_table,
+                            } => {
+                                let regs = Regs {
+                                    rip: entry as u64,
+                                    rsp: stack_pointer as u64,
+                                    rflags: 0x202,
+                                    ..Default::default()
+                                };
+                                let cap_table: KPtr<RawCapEntry> =
+                                    self.resources.clone().get_resource_as(cap_table)?;
+                                let (page_table, flags): (KPtr<AnyPageTable>, PageCapFlags) =
+                                    self.resources.clone().get_resource_as(page_table)?;
+                                if !flags.level() == 4 {
+                                    return Err(CapError::InvalidArgument);
+                                }
+                                Resource::Thread(
+                                    KPtr::new(frame, Thread::new(regs, page_table, cap_table))
+                                        .map_err(|_| CapError::InvalidArgument)?,
+                                )
+                            }
+                            ConstructArgs::PageTable { level } => {
+                                if level > 4 || level == 0 {
+                                    return Err(CapError::InvalidArgument);
+                                }
+                                let table = if level == 4 {
+                                    AnyPageTable::clone_kernel()
+                                } else {
+                                    AnyPageTable::new()
+                                };
+                                let flags = PageCapFlags::new(level);
+                                Resource::PageTable {
+                                    table: KPtr::new(frame, table)
+                                        .map_err(|_| CapError::InvalidArgument)?,
+                                    flags,
+                                }
+                            }
+                        };
+                        capability_table.index_slot(slot).change(|cap| {
+                            cap.resource = resource;
+                        });
+                        Ok(0)
+                    }
                     CapTableOp::Drop { slot: _ } => todo!(),
                     CapTableOp::Copy {
                         slot: _,

@@ -9,7 +9,7 @@ use crate::kptr::KPtr;
 use crate::retyping::RetypeError;
 
 #[repr(transparent)]
-pub struct Addrspace(KPtr<AnyPageTable>);
+pub struct Addrspace<'a>(&'a AnyPageTable);
 
 #[derive(Debug)]
 pub enum MapperError {
@@ -18,13 +18,18 @@ pub enum MapperError {
     AlreadyMapped(RawFrame),
 }
 
-impl Addrspace {
-    pub fn new(frame: RawFrame) -> Result<Self, RetypeError> {
-        Ok(Self(AnyPageTable::new_l4(frame)?))
+impl<'a> Addrspace<'a> {
+    pub unsafe fn from_frame(l4_frame: RawFrame) -> Self {
+        let table = l4_frame.base().to_virtual().as_ptr();
+        Self(unsafe { &*table })
     }
 
-    pub fn into_l4_frame(self) -> RawFrame {
-        self.0.into_raw()
+    pub unsafe fn from_table(table: &'a AnyPageTable) -> Self {
+        Self(table)
+    }
+
+    pub fn get(&self, _page: Page) -> Option<(RawFrame, PageTableFlags)> {
+        todo!();
     }
 
     /// Maps a virtual page to a physical frame.
@@ -42,7 +47,7 @@ impl Addrspace {
         frame_allocator: &mut BumpAllocator,
     ) -> Result<(), MapperError> {
         let mut level = Some(PageTableLevel::top());
-        let mut table = &*self.0;
+        let mut table = self.0;
         let addr = page.base();
         while let Some(current_level) = level {
             level = current_level.lower();
@@ -91,6 +96,10 @@ impl AnyPageTable {
     pub const fn new() -> Self {
         // SAFETY: This is correct for a page table
         unsafe { core::mem::zeroed() }
+    }
+
+    pub unsafe fn as_addrspace(&self) -> Addrspace<'_> {
+        unsafe { Addrspace::from_table(self) }
     }
 
     pub fn current() -> KPtr<Self> {

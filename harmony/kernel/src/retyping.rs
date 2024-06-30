@@ -112,7 +112,7 @@ pub struct NoRefs;
 pub struct UserFrame(RawFrame);
 
 impl RawFrame {
-    pub fn memory_size() -> usize {
+    pub fn memory_limit() -> usize {
         let nframes = RETYPE_TABLE.get().unwrap().retype_map.len();
         nframes * FRAME_SIZE as usize
     }

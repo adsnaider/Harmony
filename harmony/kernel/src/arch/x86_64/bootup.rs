@@ -4,15 +4,17 @@ use goblin::elf::program_header::{PF_R, PF_W, PF_X, PT_LOAD};
 use goblin::elf64::header::{Header, SIZEOF_EHDR};
 use goblin::elf64::program_header::ProgramHeader;
 
+use super::paging::page_table::AnyPageTable;
 use crate::arch::exec::{ExecCtx, Regs};
 use crate::arch::paging::page_table::{Addrspace, PageTableFlags};
 use crate::arch::paging::{Page, PhysAddr, RawFrame, VirtAddr, FRAME_SIZE, PAGE_SIZE};
 use crate::bump_allocator::BumpAllocator;
+use crate::kptr::KPtr;
 
 pub struct Process {
     pub entry: u64,
     pub rsp: u64,
-    pub addrspace: Addrspace,
+    pub l4_table: KPtr<AnyPageTable>,
 }
 
 #[derive(Debug)]
@@ -35,10 +37,11 @@ impl Process {
         );
 
         log::debug!("Setting up process address space");
-        let addrspace = {
+        let l4_table = {
             let l4_frame = fallocator.alloc_untyped_frame().unwrap();
-            Addrspace::new(l4_frame).unwrap()
+            AnyPageTable::new_l4(l4_frame).unwrap()
         };
+        let addrspace = unsafe { l4_table.as_addrspace() };
         let header = Header::from_bytes(program[..SIZEOF_EHDR].try_into().unwrap());
         let entry = header.e_entry;
         log::trace!("Entry: {:X}", entry);
@@ -114,13 +117,13 @@ impl Process {
         Ok(Self {
             entry,
             rsp: untyped_memory_offset as u64,
-            addrspace,
+            l4_table,
         })
     }
 
     pub fn exec(self) -> ! {
         let execution_stack = ExecCtx::new(
-            self.addrspace.into_l4_frame(),
+            self.l4_table.frame(),
             Regs {
                 rsp: self.rsp,
                 rip: self.entry,

@@ -59,9 +59,8 @@ extern "C" fn kmain() -> ! {
 
     let booter = {
         let proc = include_bytes_aligned::include_bytes_aligned!(16, "../../../.build/booter");
-        let memory_size = RawFrame::memory_size();
         log::info!("Loading user process");
-        Process::load(proc, 10, UNTYPED_MEMORY_OFFSET, memory_size).unwrap()
+        Process::load(proc, 10, UNTYPED_MEMORY_OFFSET, RawFrame::memory_limit()).unwrap()
     };
     log::info!("Jumping to boot component");
     booter.exec();
