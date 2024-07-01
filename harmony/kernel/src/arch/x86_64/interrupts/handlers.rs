@@ -204,6 +204,7 @@ pub(super) extern "x86-interrupt" fn syscall_interrupt(stack_frame: InterruptSta
             "sub rsp, 8",
             "call {handle_syscall}",
             "add rsp, 8",
+            pop_preserved!(),
             "iretq",
             handle_syscall = sym crate::syscall::handle,
             options(noreturn));

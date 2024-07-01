@@ -123,7 +123,7 @@ impl Process {
 
     pub fn into_exec(self) -> ExecCtx {
         ExecCtx::new(
-            self.l4_table.frame(),
+            self.l4_table.into_raw(),
             Regs {
                 control: ControlRegs {
                     rsp: self.rsp,

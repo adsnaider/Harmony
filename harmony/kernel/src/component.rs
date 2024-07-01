@@ -77,12 +77,14 @@ impl Thread {
         // 3. stack register needs to be whatever it was before syscall
         // 4. All callee-saved registers need to be set back (done in userspace)
         // SAFETY: Running a syscall.
-        let mut current = ACTIVE_THREAD.get().unwrap().get().borrow_mut();
-        if let Some(ref current) = *current {
-            let regs = unsafe { (*current.exec_ctx.get()).regs_mut() };
-            saver.save_state(regs);
+        {
+            let mut current = ACTIVE_THREAD.get().unwrap().get().borrow_mut();
+            if let Some(ref current) = *current {
+                let regs = unsafe { (*current.exec_ctx.get()).regs_mut() };
+                saver.save_state(regs);
+            }
+            current.replace(this.clone());
         }
-        current.replace(this.clone());
         log::info!("Set the active thread");
         unsafe { (*this.exec_ctx.get()).dispatch() }
     }
