@@ -80,9 +80,9 @@ pub trait CapEntryExtension: Sized {
 
 impl CapEntryExtension for KPtr<RawCapEntry> {
     fn find(self, cap: CapId) -> Result<impl Ptr<AtomicCapSlot>, CapError> {
-        Ok(RawCapEntry::get(self, cap.into())
+        RawCapEntry::get(self, cap.into())
             .map_err(|_| CapError::Internal)?
-            .ok_or(CapError::NotFound)?)
+            .ok_or(CapError::NotFound)
     }
 
     fn index_slot(self, slot: SlotId<NUM_SLOTS>) -> impl Ptr<AtomicCapSlot> {

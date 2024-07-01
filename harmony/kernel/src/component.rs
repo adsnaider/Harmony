@@ -60,6 +60,8 @@ impl Thread {
         unsafe { (*this.exec_ctx.get()).dispatch() }
     }
 
+    // FIXME: This is not that cool...
+    #[allow(clippy::mut_from_ref)]
     fn regs_mut(&self) -> &mut Regs {
         unsafe { (*self.exec_ctx.get()).regs_mut() }
     }
@@ -69,7 +71,7 @@ impl Thread {
     pub fn exercise_cap(&self, capability: CapId, args: SyscallArgs) -> Result<usize, CapError> {
         let slot = self.resources.clone().find(capability)?.get();
         match slot.resource {
-            Resource::Empty => return Err(CapError::NotFound),
+            Resource::Empty => Err(CapError::NotFound),
             Resource::CapEntry(capability_table) => {
                 let operation =
                     CapTableOp::from_args(args).map_err(|_| CapError::InvalidArgument)?;
@@ -115,7 +117,7 @@ impl Thread {
                             ConstructArgs::CapTable => {
                                 let ptr = KPtr::new(frame, RawCapEntry::default())
                                     .map_err(|_| CapError::InvalidArgument)?;
-                                Resource::CapEntry(ptr.into())
+                                Resource::CapEntry(ptr)
                             }
                             ConstructArgs::Thread {
                                 entry,

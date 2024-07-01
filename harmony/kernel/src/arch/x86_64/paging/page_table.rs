@@ -19,15 +19,26 @@ pub enum MapperError {
 }
 
 impl<'a> Addrspace<'a> {
+    /// Constructs a manipulable Addrspace from the l4 Frame
+    ///
+    /// # Safety
+    ///
+    /// The provided frame must be an l4 frame for some page table addressing.
     pub unsafe fn from_frame(l4_frame: RawFrame) -> Self {
         let table = l4_frame.base().to_virtual().as_ptr();
         Self(unsafe { &*table })
     }
 
+    /// Constructs a manipulable Addrspace from the top level page table.
+    ///
+    /// # Safety
+    ///
+    /// The provided table must be the root (L4) table.
     pub unsafe fn from_table(table: &'a AnyPageTable) -> Self {
         Self(table)
     }
 
+    /// Recursively finds the mapping for a page to a frame.
     pub fn get(&self, _page: Page) -> Option<(RawFrame, PageTableFlags)> {
         todo!();
     }
@@ -98,6 +109,11 @@ impl AnyPageTable {
         unsafe { core::mem::zeroed() }
     }
 
+    /// Returns the addrspace for this page table, enabling memory manipulations
+    ///
+    /// # Safety
+    ///
+    /// This must be a root-level page table.
     pub unsafe fn as_addrspace(&self) -> Addrspace<'_> {
         unsafe { Addrspace::from_table(self) }
     }

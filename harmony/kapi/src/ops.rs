@@ -8,13 +8,18 @@ pub enum InvalidOperation {
 pub trait SyscallOp: Sized + Copy {
     type R;
 
+    /// Performs the syscall associated with this operation
+    ///
+    /// # Safety
+    ///
+    /// Syscalls can fundamentally change memory
     unsafe fn syscall(self, capability: CapId) -> Result<Self::R, CapError> {
-        unsafe { syscall(capability, self.into_args()).map(|code| self.from_success_code(code)) }
+        unsafe { syscall(capability, self.into_args()).map(|code| self.convert_success_code(code)) }
     }
 
     fn into_args(self) -> SyscallArgs;
     fn from_args(args: SyscallArgs) -> Result<Self, InvalidOperation>;
-    fn from_success_code(&self, code: usize) -> Self::R;
+    fn convert_success_code(&self, code: usize) -> Self::R;
 }
 
 pub mod thread {
@@ -50,9 +55,7 @@ pub mod thread {
             }
         }
 
-        fn from_success_code(&self, _code: usize) -> Self::R {
-            ()
-        }
+        fn convert_success_code(&self, _code: usize) -> Self::R {}
     }
 }
 
@@ -166,8 +169,6 @@ pub mod cap_table {
             }
         }
 
-        fn from_success_code(&self, _code: usize) -> Self::R {
-            ()
-        }
+        fn convert_success_code(&self, _code: usize) -> Self::R {}
     }
 }
