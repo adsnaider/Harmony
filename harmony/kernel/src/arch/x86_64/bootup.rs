@@ -121,8 +121,8 @@ impl Process {
         })
     }
 
-    pub fn exec(self) -> ! {
-        let execution_stack = ExecCtx::new(
+    pub fn into_exec(self) -> ExecCtx {
+        ExecCtx::new(
             self.l4_table.frame(),
             Regs {
                 control: ControlRegs {
@@ -132,9 +132,7 @@ impl Process {
                 },
                 ..Default::default()
             },
-        );
-        log::debug!("Entering process at {:#X}", self.entry);
-        execution_stack.dispatch();
+        )
     }
 }
 

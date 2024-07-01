@@ -8,6 +8,19 @@ pub trait SaveState: Sized {
     fn save_state(self, regs: &mut Regs);
 }
 
+#[derive(Debug, Copy, Clone, Default)]
+pub struct NoopSaver {}
+impl NoopSaver {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+impl SaveState for NoopSaver {
+    fn save_state(self, _regs: &mut Regs) {
+        // Purpusely empty
+    }
+}
+
 /// Execution context that can be dispatched.
 #[repr(C)]
 pub struct ExecCtx {

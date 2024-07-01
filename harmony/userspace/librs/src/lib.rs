@@ -5,7 +5,7 @@ pub use kapi;
 pub mod serial {
     use core::fmt::Write;
 
-    use kapi::raw_syscall;
+    use kapi::raw::raw_syscall;
 
     #[macro_export]
     macro_rules! print {

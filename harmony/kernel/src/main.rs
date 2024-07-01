@@ -53,17 +53,34 @@ pub static PMO: AtomicLazyCell<VirtAddr> = AtomicLazyCell::new(|| {
 #[no_mangle]
 extern "C" fn kmain() -> ! {
     use arch::bootup::Process;
+    use arch::exec::{ExecCtx, NoopSaver};
     use arch::paging::RawFrame;
+    use bump_allocator::BumpAllocator;
+    use caps::RawCapEntry;
+    use component::Thread;
+    use kptr::KPtr;
 
     init();
 
-    let booter = {
+    let booter: ExecCtx = {
         let proc = include_bytes_aligned::include_bytes_aligned!(16, "../../../.build/booter");
         log::info!("Loading user process");
-        Process::load(proc, 10, UNTYPED_MEMORY_OFFSET, RawFrame::memory_limit()).unwrap()
+        let process =
+            Process::load(proc, 10, UNTYPED_MEMORY_OFFSET, RawFrame::memory_limit()).unwrap();
+        process.into_exec()
     };
+    let mut fallocator = BumpAllocator::new();
+    let resources = {
+        let frame = fallocator.alloc_untyped_frame().unwrap();
+        KPtr::new(frame, RawCapEntry::default()).unwrap()
+    };
+    let thread = {
+        let frame = fallocator.alloc_untyped_frame().unwrap();
+        KPtr::new(frame, Thread::new_with_ctx(booter, resources)).unwrap()
+    };
+
     log::info!("Jumping to boot component");
-    booter.exec();
+    Thread::dispatch(thread, NoopSaver::new());
 }
 
 pub fn init() {
@@ -99,8 +116,10 @@ pub fn init() {
             .entries_mut()
     };
     RetypeTable::new(memory_map).unwrap().init().unwrap();
+    log::info!("Initialized the retype table");
 
-    log::info!("Initialized the retype table")
+    component::init();
+    log::info!("Initialized component system");
 }
 
 #[cfg(all(target_os = "none", not(test)))]

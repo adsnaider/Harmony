@@ -40,8 +40,12 @@ pub struct Thread {
 impl Thread {
     pub fn new(regs: Regs, l4_table: KPtr<AnyPageTable>, resources: KPtr<RawCapEntry>) -> Self {
         let exec_ctx = ExecCtx::new(l4_table.into_raw(), regs);
+        Self::new_with_ctx(exec_ctx, resources)
+    }
+
+    pub fn new_with_ctx(ctx: ExecCtx, resources: KPtr<RawCapEntry>) -> Self {
         Self {
-            exec_ctx: UnsafeCell::new(exec_ctx),
+            exec_ctx: UnsafeCell::new(ctx),
             resources,
         }
     }
@@ -73,10 +77,13 @@ impl Thread {
         // 3. stack register needs to be whatever it was before syscall
         // 4. All callee-saved registers need to be set back (done in userspace)
         // SAFETY: Running a syscall.
-        let regs = unsafe { (*this.exec_ctx.get()).regs_mut() };
-        saver.save_state(regs);
         let mut current = ACTIVE_THREAD.get().unwrap().get().borrow_mut();
+        if let Some(ref current) = *current {
+            let regs = unsafe { (*current.exec_ctx.get()).regs_mut() };
+            saver.save_state(regs);
+        }
         current.replace(this.clone());
+        log::info!("Set the active thread");
         unsafe { (*this.exec_ctx.get()).dispatch() }
     }
 }

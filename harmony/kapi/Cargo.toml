@@ -5,9 +5,9 @@ edition = "2021"
 
 [dependencies]
 sync = { workspace = true, optional = true }
-trie = { workspace = true, optional = true }
+trie = { workspace = true }
 num_enum = { version = "0.7.2", default-features = false }
 
 [features]
 default = []
-from_errors = ["dep:sync", "dep:trie"]
+from_errors = ["dep:sync"]

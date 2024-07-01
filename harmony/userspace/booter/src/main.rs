@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-use librs::kapi::raw_syscall;
+use librs::kapi::raw::raw_syscall;
 use librs::println;
 
 #[cfg(not(test))]
