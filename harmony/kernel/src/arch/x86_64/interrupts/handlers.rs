@@ -5,12 +5,19 @@ use x86_64_impl::registers::control::Cr2;
 use x86_64_impl::structures::idt::{InterruptStackFrame, PageFaultErrorCode};
 
 use super::{KEYBOARD_INT, PICS, TIMER_INT};
-use crate::arch::exec::{ControlRegs, PreservedRegs, ScratchRegs};
+use crate::arch::exec::{ControlRegs, PreservedRegs, Regs, SaveState, ScratchRegs};
 use crate::arch::x86_64::gdt;
 
 pub struct SyscallCtx {
     pub control_regs: ControlRegs,
     pub preserved_regs: PreservedRegs,
+}
+
+impl SaveState for SyscallCtx {
+    fn save_state(self, regs: &mut Regs) {
+        regs.control = self.control_regs;
+        regs.preserved = self.preserved_regs;
+    }
 }
 
 impl SyscallCtx {
@@ -43,6 +50,14 @@ pub struct IrqCtx {
     pub control_regs: ControlRegs,
     pub preserved_regs: PreservedRegs,
     pub scratch_regs: ScratchRegs,
+}
+
+impl SaveState for IrqCtx {
+    fn save_state(self, regs: &mut Regs) {
+        regs.control = self.control_regs;
+        regs.preserved = self.preserved_regs;
+        regs.scratch = self.scratch_regs;
+    }
 }
 
 impl IrqCtx {

@@ -4,6 +4,10 @@ use core::arch::asm;
 
 use super::paging::RawFrame;
 
+pub trait SaveState: Sized {
+    fn save_state(self, regs: &mut Regs);
+}
+
 /// Execution context that can be dispatched.
 #[repr(C)]
 pub struct ExecCtx {

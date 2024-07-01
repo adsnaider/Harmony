@@ -8,7 +8,7 @@ use kapi::ops::SyscallOp as _;
 use kapi::raw::{CapError, CapId, SyscallArgs};
 use sync::cell::AtomicOnceCell;
 
-use crate::arch::exec::{ControlRegs, ExecCtx, Regs};
+use crate::arch::exec::{ControlRegs, ExecCtx, Regs, SaveState};
 use crate::arch::interrupts::SyscallCtx;
 use crate::arch::paging::page_table::{Addrspace, AnyPageTable, PageTableFlags};
 use crate::arch::paging::{Page, RawFrame, VirtAddr};
@@ -54,16 +54,30 @@ impl Thread {
         ACTIVE_THREAD.get().unwrap().get().borrow().clone()
     }
 
-    pub fn dispatch(this: KPtr<Self>) -> ! {
+    pub fn dispatch(this: KPtr<Self>, saver: impl SaveState) -> ! {
+        // Our kernel is non-preemptive which makes every other case really
+        // simple as it's a completely synchronous call-response. However, thread
+        // dispatching is somewhat weird because we exit the kernel early on the
+        // dispatch and never return back to the caller in a traditional sense (i.e.
+        // dispatch return !). The way we come back is by having another dispatch
+        // call back into the original thread. Note, we have a singular kernel
+        // execution stack, so once we leave here, the stack will be mangled and
+        // can't come back to the kernel to return to the normal flow of execution.
+        //
+        // When that happens, the state of the (current) thread needs to be valid,
+        // specifically, to the thread it needs to look like the original Activate
+        // call returned with a success status code. So here's what needs to happen
+        //
+        // 1. Return register needs to be 0.
+        // 2. rflags register needs to be valid (interrupts enabled, ring 3 execution, etc.)
+        // 3. stack register needs to be whatever it was before syscall
+        // 4. All callee-saved registers need to be set back (done in userspace)
+        // SAFETY: Running a syscall.
+        let regs = unsafe { (*this.exec_ctx.get()).regs_mut() };
+        saver.save_state(regs);
         let mut current = ACTIVE_THREAD.get().unwrap().get().borrow_mut();
         current.replace(this.clone());
         unsafe { (*this.exec_ctx.get()).dispatch() }
-    }
-
-    // FIXME: This is not that cool...
-    #[allow(clippy::mut_from_ref)]
-    fn regs_mut(&self) -> &mut Regs {
-        unsafe { (*self.exec_ctx.get()).regs_mut() }
     }
 }
 
@@ -179,30 +193,8 @@ impl Thread {
                 let operation = ThreadOp::from_args(args).map_err(|_| CapError::InvalidArgument)?;
                 match operation {
                     ThreadOp::Activate => {
-                        // Our kernel is non-preemptive which makes every other case really
-                        // simple as it's a completely synchronous call-response. However, thread
-                        // dispatching is somewhat weird because we exit the kernel early on the
-                        // dispatch and never return back to the caller in a traditional sense (i.e.
-                        // dispatch return !). The way we come back is by having another dispatch
-                        // call back into the original thread. Note, we have a singular kernel
-                        // execution stack, so once we leave here, the stack will be mangled and
-                        // can't come back to the kernel to return to the normal flow of execution.
-                        //
-                        // When that happens, the state of the (current) thread needs to be valid,
-                        // specifically, to the thread it needs to look like the original Activate
-                        // call returned with a success status code. So here's what needs to happen
-                        //
-                        // 1. Return register needs to be 0.
-                        // 2. rflags register needs to be valid (interrupts enabled, ring 3 execution, etc.)
-                        // 3. stack register needs to be whatever it was before syscall
-                        // 4. All callee-saved registers need to be set back (done in userspace)
-                        // SAFETY: Running a syscall.
                         let ctx = unsafe { SyscallCtx::current() };
-                        let regs = self.regs_mut();
-                        regs.preserved = ctx.preserved_regs;
-                        regs.control = ctx.control_regs;
-                        assert!(regs.control.rflags & (1 << 9) != 0);
-                        Thread::dispatch(thread);
+                        Thread::dispatch(thread, ctx);
                     }
                     ThreadOp::ChangeAffinity => todo!(),
                 }
