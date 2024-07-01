@@ -17,7 +17,44 @@ pub trait SyscallOp: Sized + Copy {
     fn from_success_code(&self, code: usize) -> Self::R;
 }
 
-pub mod thread {}
+pub mod thread {
+    use super::{InvalidOperation, SyscallOp};
+    use crate::raw::{RawOperation, SyscallArgs};
+
+    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+    pub enum ThreadOp {
+        Activate,
+        ChangeAffinity,
+    }
+
+    impl SyscallOp for ThreadOp {
+        type R = ();
+
+        fn into_args(self) -> SyscallArgs {
+            match self {
+                ThreadOp::Activate => {
+                    SyscallArgs::new(RawOperation::ThreadActivate.into(), 0, 0, 0, 0)
+                }
+                ThreadOp::ChangeAffinity => {
+                    todo!();
+                }
+            }
+        }
+
+        fn from_args(args: SyscallArgs) -> Result<Self, InvalidOperation> {
+            let op = RawOperation::try_from(args.op()).map_err(|_| InvalidOperation::BadOp)?;
+            match op {
+                RawOperation::ThreadActivate => Ok(Self::Activate),
+                RawOperation::ThreadChangeAffinity => Ok(Self::ChangeAffinity),
+                _ => Err(InvalidOperation::BadOp),
+            }
+        }
+
+        fn from_success_code(&self, _code: usize) -> Self::R {
+            ()
+        }
+    }
+}
 
 pub mod cap_table {
     use trie::SlotId;

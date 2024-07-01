@@ -21,19 +21,15 @@ struct Selectors {
     _user_data_selector: SegmentSelector,
     tss_selector: SegmentSelector,
 }
+
+#[used]
+static mut INTERRUPT_STACK: [u8; PAGE_SIZE] = [0; PAGE_SIZE];
 // FIXME: This needs to be per-core.
 static TSS: AtomicLazyCell<TaskStateSegment> = AtomicLazyCell::new(|| {
     let mut tss = TaskStateSegment::new();
     tss.interrupt_stack_table[DOUBLE_FAULT_IST_INDEX as usize] = {
         const STACK_SIZE: usize = PAGE_SIZE;
-        static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
-
-        // SAFETY: Although it's a static mut, STACK is only used in this context.
-        let stack_start = VirtAddr::from_ptr(unsafe { STACK.as_slice() });
-        stack_start + STACK_SIZE as u64 // stack end.
-    };
-    tss.interrupt_stack_table[PAGE_FAULT_IST_INDEX as usize] = {
-        const STACK_SIZE: usize = PAGE_SIZE;
+        #[used]
         static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
 
         // SAFETY: Although it's a static mut, STACK is only used in this context.
@@ -42,15 +38,18 @@ static TSS: AtomicLazyCell<TaskStateSegment> = AtomicLazyCell::new(|| {
     };
     // Privilege stack table used on interrupts.
     tss.privilege_stack_table[0] = {
-        const STACK_SIZE: usize = PAGE_SIZE;
-        static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
-        // Every user process will map an privilege stack page at `PRIVILEGE_STACK_ADDR`.
-        // SAFETY: Although it's a static mut, STACK is only used in this context.
-        let stack_start = VirtAddr::from_ptr(unsafe { STACK.as_slice() });
-        stack_start + STACK_SIZE as u64 // stack end.
+        // SAFETY: The interrupt stack is (almost) only used as, well, a stack. Other than getting the pointer
+        // to define it in the TSS we don't do anything else... except for reading the pushed registers
+        // on an interrupt/syscall so that we can save them in case of a thread dispatch *cough* *cough*.
+        interrupt_stack_end()
     };
     tss
 });
+
+pub(super) fn interrupt_stack_end() -> VirtAddr {
+    let start = VirtAddr::from_ptr(unsafe { INTERRUPT_STACK.as_ptr() });
+    start + PAGE_SIZE as u64
+}
 
 static GDT: AtomicLazyCell<(GlobalDescriptorTable, Selectors)> = AtomicLazyCell::new(|| {
     let mut gdt = GlobalDescriptorTable::new();

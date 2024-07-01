@@ -3,13 +3,13 @@ use core::num::TryFromIntError;
 
 use num_enum::{IntoPrimitive, TryFromPrimitive, TryFromPrimitiveError};
 
-#[naked]
 /// Performs a raw syscall
 ///
 /// # Safety
 ///
 /// Performing a syscall is inherently unsafe, follow the syscall
 /// documentation to guarantee proper usage and soundness.
+#[naked]
 pub unsafe extern "sysv64" fn raw_syscall(
     _a: usize,
     _b: usize,
@@ -19,7 +19,23 @@ pub unsafe extern "sysv64" fn raw_syscall(
     _f: usize,
 ) -> isize {
     // NOTE: We don't need to align the stack on an int instruction.
-    asm!("int 0x80", "ret", options(noreturn));
+    asm!(
+        "push rbx",
+        "push rbp",
+        "push r12",
+        "push r13",
+        "push r14",
+        "push r15",
+        "int 0x80",
+        "pop r15",
+        "pop r14",
+        "pop r13",
+        "pop r12",
+        "pop rbp",
+        "pop rbx",
+        "ret",
+        options(noreturn)
+    );
 }
 
 /// Performs a syscall

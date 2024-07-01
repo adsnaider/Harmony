@@ -5,7 +5,7 @@ use goblin::elf64::header::{Header, SIZEOF_EHDR};
 use goblin::elf64::program_header::ProgramHeader;
 
 use super::paging::page_table::AnyPageTable;
-use crate::arch::exec::{ExecCtx, Regs};
+use crate::arch::exec::{ControlRegs, ExecCtx, Regs};
 use crate::arch::paging::page_table::{Addrspace, PageTableFlags};
 use crate::arch::paging::{Page, PhysAddr, RawFrame, VirtAddr, FRAME_SIZE, PAGE_SIZE};
 use crate::bump_allocator::BumpAllocator;
@@ -125,9 +125,11 @@ impl Process {
         let execution_stack = ExecCtx::new(
             self.l4_table.frame(),
             Regs {
-                rsp: self.rsp,
-                rip: self.entry,
-                rflags: 0x202,
+                control: ControlRegs {
+                    rsp: self.rsp,
+                    rip: self.entry,
+                    rflags: 0x202,
+                },
                 ..Default::default()
             },
         );

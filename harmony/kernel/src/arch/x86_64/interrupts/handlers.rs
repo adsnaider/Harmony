@@ -1,13 +1,91 @@
 use core::arch::asm;
+use core::mem::MaybeUninit;
 
 use x86_64_impl::registers::control::Cr2;
 use x86_64_impl::structures::idt::{InterruptStackFrame, PageFaultErrorCode};
 
 use super::{KEYBOARD_INT, PICS, TIMER_INT};
+use crate::arch::exec::{ControlRegs, PreservedRegs, ScratchRegs};
+use crate::arch::x86_64::gdt;
+
+pub struct SyscallCtx {
+    pub control_regs: ControlRegs,
+    pub preserved_regs: PreservedRegs,
+}
+
+impl SyscallCtx {
+    /// Reads the syscall context from the stack
+    ///
+    /// # Safety
+    ///
+    /// Must be currently handling a syscall
+    pub unsafe fn current() -> Self {
+        let stack_end: *mut u64 = gdt::interrupt_stack_end().as_mut_ptr();
+        let rsp = unsafe { *stack_end.sub(2) };
+        let rflags = unsafe { *stack_end.sub(3) };
+        let rip = unsafe { *stack_end.sub(5) };
+        let mut preserved: MaybeUninit<PreservedRegs> = MaybeUninit::uninit();
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                stack_end.sub(12) as *const PreservedRegs,
+                preserved.as_mut_ptr(),
+                1,
+            );
+        }
+        Self {
+            control_regs: ControlRegs { rflags, rsp, rip },
+            preserved_regs: unsafe { preserved.assume_init() },
+        }
+    }
+}
+
+pub struct IrqCtx {
+    pub control_regs: ControlRegs,
+    pub preserved_regs: PreservedRegs,
+    pub scratch_regs: ScratchRegs,
+}
+
+impl IrqCtx {
+    /// Reads the syscall context from the stack
+    ///
+    /// # Safety
+    ///
+    /// Must be currently handling a syscall
+    pub unsafe fn current() -> Self {
+        let stack_end: *mut u64 = gdt::interrupt_stack_end().as_mut_ptr();
+        let rsp = unsafe { *stack_end.sub(2) };
+        let rflags = unsafe { *stack_end.sub(3) };
+        let rip = unsafe { *stack_end.sub(5) };
+        let mut preserved: MaybeUninit<PreservedRegs> = MaybeUninit::uninit();
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                stack_end.sub(12) as *const PreservedRegs,
+                preserved.as_mut_ptr(),
+                1,
+            );
+        }
+        let mut scratch: MaybeUninit<ScratchRegs> = MaybeUninit::uninit();
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                stack_end.sub(21) as *const ScratchRegs,
+                scratch.as_mut_ptr(),
+                1,
+            );
+        }
+        Self {
+            control_regs: ControlRegs { rflags, rsp, rip },
+            preserved_regs: unsafe { preserved.assume_init() },
+            scratch_regs: unsafe { scratch.assume_init() },
+        }
+    }
+}
+
+impl IrqCtx {}
 
 macro_rules! push_scratch {
     () => {
-        r#"push r11
+        r#"
+        push r11
         push r10
         push r9
         push r8
@@ -36,6 +114,32 @@ macro_rules! pop_scratch {
     };
 }
 
+macro_rules! push_preserved {
+    () => {
+        r#"
+        push r15
+        push r14
+        push r13
+        push r12
+        push rbp
+        push rbx
+        "#
+    };
+}
+
+macro_rules! pop_preserved {
+    () => {
+        r#"
+        pop rbx
+        pop rbp
+        pop r12
+        pop r13
+        pop r14
+        pop r15
+        "#
+    };
+}
+
 macro_rules! interrupt {
     ($name:ident, $handler:expr) => {
         #[naked]
@@ -47,9 +151,11 @@ macro_rules! interrupt {
             // SAFETY: Following ABI with iretq and we only wrap a C call with push/pop scratch registers.
             unsafe {
                 core::arch::asm!(
+                    push_preserved!(),
                     push_scratch!(),
                     "call {inner}",
                     pop_scratch!(),
+                    pop_preserved!(),
                     "iretq",
                     inner = sym inner,
                     options(noreturn),
@@ -79,6 +185,7 @@ pub(super) extern "x86-interrupt" fn syscall_interrupt(stack_frame: InterruptSta
     // take care of that.
     unsafe {
         asm!(
+            push_preserved!(),
             "sub rsp, 8",
             "call {handle_syscall}",
             "add rsp, 8",

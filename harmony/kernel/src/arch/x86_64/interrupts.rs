@@ -8,6 +8,7 @@ use x86_64_impl::PrivilegeLevel;
 use crate::arch::x86_64::{self, gdt};
 
 mod handlers;
+pub use handlers::{IrqCtx, SyscallCtx};
 
 const PIC1_OFFSET: u8 = 32;
 const PIC2_OFFSET: u8 = PIC1_OFFSET + 8;
