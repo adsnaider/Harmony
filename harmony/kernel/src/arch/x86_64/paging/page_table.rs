@@ -38,9 +38,26 @@ impl<'a> Addrspace<'a> {
         Self(table)
     }
 
+    // FIXME: Huge pages
     /// Recursively finds the mapping for a page to a frame.
-    pub fn get(&self, _page: Page) -> Option<(RawFrame, PageTableFlags)> {
-        todo!();
+    pub fn get(&self, page: Page) -> Option<(RawFrame, PageTableFlags)> {
+        let mut table = self.0;
+        let idx = page.base().p4_index();
+        let (frame, _) = table.get(idx).get()?;
+
+        table = unsafe { &*frame.base().to_virtual().as_ptr() };
+        let idx = page.base().p3_index();
+        let (frame, _) = table.get(idx).get()?;
+
+        table = unsafe { &*frame.base().to_virtual().as_ptr() };
+        let idx = page.base().p2_index();
+        let (frame, _) = table.get(idx).get()?;
+
+        table = unsafe { &*frame.base().to_virtual().as_ptr() };
+        let idx = page.base().p1_index();
+        let (frame, flags) = table.get(idx).get()?;
+
+        Some((frame, flags))
     }
 
     /// Maps a virtual page to a physical frame.
