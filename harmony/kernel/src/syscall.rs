@@ -1,7 +1,7 @@
 use kapi::raw::{CapError, CapId, SyscallArgs};
 
 use crate::component::Thread;
-use crate::{sprint, sprintln};
+use crate::sprint;
 
 pub extern "sysv64" fn handle(a: usize, b: usize, c: usize, d: usize, e: usize, f: usize) -> isize {
     if a == usize::MAX {

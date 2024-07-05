@@ -62,8 +62,6 @@ fn init_idt() {
             .set_handler_fn(handlers::non_maskable_interrupt);
         idt.bound_range_exceeded
             .set_handler_fn(handlers::bound_range_exceeded);
-        idt.bound_range_exceeded
-            .set_handler_fn(handlers::bound_range_exceeded);
         idt.debug.set_handler_fn(handlers::debug);
         idt.invalid_opcode.set_handler_fn(handlers::invalid_opcode);
         idt.device_not_available
@@ -85,6 +83,10 @@ fn init_idt() {
             .set_handler_fn(handlers::vmm_communication_exception);
         idt.security_exception
             .set_handler_fn(handlers::security_exception);
+        idt.cp_protection_exception
+            .set_handler_fn(handlers::cp_protection_exception);
+        idt.hv_injection_exception
+            .set_handler_fn(handlers::hv_injection_exception);
         // SAFETY: Stack index provided is valid and only used for the double fault handler.
         unsafe {
             idt.double_fault

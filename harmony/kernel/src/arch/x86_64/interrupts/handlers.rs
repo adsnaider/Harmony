@@ -317,3 +317,13 @@ pub(super) extern "x86-interrupt" fn double_fault(
 pub(super) extern "x86-interrupt" fn breakpoint(stack_frame: InterruptStackFrame) {
     log::info!("EXCEPTION BREAKPOINT:\n{stack_frame:#?}");
 }
+
+pub(super) extern "x86-interrupt" fn cp_protection_exception(
+    stack_frame: InterruptStackFrame,
+    error_code: u64,
+) {
+    panic!("EXCEPTION CP PROTECTION: {error_code:#02X}\n{stack_frame:#?}");
+}
+pub(super) extern "x86-interrupt" fn hv_injection_exception(stack_frame: InterruptStackFrame) {
+    panic!("EXCEPTION HV INJECTION:\n{stack_frame:#?}");
+}
