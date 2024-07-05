@@ -21,9 +21,9 @@ struct Selectors {
     _user_data_selector: SegmentSelector,
     tss_selector: SegmentSelector,
 }
-
+const INTERRUPT_STACK_SIZE: usize = PAGE_SIZE * 20;
 #[used]
-static mut INTERRUPT_STACK: [u8; PAGE_SIZE] = [0; PAGE_SIZE];
+static mut INTERRUPT_STACK: [u8; INTERRUPT_STACK_SIZE] = [0; INTERRUPT_STACK_SIZE];
 // FIXME: This needs to be per-core.
 static TSS: AtomicLazyCell<TaskStateSegment> = AtomicLazyCell::new(|| {
     let mut tss = TaskStateSegment::new();
@@ -47,8 +47,8 @@ static TSS: AtomicLazyCell<TaskStateSegment> = AtomicLazyCell::new(|| {
 });
 
 pub(super) fn interrupt_stack_end() -> VirtAddr {
-    let start = VirtAddr::from_ptr(unsafe { INTERRUPT_STACK.as_ptr() });
-    start + PAGE_SIZE as u64
+    let start: VirtAddr = VirtAddr::new(unsafe { INTERRUPT_STACK.as_ptr() as u64 });
+    start + INTERRUPT_STACK_SIZE as u64
 }
 
 static GDT: AtomicLazyCell<(GlobalDescriptorTable, Selectors)> = AtomicLazyCell::new(|| {
