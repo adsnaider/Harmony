@@ -1,6 +1,8 @@
 use core::arch::asm;
+use core::marker::PhantomData;
 use core::num::TryFromIntError;
 
+use bytemuck::{AnyBitPattern, NoUninit};
 use num_enum::{IntoPrimitive, TryFromPrimitive, TryFromPrimitiveError};
 
 /// Performs a raw syscall
@@ -137,16 +139,18 @@ mod convert_errors {
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct SyscallArgs {
+pub struct SyscallArgs<'a> {
     op: usize,
     general: (usize, usize, usize, usize),
+    _life: PhantomData<&'a ()>,
 }
 
-impl SyscallArgs {
+impl SyscallArgs<'_> {
     pub fn new(op: usize, a: usize, b: usize, c: usize, d: usize) -> Self {
         Self {
             op,
             general: (a, b, c, d),
+            _life: PhantomData,
         }
     }
 
@@ -160,7 +164,7 @@ impl SyscallArgs {
 }
 
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord, AnyBitPattern, NoUninit)]
 pub struct CapId(u32);
 
 pub struct OutOfBounds;

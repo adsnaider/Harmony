@@ -3,7 +3,7 @@ use core::sync::atomic::{AtomicU64, Ordering};
 use x86_64_impl::registers::control::Cr3;
 pub use x86_64_impl::structures::paging::PageTableFlags;
 
-use super::{Page, PhysAddr, RawFrame};
+use super::{Page, PhysAddr, RawFrame, VirtAddr};
 use crate::bump_allocator::BumpAllocator;
 use crate::kptr::KPtr;
 use crate::retyping::RetypeError;
@@ -27,6 +27,12 @@ impl<'a> Addrspace<'a> {
     pub unsafe fn from_frame(l4_frame: RawFrame) -> Self {
         let table = l4_frame.base().to_virtual().as_ptr();
         Self(unsafe { &*table })
+    }
+
+    pub fn l4_frame(&self) -> RawFrame {
+        RawFrame::from_start_address(unsafe {
+            VirtAddr::from_ptr(self.0 as *const _).to_physical()
+        })
     }
 
     /// Constructs a manipulable Addrspace from the top level page table.

@@ -7,6 +7,7 @@ edition = "2021"
 sync = { workspace = true, optional = true }
 trie = { workspace = true }
 num_enum = { version = "0.7.2", default-features = false }
+bytemuck = { version = "1.16.1", features = ["derive"] }
 
 [features]
 default = []

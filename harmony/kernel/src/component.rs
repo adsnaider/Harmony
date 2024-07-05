@@ -2,7 +2,9 @@
 
 use core::cell::{RefCell, UnsafeCell};
 
-use kapi::ops::cap_table::{CapTableOp, ConstructArgs};
+use kapi::ops::cap_table::{
+    CapTableOp, ConsArgs, ConstructArgs, PageTableConsArgs, ThreadConsArgs,
+};
 use kapi::ops::thread::ThreadOp;
 use kapi::ops::SyscallOp as _;
 use kapi::raw::{CapError, CapId, SyscallArgs};
@@ -92,6 +94,7 @@ impl Thread {
 
 impl Thread {
     pub fn exercise_cap(&self, capability: CapId, args: SyscallArgs) -> Result<usize, CapError> {
+        log::debug!("Syscall for: {capability:?}, {args:?}");
         let slot = self.resources.clone().find(capability)?.get();
         match slot.resource {
             Resource::Empty => Err(CapError::NotFound),
@@ -118,7 +121,7 @@ impl Thread {
                         });
                         Ok(0)
                     }
-                    CapTableOp::Construct { kind, region, slot } => {
+                    CapTableOp::Construct(ConsArgs { kind, region, slot }) => {
                         if region > RawFrame::memory_limit() {
                             return Err(CapError::InvalidArgument);
                         }
@@ -142,12 +145,12 @@ impl Thread {
                                     .map_err(|_| CapError::InvalidArgument)?;
                                 Resource::CapEntry(ptr)
                             }
-                            ConstructArgs::Thread {
+                            ConstructArgs::Thread(ThreadConsArgs {
                                 entry,
                                 stack_pointer,
                                 cap_table,
                                 page_table,
-                            } => {
+                            }) => {
                                 let regs = Regs {
                                     control: ControlRegs {
                                         rip: entry as u64,
@@ -168,7 +171,7 @@ impl Thread {
                                         .map_err(|_| CapError::InvalidArgument)?,
                                 )
                             }
-                            ConstructArgs::PageTable { level } => {
+                            ConstructArgs::PageTable(PageTableConsArgs { level }) => {
                                 if level > 4 || level == 0 {
                                     return Err(CapError::InvalidArgument);
                                 }

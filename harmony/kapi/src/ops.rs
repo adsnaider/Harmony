@@ -1,3 +1,5 @@
+use trie::TrieIndexError;
+
 use crate::raw::{syscall, CapError, CapId, SyscallArgs};
 
 pub enum InvalidOperation {
@@ -14,10 +16,11 @@ pub trait SyscallOp: Sized + Copy {
     ///
     /// Syscalls can fundamentally change memory
     unsafe fn syscall(self, capability: CapId) -> Result<Self::R, CapError> {
-        unsafe { syscall(capability, self.into_args()).map(|code| self.convert_success_code(code)) }
+        let args = self.make_args();
+        unsafe { syscall(capability, args).map(|code| self.convert_success_code(code)) }
     }
 
-    fn into_args(self) -> SyscallArgs;
+    fn make_args(&self) -> SyscallArgs<'_>;
     fn from_args(args: SyscallArgs) -> Result<Self, InvalidOperation>;
     fn convert_success_code(&self, code: usize) -> Self::R;
 }
@@ -35,7 +38,7 @@ pub mod thread {
     impl SyscallOp for ThreadOp {
         type R = ();
 
-        fn into_args(self) -> SyscallArgs {
+        fn make_args(&self) -> SyscallArgs {
             match self {
                 ThreadOp::Activate => {
                     SyscallArgs::new(RawOperation::ThreadActivate.into(), 0, 0, 0, 0)
@@ -60,24 +63,43 @@ pub mod thread {
 }
 
 pub mod cap_table {
-    use trie::SlotId;
+    use core::slice;
+
+    use bytemuck::{AnyBitPattern, NoUninit};
+    pub use trie::SlotId;
 
     use super::{InvalidOperation, SyscallOp};
     use crate::raw::{CapId, RawOperation, SyscallArgs};
 
     #[derive(Debug, Copy, Clone)]
-    #[repr(C)]
+    #[repr(usize)]
     pub enum ConstructArgs {
-        CapTable,
-        Thread {
-            entry: usize,
-            stack_pointer: usize,
-            cap_table: CapId,
-            page_table: CapId,
-        },
-        PageTable {
-            level: u8,
-        },
+        CapTable = 0,
+        Thread(ThreadConsArgs),
+        PageTable(PageTableConsArgs),
+    }
+
+    #[repr(C)]
+    #[derive(Debug, Copy, Clone, AnyBitPattern, NoUninit)]
+    pub struct ThreadConsArgs {
+        pub entry: usize,
+        pub stack_pointer: usize,
+        pub cap_table: CapId,
+        pub page_table: CapId,
+    }
+
+    #[repr(C)]
+    #[derive(Debug, Copy, Clone, AnyBitPattern, NoUninit)]
+    pub struct PageTableConsArgs {
+        pub level: u8,
+    }
+
+    #[repr(C)]
+    #[derive(Debug, Copy, Clone)]
+    pub struct ConsArgs<const SLOT_COUNT: usize> {
+        pub kind: ConstructArgs,
+        pub region: usize,
+        pub slot: SlotId<SLOT_COUNT>,
     }
 
     #[derive(Debug, Copy, Clone)]
@@ -89,11 +111,7 @@ pub mod cap_table {
         Unlink {
             slot: SlotId<SLOT_COUNT>,
         },
-        Construct {
-            kind: ConstructArgs,
-            region: usize,
-            slot: SlotId<SLOT_COUNT>,
-        },
+        Construct(ConsArgs<SLOT_COUNT>),
         Drop {
             slot: SlotId<SLOT_COUNT>,
         },
@@ -107,8 +125,8 @@ pub mod cap_table {
     impl<const SLOT_COUNT: usize> SyscallOp for CapTableOp<SLOT_COUNT> {
         type R = ();
 
-        fn into_args(self) -> SyscallArgs {
-            match self {
+        fn make_args(&self) -> SyscallArgs {
+            match *self {
                 CapTableOp::Link {
                     other_table_cap,
                     slot,
@@ -122,12 +140,19 @@ pub mod cap_table {
                 CapTableOp::Unlink { slot } => {
                     SyscallArgs::new(RawOperation::CapTableUnlink.into(), slot.into(), 0, 0, 0)
                 }
-                CapTableOp::Construct {
-                    kind: _,
-                    slot: _,
-                    region: _,
-                } => {
-                    todo!()
+                CapTableOp::Construct(ref cons_args) => {
+                    let (var, args) = match cons_args.kind {
+                        ConstructArgs::CapTable => (0, [].as_slice()),
+                        ConstructArgs::Thread(ref thd_args) => (1, bytemuck::bytes_of(thd_args)),
+                        ConstructArgs::PageTable(ref pgt_args) => (2, bytemuck::bytes_of(pgt_args)),
+                    };
+                    SyscallArgs::new(
+                        RawOperation::CapTableConstruct as usize,
+                        cons_args.region,
+                        cons_args.slot.into(),
+                        var,
+                        args.as_ptr() as usize,
+                    )
                 }
                 CapTableOp::Drop { slot: _ } => todo!(),
                 CapTableOp::Copy {
@@ -155,14 +180,34 @@ pub mod cap_table {
                     })
                 }
                 RawOperation::CapTableUnlink => {
-                    let slot = args
-                        .args()
-                        .0
-                        .try_into()
-                        .map_err(|_| InvalidOperation::InvalidArgument)?;
+                    let slot = args.args().0.try_into()?;
                     Ok(Self::Unlink { slot })
                 }
-                RawOperation::CapTableConstruct => todo!(),
+                RawOperation::CapTableConstruct => {
+                    let (region, slot, kind, data) = args.args();
+
+                    let data = data as *const _;
+                    let kind = unsafe {
+                        match kind {
+                            0 => ConstructArgs::CapTable,
+                            1 => ConstructArgs::Thread(*bytemuck::from_bytes(
+                                slice::from_raw_parts(data, core::mem::size_of::<ThreadConsArgs>()),
+                            )),
+                            2 => ConstructArgs::PageTable(*bytemuck::from_bytes(
+                                slice::from_raw_parts(
+                                    data,
+                                    core::mem::size_of::<PageTableConsArgs>(),
+                                ),
+                            )),
+                            _ => return Err(InvalidOperation::InvalidArgument),
+                        }
+                    };
+                    Ok(Self::Construct(ConsArgs {
+                        kind,
+                        region,
+                        slot: slot.try_into()?,
+                    }))
+                }
                 RawOperation::CapTableDrop => todo!(),
                 RawOperation::CapTableCopy => todo!(),
                 _ => Err(InvalidOperation::BadOp),
@@ -170,5 +215,11 @@ pub mod cap_table {
         }
 
         fn convert_success_code(&self, _code: usize) -> Self::R {}
+    }
+}
+
+impl From<TrieIndexError> for InvalidOperation {
+    fn from(_value: TrieIndexError) -> Self {
+        Self::InvalidArgument
     }
 }

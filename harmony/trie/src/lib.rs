@@ -40,6 +40,7 @@ impl<const COUNT: usize, S: Slot<COUNT> + Default> Default for TrieEntry<COUNT, 
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum TrieIndexError {
     OutOfBounds,
 }

@@ -13,9 +13,11 @@ use limine::memory_map::Entry;
 use limine::request::{HhdmRequest, MemoryMapRequest, StackSizeRequest};
 use limine::BaseRevision;
 use sync::cell::AtomicLazyCell;
+use trie::SlotId;
 
 use crate::arch::interrupts;
 use crate::arch::paging::VirtAddr;
+use crate::caps::{CapEntryExtension, PageCapFlags, Resource};
 use crate::retyping::RetypeTable;
 
 pub mod arch;
@@ -61,23 +63,54 @@ extern "C" fn kmain() -> ! {
     use kptr::KPtr;
 
     init();
+    let thread;
 
-    let booter: ExecCtx = {
-        let proc = include_bytes_aligned::include_bytes_aligned!(16, "../../../.build/booter");
-        log::info!("Loading user process");
-        let process =
-            Process::load(proc, 10, UNTYPED_MEMORY_OFFSET, RawFrame::memory_limit()).unwrap();
-        process.into_exec()
-    };
-    let mut fallocator = BumpAllocator::new();
-    let resources = {
-        let frame = fallocator.alloc_untyped_frame().unwrap();
-        KPtr::new(frame, RawCapEntry::default()).unwrap()
-    };
-    let thread = {
-        let frame = fallocator.alloc_untyped_frame().unwrap();
-        KPtr::new(frame, Thread::new_with_ctx(booter, resources)).unwrap()
-    };
+    {
+        let booter: ExecCtx = {
+            let proc = include_bytes_aligned::include_bytes_aligned!(16, "../../../.build/booter");
+            log::info!("Loading user process");
+            let process =
+                Process::load(proc, 10, UNTYPED_MEMORY_OFFSET, RawFrame::memory_limit()).unwrap();
+            process.into_exec()
+        };
+        let mut fallocator = BumpAllocator::new();
+        let resources = {
+            let frame = fallocator.alloc_untyped_frame().unwrap();
+            KPtr::new(frame, RawCapEntry::default()).unwrap()
+        };
+        thread = {
+            let frame = fallocator.alloc_untyped_frame().unwrap();
+            KPtr::new(frame, Thread::new_with_ctx(booter, resources.clone())).unwrap()
+        };
+        log::info!("Adding self capability to slot 0");
+        resources
+            .clone()
+            .index_slot(SlotId::try_from(0).unwrap())
+            .change(|cap| {
+                cap.resource = Resource::CapEntry(resources.clone());
+            });
+        log::info!("Adding thread capability to slot 1");
+        resources
+            .clone()
+            .index_slot(SlotId::try_from(1).unwrap())
+            .change(|cap| {
+                cap.resource = Resource::Thread(thread.clone());
+            });
+        log::info!("Adding page table capability to slot 2");
+        resources
+            .clone()
+            .index_slot(SlotId::try_from(2).unwrap())
+            .change(|cap| {
+                cap.resource = Resource::PageTable {
+                    table: unsafe {
+                        KPtr::from_frame_unchecked(
+                            thread.addrspace().l4_frame().try_as_kernel().unwrap(),
+                        )
+                    },
+                    flags: PageCapFlags::new(4),
+                };
+            });
+    }
 
     log::info!("Jumping to boot component");
     Thread::dispatch(thread, NoopSaver::new());

@@ -1,4 +1,6 @@
 use super::page_table::{PageTableLevel, PageTableOffset};
+use super::PhysAddr;
+use crate::PMO;
 
 #[repr(transparent)]
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -81,5 +83,10 @@ impl VirtAddr {
     #[inline]
     pub const fn page_table_index(self, level: PageTableLevel) -> PageTableOffset {
         PageTableOffset::new_truncate((self.0 >> 12 >> ((level.level() - 1) * 9)) as u16)
+    }
+
+    pub unsafe fn to_physical(&self) -> PhysAddr {
+        let phys = self.0 - PMO.get().as_usize();
+        PhysAddr::new(phys as u64)
     }
 }

@@ -249,7 +249,10 @@ impl UserFrame {
     }
 
     pub fn drop(self) -> u16 {
-        self.entry().decrement().unwrap()
+        let this = ManuallyDrop::new(self);
+        let count = this.entry().decrement().unwrap();
+        log::debug!("Dropping {this:?}: Old count {count}");
+        count
     }
 }
 
@@ -286,21 +289,24 @@ impl KernelFrame {
     }
 
     pub fn drop(self) -> u16 {
-        self.entry().decrement().unwrap()
+        let this = ManuallyDrop::new(self);
+        let count = this.entry().decrement().unwrap();
+        log::debug!("Dropping {this:?}: Old count {count}");
+        count
     }
 }
 
 impl Drop for KernelFrame {
     fn drop(&mut self) {
-        log::trace!("Dropping {self:?}");
-        self.entry().decrement().unwrap();
+        let count = self.entry().decrement().unwrap();
+        log::debug!("Dropping {self:?}: Old count {count}");
     }
 }
 
 impl Drop for UserFrame {
     fn drop(&mut self) {
-        log::trace!("Dropping {self:?}");
-        self.entry().decrement().unwrap();
+        let count = self.entry().decrement().unwrap();
+        log::debug!("Dropping {self:?}: Old count {count}");
     }
 }
 
