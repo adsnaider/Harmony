@@ -41,6 +41,7 @@ impl<T> KPtr<T> {
         assert!(core::mem::align_of::<T>() == PAGE_SIZE);
     };
 
+    #[inline(always)]
     pub fn new(frame: RawFrame, value: T) -> Result<Self, RetypeError> {
         // SAFEYT: Frame is retyped into kernel so no other references to living
         // data exists.
@@ -54,6 +55,7 @@ impl<T> KPtr<T> {
     /// Unused kernel frames must be used. This can generally be guaranteed if
     /// the frame is retyped into a kernel frame as opposed to using a pre-allocated
     /// kernel frame
+    #[inline(always)]
     pub unsafe fn new_unchecked(frame: KernelFrame, value: T) -> Self {
         let frame = frame.into_raw();
         let pointer = frame.addr().to_virtual().as_mut_ptr();

@@ -21,7 +21,7 @@ struct Selectors {
     _user_data_selector: SegmentSelector,
     tss_selector: SegmentSelector,
 }
-const INTERRUPT_STACK_SIZE: usize = PAGE_SIZE * 20;
+const INTERRUPT_STACK_SIZE: usize = PAGE_SIZE * 10;
 #[used]
 static mut INTERRUPT_STACK: [u8; INTERRUPT_STACK_SIZE] = [0; INTERRUPT_STACK_SIZE];
 // FIXME: This needs to be per-core.
