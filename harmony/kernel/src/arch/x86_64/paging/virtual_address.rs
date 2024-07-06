@@ -14,6 +14,18 @@ impl core::fmt::Debug for VirtAddr {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct BadVirtAddr;
 
+impl From<x86_64_impl::VirtAddr> for VirtAddr {
+    fn from(value: x86_64_impl::VirtAddr) -> Self {
+        Self::try_new(value.as_u64() as usize).unwrap()
+    }
+}
+
+impl From<VirtAddr> for x86_64_impl::VirtAddr {
+    fn from(value: VirtAddr) -> Self {
+        Self::try_new(value.0 as u64).unwrap()
+    }
+}
+
 impl VirtAddr {
     pub const fn new(addr: usize) -> Self {
         match Self::try_new(addr) {

@@ -1,5 +1,6 @@
 use core::sync::atomic::{AtomicU64, Ordering};
 
+use x86_64_impl::instructions::tlb;
 use x86_64_impl::registers::control::Cr3;
 pub use x86_64_impl::structures::paging::PageTableFlags;
 
@@ -18,6 +19,23 @@ pub enum MapperError {
     AlreadyMapped(RawFrame),
 }
 
+#[derive(Debug)]
+pub enum UnmapError {
+    NotMapped,
+    HugeParent,
+}
+
+#[must_use]
+pub struct Flusher {
+    page: Page,
+}
+
+impl Flusher {
+    pub fn flush(self) {
+        tlb::flush(self.page.base().into())
+    }
+}
+
 impl<'a> Addrspace<'a> {
     /// Constructs a manipulable Addrspace from the l4 Frame
     ///
@@ -33,6 +51,10 @@ impl<'a> Addrspace<'a> {
         RawFrame::from_start_address(unsafe {
             VirtAddr::from_ptr(self.0 as *const _).to_physical()
         })
+    }
+
+    pub fn current() -> Self {
+        unsafe { Self::from_frame(AnyPageTable::current_raw()) }
     }
 
     /// Constructs a manipulable Addrspace from the top level page table.
@@ -79,7 +101,7 @@ impl<'a> Addrspace<'a> {
         flags: PageTableFlags,
         parent_flags: PageTableFlags,
         frame_allocator: &mut BumpAllocator,
-    ) -> Result<(), MapperError> {
+    ) -> Result<Flusher, MapperError> {
         let mut level = Some(PageTableLevel::top());
         let mut table = self.0;
         let addr = page.base();
@@ -113,7 +135,39 @@ impl<'a> Addrspace<'a> {
                 }
             }
         }
-        Ok(())
+        Ok(Flusher { page })
+    }
+
+    /// Unmaps a virtual page from its physical frame.
+    ///
+    /// # Safety
+    ///
+    /// Creating virtual memory mappings is a fundamentally unsafe operation as it enables
+    /// aliasing (shared memory).
+    pub unsafe fn unmap(
+        &self,
+        page: Page,
+    ) -> Result<(Flusher, RawFrame, PageTableFlags), UnmapError> {
+        let mut level = Some(PageTableLevel::top());
+        let mut table = self.0;
+        let addr = page.base();
+        while let Some(current_level) = level {
+            level = current_level.lower();
+            let offset = addr.page_table_index(current_level);
+            let entry = table.get(offset);
+            if current_level.is_bottom() {
+                return entry
+                    .reset()
+                    .map(|(frame, flags)| (Flusher { page }, frame, flags))
+                    .ok_or(UnmapError::NotMapped);
+            }
+            let (frame, flags) = entry.get().ok_or(UnmapError::NotMapped)?;
+            if flags.contains(PageTableFlags::HUGE_PAGE) {
+                return Err(UnmapError::HugeParent);
+            }
+            table = unsafe { &*frame.base().to_virtual().as_ptr() };
+        }
+        unreachable!();
     }
 }
 

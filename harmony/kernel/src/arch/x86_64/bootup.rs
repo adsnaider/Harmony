@@ -85,7 +85,8 @@ impl Process {
                         PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE,
                         &mut fallocator,
                     )
-                    .unwrap();
+                    .unwrap()
+                    .flush();
             }
         }
 
@@ -109,7 +110,8 @@ impl Process {
                         PageTableFlags::PRESENT,
                         &mut fallocator,
                     )
-                    .unwrap();
+                    .unwrap()
+                    .flush();
             }
         }
 
@@ -178,7 +180,8 @@ impl<'prog, 'head> Segment<'prog, 'head> {
                         PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE,
                         fallocator,
                     )
-                    .unwrap();
+                    .unwrap()
+                    .flush();
             }
 
             let offset_page: *mut u8 = frame.base().to_virtual().as_mut_ptr();

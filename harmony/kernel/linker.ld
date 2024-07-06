@@ -12,6 +12,7 @@ PHDRS
     text    PT_LOAD    FLAGS((1 << 0) | (1 << 2)) ; /* Execute + Read */
     rodata  PT_LOAD    FLAGS((1 << 2)) ;            /* Read only */
     data    PT_LOAD    FLAGS((1 << 1) | (1 << 2)) ; /* Write + Read */
+    interrupt_stack PT_LOAD FLAGS((1 << 1) | (1<< 2)) ;
     dynamic PT_DYNAMIC FLAGS((1 << 1) | (1 << 2)) ; /* Dynamic PHDR for relocations */
 }
 
@@ -22,6 +23,10 @@ SECTIONS
     /* Any address in this region will do, but often 0xffffffff80000000 is chosen as */
     /* that is the beginning of the region. */
     . = 0xffffffff80000000;
+
+    .interrupt_stack : {
+        *(.interrupt_stack)
+    } :interrupt_stack
 
     .text : {
         *(.text .text.*)
@@ -46,6 +51,7 @@ SECTIONS
         *(.dynamic)
     } :data :dynamic
 
+
     /* NOTE: .bss needs to be the last thing mapped to :data, otherwise lots of */
     /* unnecessary zeros will be written to the binary. */
     /* If you need, for example, .init_array and .fini_array, those should be placed */
@@ -54,6 +60,7 @@ SECTIONS
         *(.bss .bss.*)
         *(COMMON)
     } :data
+
 
     /* Discard .note.* and .eh_frame since they may cause issues on some hosts. */
     /DISCARD/ : {

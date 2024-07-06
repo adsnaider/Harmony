@@ -9,7 +9,8 @@ use x86_64_impl::structures::gdt::{Descriptor, GlobalDescriptorTable, SegmentSel
 use x86_64_impl::structures::tss::TaskStateSegment;
 use x86_64_impl::VirtAddr;
 
-use crate::arch::paging::PAGE_SIZE;
+use crate::arch::paging::page_table::Addrspace;
+use crate::arch::paging::{Page, FRAME_SIZE, PAGE_SIZE};
 
 /// The TSS stack table index to be used for the Double Fault exception.
 pub const DOUBLE_FAULT_IST_INDEX: u16 = 0;
@@ -23,7 +24,6 @@ struct Selectors {
     _user_data_selector: SegmentSelector,
     tss_selector: SegmentSelector,
 }
-const INTERRUPT_STACK_SIZE: usize = PAGE_SIZE * 20;
 
 #[repr(C, align(16))]
 #[derive(Debug, Copy, Clone)]
@@ -40,12 +40,24 @@ impl OverAlignedU8 {
     }
 }
 
+const INTERRUPT_STACK_SIZE: usize = PAGE_SIZE * 10;
+
 #[used]
+#[link_section = ".interrupt_stack"]
 static mut INTERRUPT_STACK: [OverAlignedU8; INTERRUPT_STACK_SIZE] = OverAlignedU8::uninit_array();
 // FIXME: This needs to be per-core.
 static TSS: AtomicLazyCell<TaskStateSegment> = AtomicLazyCell::new(|| {
     let mut tss = TaskStateSegment::new();
     tss.interrupt_stack_table[DOUBLE_FAULT_IST_INDEX as usize] = {
+        const STACK_SIZE: usize = PAGE_SIZE;
+        #[used]
+        static mut STACK: [OverAlignedU8; STACK_SIZE] = OverAlignedU8::uninit_array();
+
+        // SAFETY: Although it's a static mut, STACK is only used in this context.
+        let stack_start = VirtAddr::from_ptr(unsafe { STACK.as_slice() });
+        stack_start + STACK_SIZE as u64 // stack end.
+    };
+    tss.interrupt_stack_table[PAGE_FAULT_IST_INDEX as usize] = {
         const STACK_SIZE: usize = PAGE_SIZE;
         #[used]
         static mut STACK: [OverAlignedU8; STACK_SIZE] = OverAlignedU8::uninit_array();
@@ -66,6 +78,7 @@ static TSS: AtomicLazyCell<TaskStateSegment> = AtomicLazyCell::new(|| {
 
 pub(super) fn interrupt_stack_end() -> VirtAddr {
     let start: VirtAddr = VirtAddr::new(unsafe { INTERRUPT_STACK.as_ptr() as u64 });
+    debug_assert_eq!(start.as_u64(), 0xffffffff80000000);
     start + INTERRUPT_STACK_SIZE as u64
 }
 
@@ -103,4 +116,13 @@ pub fn init() {
         load_tss(GDT.1.tss_selector);
     }
     log::info!("Initialized the GDT");
+
+    let addrspace = Addrspace::current();
+    unsafe {
+        if let Ok((flush, ..)) = addrspace.unmap(Page::from_start_address(
+            VirtAddr::new(0xffffffff80000000 - FRAME_SIZE).into(),
+        )) {
+            flush.flush()
+        }
+    }
 }
