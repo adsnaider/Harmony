@@ -13,11 +13,9 @@ use limine::memory_map::Entry;
 use limine::request::{HhdmRequest, MemoryMapRequest, StackSizeRequest};
 use limine::BaseRevision;
 use sync::cell::AtomicLazyCell;
-use trie::SlotId;
 
 use crate::arch::interrupts;
 use crate::arch::paging::VirtAddr;
-use crate::caps::{CapEntryExtension, PageCapFlags, Resource};
 use crate::retyping::RetypeTable;
 
 pub mod arch;
@@ -61,6 +59,9 @@ extern "C" fn kmain() -> ! {
     use caps::RawCapEntry;
     use component::Thread;
     use kptr::KPtr;
+    use trie::SlotId;
+
+    use crate::caps::{CapEntryExtension, PageCapFlags, Resource};
 
     init();
     let thread;
