@@ -2,6 +2,7 @@
 #![no_main]
 
 use librs::kapi::ops::cap_table::{CapTableOp, ConsArgs, ConstructArgs, SlotId, ThreadConsArgs};
+use librs::kapi::ops::thread::ThreadOp;
 use librs::kapi::ops::SyscallOp;
 use librs::println;
 
@@ -14,22 +15,32 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 }
 
 fn foo() -> ! {
+    println!("In a thread!");
+    unsafe {
+        ThreadOp::Activate.syscall(1.into()).unwrap();
+    }
     loop {}
 }
 
 #[no_mangle]
 extern "C" fn _start() -> ! {
+    let mut stack = [0u8; 4096];
     let operation = CapTableOp::Construct(ConsArgs {
         kind: ConstructArgs::Thread(ThreadConsArgs {
             entry: foo as usize,
-            stack_pointer: 0,
+            stack_pointer: &stack as *const _ as usize,
             cap_table: 0.into(),
             page_table: 2.into(),
         }),
-        region: 0x14000,
+        region: 0x590000,
         slot: SlotId::<128>::try_from(4).unwrap(),
     });
     println!("{:?}", operation);
     unsafe { operation.syscall(0.into()) }.expect("Error on syscall");
+    let activate = ThreadOp::Activate;
+    unsafe {
+        activate.syscall(4.into()).unwrap();
+    }
+    println!("We are back!");
     loop {}
 }

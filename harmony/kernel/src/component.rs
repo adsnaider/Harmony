@@ -123,7 +123,7 @@ impl Thread {
                     }
                     CapTableOp::Construct(ConsArgs { kind, region, slot }) => {
                         if region > RawFrame::memory_limit() {
-                            return Err(CapError::InvalidArgument);
+                            return Err(CapError::InvalidFrame);
                         }
                         let page_address = region + UNTYPED_MEMORY_OFFSET;
                         let region = Page::try_from_start_address(
@@ -132,17 +132,15 @@ impl Thread {
                         )
                         .map_err(|_| CapError::InvalidArgument)?;
 
-                        let (frame, flags) = self
-                            .addrspace()
-                            .get(region)
-                            .ok_or(CapError::InvalidArgument)?;
+                        let (frame, flags) =
+                            self.addrspace().get(region).ok_or(CapError::Internal)?;
                         if !flags.contains(PageTableFlags::PRESENT) {
-                            return Err(CapError::InvalidArgument);
+                            return Err(CapError::MissingRightsToFrame);
                         }
                         let resource = match kind {
                             ConstructArgs::CapTable => {
                                 let ptr = KPtr::new(frame, RawCapEntry::default())
-                                    .map_err(|_| CapError::InvalidArgument)?;
+                                    .map_err(|_| CapError::BadFrameType)?;
                                 Resource::CapEntry(ptr)
                             }
                             ConstructArgs::Thread(ThreadConsArgs {
@@ -168,7 +166,7 @@ impl Thread {
                                 }
                                 Resource::Thread(
                                     KPtr::new(frame, Thread::new(regs, page_table, cap_table))
-                                        .map_err(|_| CapError::InvalidArgument)?,
+                                        .map_err(|_| CapError::BadFrameType)?,
                                 )
                             }
                             ConstructArgs::PageTable(PageTableConsArgs { level }) => {
@@ -183,7 +181,7 @@ impl Thread {
                                 let flags = PageCapFlags::new(level);
                                 Resource::PageTable {
                                     table: KPtr::new(frame, table)
-                                        .map_err(|_| CapError::InvalidArgument)?,
+                                        .map_err(|_| CapError::BadFrameType)?,
                                     flags,
                                 }
                             }

@@ -90,6 +90,9 @@ pub enum CapError {
     FrameOutsideOfRegion,
     FrameNotUser,
     Internal,
+    InvalidFrame,
+    MissingRightsToFrame,
+    BadFrameType,
 }
 
 #[derive(Debug, Copy, Clone, TryFromPrimitive, IntoPrimitive)]
