@@ -23,16 +23,17 @@ fn foo() -> ! {
 }
 
 #[no_mangle]
-extern "C" fn _start() -> ! {
+extern "C" fn _start(lowest_frame: usize) -> ! {
+    println!("Lowest frame: {lowest_frame}");
     let mut stack = [0u8; 4096];
     let operation = CapTableOp::Construct(ConsArgs {
         kind: ConstructArgs::Thread(ThreadConsArgs {
             entry: foo as usize,
-            stack_pointer: &stack as *const _ as usize,
+            stack_pointer: &mut stack as *mut u8 as usize,
             cap_table: 0.into(),
             page_table: 2.into(),
         }),
-        region: 0x590000,
+        region: lowest_frame,
         slot: SlotId::<128>::try_from(4).unwrap(),
     });
     println!("{:?}", operation);

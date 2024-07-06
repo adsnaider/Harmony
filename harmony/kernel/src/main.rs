@@ -67,7 +67,7 @@ extern "C" fn kmain() -> ! {
     let thread;
 
     {
-        let booter: ExecCtx = {
+        let mut booter: ExecCtx = {
             let proc = include_bytes_aligned::include_bytes_aligned!(16, "../../../.build/booter");
             log::info!("Loading user process");
             let process =
@@ -81,6 +81,7 @@ extern "C" fn kmain() -> ! {
         };
         thread = {
             let frame = fallocator.alloc_untyped_frame().unwrap();
+            booter.regs_mut().scratch.rdi = fallocator.next_available().base().as_u64();
             KPtr::new(frame, Thread::new_with_ctx(booter, resources.clone())).unwrap()
         };
         log::info!("Adding self capability to slot 0");
