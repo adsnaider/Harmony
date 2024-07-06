@@ -1,6 +1,5 @@
 use super::page_table::{PageTableLevel, PageTableOffset};
 use super::PhysAddr;
-use crate::PMO;
 
 #[repr(transparent)]
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -85,8 +84,12 @@ impl VirtAddr {
         PageTableOffset::new_truncate((self.0 >> 12 >> ((level.level() - 1) * 9)) as u16)
     }
 
+    /// Converts a virtual address to physical assuming the physical memory offset.
+    ///
+    /// # Safety
+    ///
+    /// The virtual address must have been created with `PhysAddr::to_virtual`
     pub unsafe fn to_physical(&self) -> PhysAddr {
-        let phys = self.0 - PMO.get().as_usize();
-        PhysAddr::new(phys as u64)
+        PhysAddr::from_virtual(*self)
     }
 }
