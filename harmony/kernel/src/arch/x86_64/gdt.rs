@@ -1,5 +1,7 @@
 //! Global descriptor table.
 
+use core::mem::MaybeUninit;
+
 use sync::cell::AtomicLazyCell;
 use x86_64_impl::instructions::tables::load_tss;
 use x86_64_impl::registers::segmentation::{Segment, CS, DS, ES, FS, GS, SS};
@@ -22,15 +24,31 @@ struct Selectors {
     tss_selector: SegmentSelector,
 }
 const INTERRUPT_STACK_SIZE: usize = PAGE_SIZE * 20;
+
+#[repr(C, align(16))]
+#[derive(Debug, Copy, Clone)]
+struct OverAlignedU8(MaybeUninit<u8>);
+
+impl OverAlignedU8 {
+    pub const fn uninit() -> Self {
+        Self(MaybeUninit::uninit())
+    }
+
+    pub const fn uninit_array<const N: usize>() -> [Self; N] {
+        // SAFETY: An uninitialized `[MaybeUninit<_>; LEN]` is valid.
+        unsafe { MaybeUninit::<[Self; N]>::uninit().assume_init() }
+    }
+}
+
 #[used]
-static mut INTERRUPT_STACK: [u8; INTERRUPT_STACK_SIZE] = [0; INTERRUPT_STACK_SIZE];
+static mut INTERRUPT_STACK: [OverAlignedU8; INTERRUPT_STACK_SIZE] = OverAlignedU8::uninit_array();
 // FIXME: This needs to be per-core.
 static TSS: AtomicLazyCell<TaskStateSegment> = AtomicLazyCell::new(|| {
     let mut tss = TaskStateSegment::new();
     tss.interrupt_stack_table[DOUBLE_FAULT_IST_INDEX as usize] = {
         const STACK_SIZE: usize = PAGE_SIZE;
         #[used]
-        static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
+        static mut STACK: [OverAlignedU8; STACK_SIZE] = OverAlignedU8::uninit_array();
 
         // SAFETY: Although it's a static mut, STACK is only used in this context.
         let stack_start = VirtAddr::from_ptr(unsafe { STACK.as_slice() });

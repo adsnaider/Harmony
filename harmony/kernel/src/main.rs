@@ -82,6 +82,8 @@ extern "C" fn kmain() -> ! {
         thread = {
             let frame = fallocator.alloc_untyped_frame().unwrap();
             booter.regs_mut().scratch.rdi = fallocator.next_available().base().as_u64();
+            // Sysv64 alignment
+            booter.regs_mut().control.rsp -= 8;
             KPtr::new(frame, Thread::new_with_ctx(booter, resources.clone())).unwrap()
         };
         log::info!("Adding self capability to slot 0");
