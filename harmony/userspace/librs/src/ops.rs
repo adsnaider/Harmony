@@ -71,7 +71,6 @@ impl Thread {
 
     pub unsafe fn activate(&self) -> Result<(), CapError> {
         ThreadOp::Activate.syscall(self.id)?;
-        crate::println!("Came back");
         Ok(())
     }
 }

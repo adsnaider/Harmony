@@ -4,13 +4,6 @@ use crate::component::Thread;
 use crate::sprint;
 
 pub extern "sysv64" fn handle(a: usize, b: usize, c: usize, d: usize, e: usize, f: usize) -> isize {
-    if a == usize::MAX {
-        let ptr = c as *const u8;
-        let msg = unsafe { core::slice::from_raw_parts(ptr, d) };
-        let msg = unsafe { core::str::from_utf8_unchecked(msg) };
-        sprint!("{}", msg);
-        return 0;
-    }
     log::debug!("SYSCALL: {a}, {b}, {c}, {d}, {e}, {f}");
     let thread = Thread::current().unwrap();
 
