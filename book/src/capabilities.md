@@ -18,28 +18,25 @@ be applied to different resources. Resources include:
 - Threads
 - Page Tables
 - Synchronous Invocations
-- Hardware access
 - Capability Tables
 - etc.
 
 As you can see, capability tables themselves are resources abstracted by the
 kernel. This is an intentional decision that enables our kernel to remain small.
-As you may imagine, having a capaiblity to a capability table should not be done
-lightly. As such, most userspace components will not have a capability to a
-capability table.
+However, most userspace components will not have a capability to a capability
+table.
 
 ## Capabilities are Just File Descriptors
 
-Well, actually it makes more sense to think about it the other way around.
+Well, actually it makes more sense to think about it the other way around:
 File descriptors are just capabilities. In a unix system, when you have a file
-descriptor (represented as a number), you have a key to a resource (a file).
+descriptor (represented by a number), you have a key to a resource (a file).
 This key enables many operations to be performed on this file (read, write,
 append, delete, etc.).
 
 This idea can be extended to many resources in the system. For instance, by
-having a capaiblity to a thread control block, one can "activate" it or delete
-it. By having the capaiblity to a synchronous invocation, one can perform
-synchronous IPC.
+having a capaiblity to a thread, one can "activate" it. Similarily, by having
+the capaiblity to a synchronous invocation, one can perform synchronous IPC.
 
 ## Implementation
 
@@ -53,3 +50,7 @@ nodes. That's 6 bits per level, so for a 32 bit key, we would gurantee a maximum
 depth of 6. In general, the key lookup will always follow a `log(b)` where `b`
 is the bit-width of the key.
 
+# Next Up
+
+The rest of this chapter will focus on each individual capability along with
+their operations.
