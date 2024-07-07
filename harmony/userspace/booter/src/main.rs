@@ -1,10 +1,13 @@
 #![no_std]
 #![no_main]
 
+use core::fmt::Write;
+
 use librs::kapi::ops::cap_table::SlotId;
 use librs::kapi::raw::CapId;
-use librs::ops::{CapTable, PageTable, PhysFrame, Thread};
+use librs::ops::{CapTable, HardwareAccess, PageTable, PhysFrame, Thread};
 use librs::println;
+use uart_16550::SerialPort;
 
 #[cfg(not(test))]
 #[panic_handler]
@@ -30,6 +33,7 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
     let resources = CapTable::new(CapId::new(0));
     let current_thread = Thread::new(CapId::new(1));
     let page_table = PageTable::new(CapId::new(2));
+    let hardware_access = HardwareAccess::new(CapId::new(3));
 
     println!("{:?}", &current_thread as *const Thread);
 
@@ -53,5 +57,10 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
     }
 
     println!("We are back!");
+    hardware_access.enable_ports();
+
+    let mut serial_port = unsafe { SerialPort::new(0x3F8) };
+    serial_port.init();
+    serial_port.write_fmt(format_args!("Hi, this is writing for userspace\n"));
     loop {}
 }

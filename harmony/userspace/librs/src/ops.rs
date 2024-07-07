@@ -4,6 +4,7 @@
 //! kernel APIs.
 
 use kapi::ops::cap_table::{CapTableOp, ConsArgs, ConstructArgs, SlotId, ThreadConsArgs};
+use kapi::ops::hardware::HardwareOp;
 use kapi::ops::thread::ThreadOp;
 use kapi::ops::SyscallOp as _;
 use kapi::raw::{CapError, CapId};
@@ -84,5 +85,20 @@ pub struct PageTable {
 impl PageTable {
     pub fn new(id: CapId) -> Self {
         Self { id }
+    }
+}
+
+pub struct HardwareAccess {
+    id: CapId,
+}
+
+impl HardwareAccess {
+    pub fn new(id: CapId) -> Self {
+        Self { id }
+    }
+
+    pub fn enable_ports(&self) -> Result<(), CapError> {
+        unsafe { HardwareOp::EnableIoPorts.syscall(self.id) }?;
+        Ok(())
     }
 }

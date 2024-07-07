@@ -5,6 +5,7 @@ use core::cell::{RefCell, UnsafeCell};
 use kapi::ops::cap_table::{
     CapTableOp, ConsArgs, ConstructArgs, PageTableConsArgs, ThreadConsArgs,
 };
+use kapi::ops::hardware::HardwareOp;
 use kapi::ops::thread::ThreadOp;
 use kapi::ops::SyscallOp as _;
 use kapi::raw::{CapError, CapId, SyscallArgs};
@@ -98,8 +99,7 @@ impl Thread {
         match slot.resource {
             Resource::Empty => Err(CapError::NotFound),
             Resource::CapEntry(capability_table) => {
-                let operation =
-                    CapTableOp::from_args(args).map_err(|_| CapError::InvalidArgument)?;
+                let operation = CapTableOp::from_args(args)?;
                 match operation {
                     CapTableOp::Link {
                         other_table_cap,
@@ -204,7 +204,7 @@ impl Thread {
                 }
             }
             Resource::Thread(thread) => {
-                let operation = ThreadOp::from_args(args).map_err(|_| CapError::InvalidArgument)?;
+                let operation = ThreadOp::from_args(args)?;
                 match operation {
                     ThreadOp::Activate => {
                         // SAFETY: Running a syscall.
@@ -215,6 +215,19 @@ impl Thread {
                 }
             }
             Resource::PageTable { table: _, flags: _ } => todo!(),
+            Resource::HardwareAccess => {
+                let op = HardwareOp::from_args(args)?;
+                match op {
+                    HardwareOp::EnableIoPorts => {
+                        const IOPL3: u64 = 0x3000;
+                        unsafe {
+                            let flags = SyscallCtx::get_flags();
+                            SyscallCtx::update_flags(flags | IOPL3);
+                        }
+                        Ok(0)
+                    }
+                }
+            }
         }
     }
 }

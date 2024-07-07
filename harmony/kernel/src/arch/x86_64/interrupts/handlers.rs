@@ -44,6 +44,31 @@ impl SyscallCtx {
             preserved_regs: unsafe { preserved.assume_init() },
         }
     }
+
+    /// Updates the rflags register on this syscall.
+    ///
+    /// Note that this will update the rflags iff the syscall returns normally (i.e. no
+    /// thread dispatching).
+    ///
+    /// # Safety
+    ///
+    /// Must be currently handling a syscall.
+    pub unsafe fn update_flags(flags: u64) {
+        let stack_end: *mut u64 = gdt::interrupt_stack_end().as_mut_ptr();
+        unsafe {
+            *stack_end.sub(3) = flags;
+        }
+    }
+
+    /// Gets the rflags registers (as it was before the syscall).
+    ///
+    /// # Safety
+    ///
+    /// Must be currently handling a syscall.
+    pub unsafe fn get_flags() -> u64 {
+        let stack_end: *mut u64 = gdt::interrupt_stack_end().as_mut_ptr();
+        unsafe { *stack_end.sub(3) }
+    }
 }
 
 pub struct IrqCtx {

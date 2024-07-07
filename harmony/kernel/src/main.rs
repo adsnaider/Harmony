@@ -114,6 +114,12 @@ extern "C" fn kmain() -> ! {
                     flags: PageCapFlags::new(4),
                 };
             });
+
+        log::info!("Adding hardware access capability to slot 3");
+        resources
+            .clone()
+            .index_slot(SlotId::try_from(3).unwrap())
+            .change(|cap| cap.resource = Resource::HardwareAccess);
     }
 
     log::info!("Jumping to boot component");

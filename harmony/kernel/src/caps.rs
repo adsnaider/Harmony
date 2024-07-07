@@ -154,6 +154,7 @@ pub enum Resource {
         table: KPtr<AnyPageTable>,
         flags: PageCapFlags,
     },
+    HardwareAccess,
 }
 
 #[repr(transparent)]

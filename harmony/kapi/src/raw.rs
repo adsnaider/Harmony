@@ -61,6 +61,7 @@ pub enum RawOperation {
     PageTableUnlink,
     MemoryRegionRetype,
     MemoryRegionSplit,
+    HardwareAccessEnable,
 }
 
 #[derive(Debug, Copy, Clone, TryFromPrimitive, IntoPrimitive)]
