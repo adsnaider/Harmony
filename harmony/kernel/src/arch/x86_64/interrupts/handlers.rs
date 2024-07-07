@@ -34,7 +34,7 @@ impl SyscallCtx {
         let mut preserved: MaybeUninit<PreservedRegs> = MaybeUninit::uninit();
         unsafe {
             core::ptr::copy_nonoverlapping(
-                stack_end.sub(12) as *const PreservedRegs,
+                stack_end.sub(11) as *const PreservedRegs,
                 preserved.as_mut_ptr(),
                 1,
             );
@@ -74,7 +74,7 @@ impl IrqCtx {
         let mut preserved: MaybeUninit<PreservedRegs> = MaybeUninit::uninit();
         unsafe {
             core::ptr::copy_nonoverlapping(
-                stack_end.sub(12) as *const PreservedRegs,
+                stack_end.sub(11) as *const PreservedRegs,
                 preserved.as_mut_ptr(),
                 1,
             );
@@ -82,7 +82,7 @@ impl IrqCtx {
         let mut scratch: MaybeUninit<ScratchRegs> = MaybeUninit::uninit();
         unsafe {
             core::ptr::copy_nonoverlapping(
-                stack_end.sub(21) as *const ScratchRegs,
+                stack_end.sub(20) as *const ScratchRegs,
                 scratch.as_mut_ptr(),
                 1,
             );
