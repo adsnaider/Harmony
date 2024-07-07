@@ -10,7 +10,7 @@ use kapi::ops::SyscallOp as _;
 use kapi::raw::{CapError, CapId, SyscallArgs};
 use sync::cell::AtomicOnceCell;
 
-use crate::arch::exec::{ControlRegs, ExecCtx, Regs, SaveState};
+use crate::arch::exec::{ControlRegs, ExecCtx, Regs, SaveState, ScratchRegs};
 use crate::arch::interrupts::SyscallCtx;
 use crate::arch::paging::page_table::{Addrspace, AnyPageTable, PageTableFlags};
 use crate::arch::paging::{Page, RawFrame, VirtAddr};
@@ -78,7 +78,6 @@ impl Thread {
         // 2. rflags register needs to be valid (interrupts enabled, ring 3 execution, etc.)
         // 3. stack register needs to be whatever it was before syscall
         // 4. All callee-saved registers need to be set back (done in userspace)
-        // SAFETY: Running a syscall.
         {
             let mut current = ACTIVE_THREAD.get().unwrap().get().borrow_mut();
             if let Some(ref current) = *current {
@@ -148,12 +147,17 @@ impl Thread {
                                 stack_pointer,
                                 cap_table,
                                 page_table,
+                                arg0,
                             }) => {
                                 let regs = Regs {
                                     control: ControlRegs {
                                         rip: entry as u64,
                                         rsp: stack_pointer as u64,
                                         rflags: 0x202,
+                                    },
+                                    scratch: ScratchRegs {
+                                        rdi: arg0 as u64,
+                                        ..Default::default()
                                     },
                                     ..Default::default()
                                 };
@@ -203,6 +207,7 @@ impl Thread {
                 let operation = ThreadOp::from_args(args).map_err(|_| CapError::InvalidArgument)?;
                 match operation {
                     ThreadOp::Activate => {
+                        // SAFETY: Running a syscall.
                         let ctx = unsafe { SyscallCtx::current() };
                         Thread::dispatch(thread, ctx);
                     }

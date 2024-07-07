@@ -86,6 +86,7 @@ pub mod cap_table {
         pub stack_pointer: usize,
         pub cap_table: CapId,
         pub page_table: CapId,
+        pub arg0: usize,
     }
 
     #[repr(C)]

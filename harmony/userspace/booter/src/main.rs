@@ -1,9 +1,9 @@
 #![no_std]
 #![no_main]
 
-use librs::kapi::ops::cap_table::{CapTableOp, ConsArgs, ConstructArgs, SlotId, ThreadConsArgs};
-use librs::kapi::ops::thread::ThreadOp;
-use librs::kapi::ops::SyscallOp;
+use librs::kapi::ops::cap_table::SlotId;
+use librs::kapi::raw::CapId;
+use librs::ops::{CapTable, PageTable, PhysFrame, Thread};
 use librs::println;
 
 #[cfg(not(test))]
@@ -14,34 +14,44 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
-fn foo() -> ! {
+extern "C" fn foo(arg0: usize) -> ! {
+    println!("{:?}", arg0 as *const Thread);
+    let main_thread = unsafe { &*(arg0 as *const Thread) };
+    println!("{:?}", main_thread);
     println!("In a thread!");
     unsafe {
-        ThreadOp::Activate.syscall(1.into()).unwrap();
+        main_thread.activate().unwrap();
     }
-    loop {}
+    unreachable!();
 }
 
 #[no_mangle]
 extern "C" fn _start(lowest_frame: usize) -> ! {
-    println!("Lowest frame: {lowest_frame}");
+    let resources = CapTable::new(CapId::new(0));
+    let current_thread = Thread::new(CapId::new(1));
+    let page_table = PageTable::new(CapId::new(2));
+
+    println!("{:?}", &current_thread as *const Thread);
+
     let mut stack = [0u8; 4096];
-    let operation = CapTableOp::Construct(ConsArgs {
-        kind: ConstructArgs::Thread(ThreadConsArgs {
-            entry: foo as usize,
-            stack_pointer: &mut stack as *mut u8 as usize,
-            cap_table: 0.into(),
-            page_table: 2.into(),
-        }),
-        region: lowest_frame,
-        slot: SlotId::<128>::try_from(4).unwrap(),
-    });
-    println!("{:?}", operation);
-    unsafe { operation.syscall(0.into()) }.expect("Error on syscall");
-    let activate = ThreadOp::Activate;
     unsafe {
-        activate.syscall(4.into()).unwrap();
+        resources
+            .make_thread(
+                foo,
+                (&mut stack as *mut u8).add(stack.len()),
+                resources,
+                page_table,
+                SlotId::new(4).unwrap(),
+                PhysFrame::new(lowest_frame),
+                &current_thread as *const _ as usize,
+            )
+            .unwrap()
+    };
+    let t2 = Thread::new(CapId::new(4));
+    unsafe {
+        t2.activate().unwrap();
     }
+
     println!("We are back!");
     loop {}
 }

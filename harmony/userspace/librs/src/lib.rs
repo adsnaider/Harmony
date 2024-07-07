@@ -1,6 +1,7 @@
 #![no_std]
 
 pub use kapi;
+pub mod ops;
 
 pub mod serial {
     use core::fmt::Write;

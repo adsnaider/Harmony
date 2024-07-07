@@ -21,23 +21,7 @@ pub unsafe extern "sysv64" fn raw_syscall(
     _f: usize,
 ) -> isize {
     // NOTE: We don't need to align the stack on an int instruction.
-    asm!(
-        "push rbx",
-        "push rbp",
-        "push r12",
-        "push r13",
-        "push r14",
-        "push r15",
-        "int 0x80",
-        "pop r15",
-        "pop r14",
-        "pop r13",
-        "pop r12",
-        "pop rbp",
-        "pop rbx",
-        "ret",
-        options(noreturn)
-    );
+    asm!("int 0x80", "ret", options(noreturn));
 }
 
 /// Performs a syscall
@@ -169,6 +153,12 @@ impl SyscallArgs<'_> {
 #[repr(transparent)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord, AnyBitPattern, NoUninit)]
 pub struct CapId(u32);
+
+impl CapId {
+    pub fn new(id: u32) -> Self {
+        Self(id)
+    }
+}
 
 pub struct OutOfBounds;
 

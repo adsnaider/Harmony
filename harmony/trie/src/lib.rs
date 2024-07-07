@@ -14,6 +14,12 @@ pub struct TrieEntry<const COUNT: usize, S: Slot<COUNT>> {
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
 pub struct SlotId<const COUNT: usize>(usize);
 
+impl<const COUNT: usize> SlotId<COUNT> {
+    pub fn new(id: usize) -> Result<Self, TrieIndexError> {
+        Self::try_from(id)
+    }
+}
+
 impl<const COUNT: usize> TryFrom<usize> for SlotId<COUNT> {
     type Error = TrieIndexError;
 
