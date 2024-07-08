@@ -12,6 +12,7 @@ pub enum ConstructArgs {
     CapTable = 0,
     Thread(ThreadConsArgs),
     PageTable(PageTableConsArgs),
+    SyncCall(SyncCallConsArgs),
 }
 
 #[repr(C)]
@@ -28,6 +29,14 @@ pub struct ThreadConsArgs {
 #[derive(Debug, Copy, Clone, AnyBitPattern, NoUninit)]
 pub struct PageTableConsArgs {
     pub level: u8,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, AnyBitPattern, NoUninit)]
+pub struct SyncCallConsArgs {
+    pub entry: usize,
+    pub cap_table: CapId,
+    pub page_table: CapId,
 }
 
 #[repr(C)]
@@ -81,6 +90,9 @@ impl<const SLOT_COUNT: usize> SyscallOp for CapTableOp<SLOT_COUNT> {
                     ConstructArgs::CapTable => (0, [].as_slice()),
                     ConstructArgs::Thread(ref thd_args) => (1, bytemuck::bytes_of(thd_args)),
                     ConstructArgs::PageTable(ref pgt_args) => (2, bytemuck::bytes_of(pgt_args)),
+                    ConstructArgs::SyncCall(ref sync_call_args) => {
+                        (3, bytemuck::bytes_of(sync_call_args))
+                    }
                 };
                 SyscallArgs::new(
                     RawOperation::CapTableConstruct as usize,

@@ -11,7 +11,7 @@ use crate::arch::paging::PAGE_SIZE;
 use crate::component::Thread;
 use crate::kptr::KPtr;
 
-const SLOT_SIZE: usize = 32;
+const SLOT_SIZE: usize = 64;
 const NUM_SLOTS: usize = PAGE_SIZE / SLOT_SIZE;
 
 /// A page-wide trie node for the capability tables.
@@ -109,7 +109,7 @@ impl CapSlot {
     }
 }
 
-#[repr(transparent)]
+#[repr(align(64))]
 #[derive(Debug, Default)]
 pub struct AtomicCapSlot(AtomicCell<CapSlot>);
 
@@ -145,6 +145,7 @@ const _SIZE_OF_ENTRY: () = {
 };
 
 #[derive(Default, Debug, Clone)]
+#[repr(align(8))]
 pub enum Resource {
     #[default]
     Empty,
@@ -155,6 +156,11 @@ pub enum Resource {
         flags: PageCapFlags,
     },
     HardwareAccess,
+    SyncCall {
+        entry: usize,
+        cap_table: KPtr<RawCapEntry>,
+        page_table: KPtr<AnyPageTable>,
+    },
 }
 
 #[repr(transparent)]

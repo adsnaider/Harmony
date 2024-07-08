@@ -3,7 +3,7 @@
 use core::cell::{RefCell, UnsafeCell};
 
 use kapi::ops::cap_table::{
-    CapTableOp, ConsArgs, ConstructArgs, PageTableConsArgs, ThreadConsArgs,
+    CapTableOp, ConsArgs, ConstructArgs, PageTableConsArgs, SyncCallConsArgs, ThreadConsArgs,
 };
 use kapi::ops::hardware::HardwareOp;
 use kapi::ops::thread::ThreadOp;
@@ -189,6 +189,21 @@ impl Thread {
                                     flags,
                                 }
                             }
+                            ConstructArgs::SyncCall(SyncCallConsArgs {
+                                entry,
+                                cap_table,
+                                page_table,
+                            }) => {
+                                let cap_table: KPtr<RawCapEntry> =
+                                    self.resources.clone().get_resource_as(cap_table)?;
+                                let (page_table, _): (KPtr<AnyPageTable>, PageCapFlags) =
+                                    self.resources.clone().get_resource_as(page_table)?;
+                                Resource::SyncCall {
+                                    entry,
+                                    cap_table,
+                                    page_table,
+                                }
+                            }
                         };
                         capability_table.index_slot(slot).change(|cap| {
                             cap.resource = resource;
@@ -228,6 +243,11 @@ impl Thread {
                     }
                 }
             }
+            Resource::SyncCall {
+                entry,
+                cap_table,
+                page_table,
+            } => todo!(),
         }
     }
 }
