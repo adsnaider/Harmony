@@ -94,24 +94,31 @@ extern "C" fn kmain() -> ! {
             )
             .unwrap()
         };
-        log::info!("Adding self capability to slot 0");
+        log::info!("Adding sync return capability to slot 0");
         resources
             .clone()
             .index_slot(SlotId::try_from(0).unwrap())
             .change(|cap| {
-                cap.resource = Resource::CapEntry(resources.clone());
+                cap.resource = Resource::SyncRet;
             });
-        log::info!("Adding thread capability to slot 1");
+        log::info!("Adding self capability to slot 1");
         resources
             .clone()
             .index_slot(SlotId::try_from(1).unwrap())
             .change(|cap| {
-                cap.resource = Resource::Thread(thread.clone());
+                cap.resource = Resource::CapEntry(resources.clone());
             });
-        log::info!("Adding page table capability to slot 2");
+        log::info!("Adding thread capability to slot 2");
         resources
             .clone()
             .index_slot(SlotId::try_from(2).unwrap())
+            .change(|cap| {
+                cap.resource = Resource::Thread(thread.clone());
+            });
+        log::info!("Adding page table capability to slot 3");
+        resources
+            .clone()
+            .index_slot(SlotId::try_from(3).unwrap())
             .change(|cap| {
                 cap.resource = Resource::PageTable {
                     table: unsafe {
@@ -128,10 +135,10 @@ extern "C" fn kmain() -> ! {
                 };
             });
 
-        log::info!("Adding hardware access capability to slot 3");
+        log::info!("Adding hardware access capability to slot 4");
         resources
             .clone()
-            .index_slot(SlotId::try_from(3).unwrap())
+            .index_slot(SlotId::try_from(4).unwrap())
             .change(|cap| cap.resource = Resource::HardwareAccess);
     }
 
