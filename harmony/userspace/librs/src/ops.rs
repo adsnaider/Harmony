@@ -3,7 +3,9 @@
 //! This module provides a higher-level set of operations to raw
 //! kernel APIs.
 
-use kapi::ops::cap_table::{CapTableOp, ConsArgs, ConstructArgs, SlotId, ThreadConsArgs};
+use kapi::ops::cap_table::{
+    CapTableOp, ConsArgs, ConstructArgs, SlotId, SyncCallConsArgs, ThreadConsArgs,
+};
 use kapi::ops::hardware::HardwareOp;
 use kapi::ops::thread::ThreadOp;
 use kapi::ops::SyscallOp as _;
@@ -47,8 +49,29 @@ impl CapTable {
                 cap_table: resources.id,
                 page_table: page_table.id,
                 arg0,
+                region: construct_frame.0,
             }),
-            region: construct_frame.0,
+            slot: construct_slot,
+        });
+        unsafe {
+            op.syscall(self.id)?;
+        }
+        Ok(())
+    }
+
+    pub unsafe fn make_sync_call(
+        &self,
+        entry: extern "C" fn(usize, usize, usize, usize) -> usize,
+        resources: CapTable,
+        page_table: PageTable,
+        construct_slot: SlotId<128>,
+    ) -> Result<(), CapError> {
+        let op = CapTableOp::Construct(ConsArgs {
+            kind: ConstructArgs::SyncCall(SyncCallConsArgs {
+                entry: entry as usize,
+                cap_table: resources.id,
+                page_table: page_table.id,
+            }),
             slot: construct_slot,
         });
         unsafe {

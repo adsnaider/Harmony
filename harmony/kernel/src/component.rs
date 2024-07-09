@@ -4,7 +4,8 @@ use core::cell::{RefCell, UnsafeCell};
 
 use heapless::Vec;
 use kapi::ops::cap_table::{
-    CapTableOp, ConsArgs, ConstructArgs, PageTableConsArgs, SyncCallConsArgs, ThreadConsArgs,
+    CapTableConsArgs, CapTableOp, ConsArgs, ConstructArgs, PageTableConsArgs, SyncCallConsArgs,
+    ThreadConsArgs,
 };
 use kapi::ops::hardware::HardwareOp;
 use kapi::ops::ipc::{SyncCallOp, SyncRetOp};
@@ -139,27 +140,10 @@ impl Thread {
                         });
                         Ok(0)
                     }
-                    CapTableOp::Construct(ConsArgs { kind, region, slot }) => {
-                        if region > RawFrame::memory_limit() {
-                            return Err(CapError::InvalidFrame);
-                        }
-                        let page_address = region + UNTYPED_MEMORY_OFFSET;
-                        let region = Page::try_from_start_address(
-                            VirtAddr::try_new(page_address)
-                                .map_err(|_| CapError::InvalidArgument)?,
-                        )
-                        .map_err(|_| CapError::InvalidArgument)?;
-
-                        let (frame, flags) = self
-                            .component()
-                            .addrspace()
-                            .get(region)
-                            .ok_or(CapError::Internal)?;
-                        if !flags.contains(PageTableFlags::PRESENT) {
-                            return Err(CapError::MissingRightsToFrame);
-                        }
+                    CapTableOp::Construct(ConsArgs { kind, slot }) => {
                         let resource = match kind {
-                            ConstructArgs::CapTable => {
+                            ConstructArgs::CapTable(CapTableConsArgs { region }) => {
+                                let frame = self.component().allocate_as_kernel(region)?;
                                 let ptr = KPtr::new(frame, RawCapEntry::default())
                                     .map_err(|_| CapError::BadFrameType)?;
                                 Resource::CapEntry(ptr)
@@ -170,7 +154,9 @@ impl Thread {
                                 cap_table,
                                 page_table,
                                 arg0,
+                                region,
                             }) => {
+                                let frame = self.component().allocate_as_kernel(region)?;
                                 let regs = Regs {
                                     control: ControlRegs {
                                         rip: entry as u64,
@@ -204,7 +190,12 @@ impl Thread {
                                     .map_err(|_| CapError::BadFrameType)?,
                                 )
                             }
-                            ConstructArgs::PageTable(PageTableConsArgs { level }) => {
+                            ConstructArgs::PageTable(PageTableConsArgs {
+                                level,
+                                region,
+                                _padding,
+                            }) => {
+                                let frame = self.component().allocate_as_kernel(region)?;
                                 if level > 4 || level == 0 {
                                     return Err(CapError::InvalidArgument);
                                 }
@@ -328,5 +319,22 @@ impl Component {
 
     pub fn addrspace(&self) -> Addrspace<'_> {
         unsafe { self.page_table.as_addrspace() }
+    }
+
+    fn allocate_as_kernel(&self, region: usize) -> Result<RawFrame, CapError> {
+        if region > RawFrame::memory_limit() {
+            return Err(CapError::InvalidFrame);
+        }
+        let page_address = region + UNTYPED_MEMORY_OFFSET;
+        let region = Page::try_from_start_address(
+            VirtAddr::try_new(page_address).map_err(|_| CapError::InvalidArgument)?,
+        )
+        .map_err(|_| CapError::InvalidArgument)?;
+
+        let (frame, flags) = self.addrspace().get(region).ok_or(CapError::Internal)?;
+        if !flags.contains(PageTableFlags::PRESENT) {
+            return Err(CapError::MissingRightsToFrame);
+        }
+        Ok(frame)
     }
 }

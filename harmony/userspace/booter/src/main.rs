@@ -63,3 +63,8 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
     sprintln!("We are back!");
     loop {}
 }
+
+extern "C" fn sync_call(a: usize, b: usize, c: usize, d: usize) -> usize {
+    sprintln!("This is a synchronous invocation!");
+    0
+}
