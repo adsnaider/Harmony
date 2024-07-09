@@ -53,11 +53,11 @@ pub static PMO: AtomicLazyCell<VirtAddr> = AtomicLazyCell::new(|| {
 #[no_mangle]
 extern "C" fn kmain() -> ! {
     use arch::bootup::Process;
-    use arch::exec::{ExecCtx, NoopSaver};
+    use arch::exec::NoopSaver;
     use arch::paging::RawFrame;
     use bump_allocator::BumpAllocator;
     use caps::RawCapEntry;
-    use component::Thread;
+    use component::{Component, Thread};
     use kptr::KPtr;
     use trie::SlotId;
 
@@ -67,12 +67,12 @@ extern "C" fn kmain() -> ! {
     let thread;
 
     {
-        let mut booter: ExecCtx = {
+        let (mut boot_regs, boot_page_table) = {
             let proc = include_bytes_aligned::include_bytes_aligned!(16, "../../../.build/booter");
             log::info!("Loading user process");
             let process =
                 Process::load(proc, 10, UNTYPED_MEMORY_OFFSET, RawFrame::memory_limit()).unwrap();
-            process.into_exec()
+            process.into_parts()
         };
         let mut fallocator = BumpAllocator::new();
         let resources = {
@@ -81,44 +81,63 @@ extern "C" fn kmain() -> ! {
         };
         thread = {
             let frame = fallocator.alloc_untyped_frame().unwrap();
-            booter.regs_mut().scratch.rdi = fallocator.next_available().base().as_u64();
+            boot_regs.scratch.rdi = fallocator.next_available().base().as_u64();
             // Sysv64 alignment
-            booter.regs_mut().control.rsp -= 8;
-            KPtr::new(frame, Thread::new_with_ctx(booter, resources.clone())).unwrap()
+            boot_regs.control.rsp -= 8;
+            KPtr::new(
+                frame,
+                Thread::new(
+                    boot_regs,
+                    Component::new(resources.clone(), boot_page_table),
+                ),
+            )
+            .unwrap()
         };
-        log::info!("Adding self capability to slot 0");
+        log::info!("Adding sync return capability to slot 0");
         resources
             .clone()
             .index_slot(SlotId::try_from(0).unwrap())
             .change(|cap| {
-                cap.resource = Resource::CapEntry(resources.clone());
+                cap.resource = Resource::SyncRet;
             });
-        log::info!("Adding thread capability to slot 1");
+        log::info!("Adding self capability to slot 1");
         resources
             .clone()
             .index_slot(SlotId::try_from(1).unwrap())
             .change(|cap| {
-                cap.resource = Resource::Thread(thread.clone());
+                cap.resource = Resource::CapEntry(resources.clone());
             });
-        log::info!("Adding page table capability to slot 2");
+        log::info!("Adding thread capability to slot 2");
         resources
             .clone()
             .index_slot(SlotId::try_from(2).unwrap())
             .change(|cap| {
+                cap.resource = Resource::Thread(thread.clone());
+            });
+        log::info!("Adding page table capability to slot 3");
+        resources
+            .clone()
+            .index_slot(SlotId::try_from(3).unwrap())
+            .change(|cap| {
                 cap.resource = Resource::PageTable {
                     table: unsafe {
                         KPtr::from_frame_unchecked(
-                            thread.addrspace().l4_frame().try_as_kernel().unwrap(),
+                            thread
+                                .component()
+                                .addrspace()
+                                .l4_frame()
+                                .try_as_kernel()
+                                .unwrap(),
                         )
                     },
                     flags: PageCapFlags::new(4),
                 };
             });
 
-        log::info!("Adding hardware access capability to slot 3");
+        log::info!("Adding hardware access capability to slot 4");
         resources
             .clone()
-            .index_slot(SlotId::try_from(3).unwrap())
+            .index_slot(SlotId::try_from(4).unwrap())
             .change(|cap| cap.resource = Resource::HardwareAccess);
     }
 

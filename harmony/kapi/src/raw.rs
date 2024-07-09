@@ -62,6 +62,8 @@ pub enum RawOperation {
     MemoryRegionRetype,
     MemoryRegionSplit,
     HardwareAccessEnable,
+    SyncCall,
+    SyncRet,
 }
 
 #[derive(Debug, Copy, Clone, TryFromPrimitive, IntoPrimitive)]
@@ -78,6 +80,8 @@ pub enum CapError {
     InvalidFrame,
     MissingRightsToFrame,
     BadFrameType,
+    SyncCallLimit,
+    SyncRetBottom,
 }
 
 #[derive(Debug, Copy, Clone, TryFromPrimitive, IntoPrimitive)]

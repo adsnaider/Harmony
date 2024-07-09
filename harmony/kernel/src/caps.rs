@@ -8,10 +8,10 @@ use trie::{Ptr, Slot, SlotId, TrieEntry};
 
 use crate::arch::paging::page_table::AnyPageTable;
 use crate::arch::paging::PAGE_SIZE;
-use crate::component::Thread;
+use crate::component::{Component, Thread};
 use crate::kptr::KPtr;
 
-const SLOT_SIZE: usize = 32;
+const SLOT_SIZE: usize = 64;
 const NUM_SLOTS: usize = PAGE_SIZE / SLOT_SIZE;
 
 /// A page-wide trie node for the capability tables.
@@ -109,7 +109,7 @@ impl CapSlot {
     }
 }
 
-#[repr(transparent)]
+#[repr(align(64))]
 #[derive(Debug, Default)]
 pub struct AtomicCapSlot(AtomicCell<CapSlot>);
 
@@ -155,6 +155,11 @@ pub enum Resource {
         flags: PageCapFlags,
     },
     HardwareAccess,
+    SyncCall {
+        entry: usize,
+        component: Component,
+    },
+    SyncRet,
 }
 
 #[repr(transparent)]

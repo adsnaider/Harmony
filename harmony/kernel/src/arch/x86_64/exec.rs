@@ -2,8 +2,6 @@
 
 use core::arch::asm;
 
-use super::paging::RawFrame;
-
 pub trait SaveState: Sized {
     fn save_state(self, regs: &mut Regs);
 }
@@ -25,7 +23,6 @@ impl SaveState for NoopSaver {
 #[repr(C)]
 pub struct ExecCtx {
     regs: Regs,
-    l4_frame: RawFrame, // Off: 18
 }
 
 // SAFETY: Don't change the order of any of these
@@ -73,8 +70,8 @@ pub struct Regs {
 }
 
 impl ExecCtx {
-    pub fn new(l4_frame: RawFrame, regs: Regs) -> Self {
-        Self { l4_frame, regs }
+    pub fn new(regs: Regs) -> Self {
+        Self { regs }
     }
 
     pub fn regs(&self) -> &Regs {
@@ -85,25 +82,13 @@ impl ExecCtx {
         &mut self.regs
     }
 
-    pub fn l4_frame(&self) -> RawFrame {
-        self.l4_frame
-    }
-
-    pub fn set_l4_frame(&mut self, l4_frame: RawFrame) {
-        self.l4_frame = l4_frame;
-    }
-
     #[naked]
     pub extern "sysv64" fn dispatch(&self) -> ! {
-        // SAFETY: All ExecCtx must be safe to dispatch. Every l4_frame
-        // must have the top half kernel mapped.
+        // SAFETY: We are only jumping to userspace, guaranteeing address space separation, so it doesn't matter
+        // what we are actually jumping to.
         unsafe {
             asm!(
                 "pop rax",
-                "mov rbx, cr3",            // Current CR3
-                "mov rax, [rdi + 8 * 18]", // New cr3
-                "cmp rax, rbx",
-                "mov cr3, rax",
                 // Setup the segment selectors
                 "mov ax, (4 * 8) | 3",
                 "mov ds, ax",

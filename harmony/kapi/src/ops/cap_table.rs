@@ -9,9 +9,10 @@ use crate::raw::{CapId, RawOperation, SyscallArgs};
 #[derive(Debug, Copy, Clone)]
 #[repr(usize)]
 pub enum ConstructArgs {
-    CapTable = 0,
+    CapTable(CapTableConsArgs),
     Thread(ThreadConsArgs),
     PageTable(PageTableConsArgs),
+    SyncCall(SyncCallConsArgs),
 }
 
 #[repr(C)]
@@ -22,19 +23,35 @@ pub struct ThreadConsArgs {
     pub cap_table: CapId,
     pub page_table: CapId,
     pub arg0: usize,
+    pub region: usize,
 }
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, AnyBitPattern, NoUninit)]
 pub struct PageTableConsArgs {
+    pub region: usize,
     pub level: u8,
+    pub _padding: [u8; 7],
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, AnyBitPattern, NoUninit)]
+pub struct CapTableConsArgs {
+    pub region: usize,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, AnyBitPattern, NoUninit)]
+pub struct SyncCallConsArgs {
+    pub entry: usize,
+    pub cap_table: CapId,
+    pub page_table: CapId,
 }
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ConsArgs<const SLOT_COUNT: usize> {
     pub kind: ConstructArgs,
-    pub region: usize,
     pub slot: SlotId<SLOT_COUNT>,
 }
 
@@ -78,16 +95,19 @@ impl<const SLOT_COUNT: usize> SyscallOp for CapTableOp<SLOT_COUNT> {
             }
             CapTableOp::Construct(ref cons_args) => {
                 let (var, args) = match cons_args.kind {
-                    ConstructArgs::CapTable => (0, [].as_slice()),
+                    ConstructArgs::CapTable(ref cap_args) => (0, bytemuck::bytes_of(cap_args)),
                     ConstructArgs::Thread(ref thd_args) => (1, bytemuck::bytes_of(thd_args)),
                     ConstructArgs::PageTable(ref pgt_args) => (2, bytemuck::bytes_of(pgt_args)),
+                    ConstructArgs::SyncCall(ref sync_call_args) => {
+                        (3, bytemuck::bytes_of(sync_call_args))
+                    }
                 };
                 SyscallArgs::new(
                     RawOperation::CapTableConstruct as usize,
-                    cons_args.region,
                     cons_args.slot.into(),
                     var,
                     args.as_ptr() as usize,
+                    0,
                 )
             }
             CapTableOp::Drop { slot: _ } => todo!(),
@@ -115,12 +135,15 @@ impl<const SLOT_COUNT: usize> SyscallOp for CapTableOp<SLOT_COUNT> {
                 Ok(Self::Unlink { slot })
             }
             RawOperation::CapTableConstruct => {
-                let (region, slot, kind, data) = args.args();
+                let (slot, kind, data, _) = args.args();
 
                 let data = data as *const _;
                 let kind = unsafe {
                     match kind {
-                        0 => ConstructArgs::CapTable,
+                        0 => ConstructArgs::CapTable(*bytemuck::from_bytes(slice::from_raw_parts(
+                            data,
+                            core::mem::size_of::<CapTableConsArgs>(),
+                        ))),
                         1 => ConstructArgs::Thread(*bytemuck::from_bytes(slice::from_raw_parts(
                             data,
                             core::mem::size_of::<ThreadConsArgs>(),
@@ -128,12 +151,15 @@ impl<const SLOT_COUNT: usize> SyscallOp for CapTableOp<SLOT_COUNT> {
                         2 => ConstructArgs::PageTable(*bytemuck::from_bytes(
                             slice::from_raw_parts(data, core::mem::size_of::<PageTableConsArgs>()),
                         )),
+                        3 => ConstructArgs::SyncCall(*bytemuck::from_bytes(slice::from_raw_parts(
+                            data,
+                            core::mem::size_of::<SyncCallConsArgs>(),
+                        ))),
                         _ => return Err(InvalidOperation::InvalidArgument),
                     }
                 };
                 Ok(Self::Construct(ConsArgs {
                     kind,
-                    region,
                     slot: slot.try_into()?,
                 }))
             }

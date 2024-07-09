@@ -53,6 +53,16 @@ impl<'a> Addrspace<'a> {
         })
     }
 
+    pub unsafe fn make_active(&self) {
+        let frame = self.l4_frame().into();
+        unsafe {
+            let (old, flags) = Cr3::read();
+            if old != frame {
+                Cr3::write(frame, flags);
+            }
+        }
+    }
+
     pub fn current() -> Self {
         unsafe { Self::from_frame(AnyPageTable::current_raw()) }
     }
