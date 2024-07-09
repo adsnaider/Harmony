@@ -25,7 +25,5 @@ impl SyscallOp for HardwareOp {
         }
     }
 
-    fn convert_success_code(&self, _code: usize) -> Self::R {
-        ()
-    }
+    fn convert_success_code(&self, _code: usize) -> Self::R {}
 }

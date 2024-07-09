@@ -53,6 +53,11 @@ impl<'a> Addrspace<'a> {
         })
     }
 
+    /// Makes this address space active.
+    ///
+    /// # Safety
+    ///
+    /// The top half (kernel address space) must be intact (i.e. not change with this).
     pub unsafe fn make_active(&self) {
         let frame = self.l4_frame().into();
         unsafe {
