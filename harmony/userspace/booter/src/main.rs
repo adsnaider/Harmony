@@ -16,7 +16,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 }
 
 extern "C" fn foo(arg0: usize) -> ! {
-    let hardware_access = HardwareAccess::new(CapId::new(4));
+    let hardware_access = HardwareAccess::new(CapId::new(5));
     hardware_access.enable_ports().unwrap();
 
     sprintln!("{:?}", arg0 as *const Thread);
@@ -24,7 +24,7 @@ extern "C" fn foo(arg0: usize) -> ! {
     let main_thread = unsafe { &*(arg0 as *const Thread) };
     sprintln!("{:?}", main_thread);
     sprintln!("In a thread!");
-    let sync_call = SyncCall::new(CapId::new(6));
+    let sync_call = SyncCall::new(CapId::new(7));
     let mut stack = [0u8; 4096];
     unsafe {
         assert_eq!(
@@ -40,10 +40,10 @@ extern "C" fn foo(arg0: usize) -> ! {
 
 #[no_mangle]
 extern "C" fn _start(lowest_frame: usize) -> ! {
-    let resources = CapTable::new(CapId::new(1));
-    let current_thread = Thread::new(CapId::new(2));
-    let page_table = PageTable::new(CapId::new(3));
-    let hardware_access = HardwareAccess::new(CapId::new(4));
+    let resources = CapTable::new(CapId::new(2));
+    let current_thread = Thread::new(CapId::new(3));
+    let page_table = PageTable::new(CapId::new(4));
+    let hardware_access = HardwareAccess::new(CapId::new(5));
 
     hardware_access.enable_ports().unwrap();
 
@@ -59,17 +59,17 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
                 (&mut stack as *mut u8).add(stack.len()),
                 resources,
                 page_table,
-                SlotId::new(5).unwrap(),
+                SlotId::new(6).unwrap(),
                 PhysFrame::new(lowest_frame),
                 &current_thread as *const _ as usize,
             )
             .unwrap();
         resources
-            .make_sync_call(sync_call, resources, page_table, SlotId::new(6).unwrap())
+            .make_sync_call(sync_call, resources, page_table, SlotId::new(7).unwrap())
             .unwrap();
     };
 
-    let t2 = Thread::new(CapId::new(5));
+    let t2 = Thread::new(CapId::new(6));
     unsafe {
         t2.activate().unwrap();
     }
@@ -81,7 +81,7 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
 #[naked]
 extern "C" fn sync_call(_a: usize, _b: usize, _c: usize, _d: usize) -> usize {
     extern "C" fn foo(a: usize, b: usize, c: usize) -> usize {
-        let hardware_access = HardwareAccess::new(CapId::new(4));
+        let hardware_access = HardwareAccess::new(CapId::new(5));
 
         hardware_access.enable_ports().unwrap();
         sprintln!("Look ma! I'm a synchronous invocation");
