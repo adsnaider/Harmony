@@ -2,6 +2,7 @@
 
 use core::cell::{RefCell, UnsafeCell};
 
+use heapless::Vec;
 use kapi::ops::cap_table::{
     CapTableOp, ConsArgs, ConstructArgs, PageTableConsArgs, SyncCallConsArgs, ThreadConsArgs,
 };
@@ -37,7 +38,7 @@ pub fn init() {
 pub struct Thread {
     // FIXME: This is not the correct way to do this...
     exec_ctx: UnsafeCell<ExecCtx>,
-    component: Component,
+    component_stack: Vec<Component, 16>,
 }
 
 #[derive(Debug, Clone)]
@@ -51,12 +52,12 @@ impl Thread {
         let exec_ctx = ExecCtx::new(regs);
         Self {
             exec_ctx: UnsafeCell::new(exec_ctx),
-            component,
+            component_stack: Vec::from_slice(&[component]).unwrap(),
         }
     }
 
     pub fn component(&self) -> &Component {
-        &self.component
+        self.component_stack.last().unwrap()
     }
 
     pub fn current() -> Option<KPtr<Thread>> {
@@ -91,7 +92,7 @@ impl Thread {
         }
         log::info!("Set the active thread");
         unsafe {
-            this.component.page_table.as_addrspace().make_active();
+            this.component().page_table.as_addrspace().make_active();
             (*this.exec_ctx.get()).dispatch();
         }
     }
