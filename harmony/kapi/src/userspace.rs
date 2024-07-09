@@ -10,6 +10,7 @@ use crate::ops::cap_table::{
 };
 use crate::ops::hardware::HardwareOp;
 use crate::ops::ipc::{SyncCallOp, SyncRetOp};
+use crate::ops::memory::{RetypeKind, RetypeOp};
 use crate::ops::thread::ThreadOp;
 use crate::ops::SyscallOp as _;
 use crate::raw::{CapError, CapId};
@@ -56,10 +57,7 @@ impl CapTable {
             }),
             slot: construct_slot,
         });
-        unsafe {
-            op.syscall(self.id)?;
-        }
-        Ok(())
+        unsafe { op.syscall(self.id) }
     }
 
     pub unsafe fn make_sync_call(
@@ -77,10 +75,7 @@ impl CapTable {
             }),
             slot: construct_slot,
         });
-        unsafe {
-            op.syscall(self.id)?;
-        }
-        Ok(())
+        unsafe { op.syscall(self.id) }
     }
 }
 
@@ -96,8 +91,7 @@ impl Thread {
     }
 
     pub unsafe fn activate(&self) -> Result<(), CapError> {
-        ThreadOp::Activate.syscall(self.id)?;
-        Ok(())
+        unsafe { ThreadOp::Activate.syscall(self.id) }
     }
 }
 
@@ -123,8 +117,7 @@ impl HardwareAccess {
     }
 
     pub fn enable_ports(&self) -> Result<(), CapError> {
-        unsafe { HardwareOp::EnableIoPorts.syscall(self.id) }?;
-        Ok(())
+        unsafe { HardwareOp::EnableIoPorts.syscall(self.id) }
     }
 }
 
@@ -152,6 +145,20 @@ impl SyncRet {
     }
 
     pub fn ret(&self, code: usize) -> Result<Infallible, CapError> {
-        unsafe { Ok(SyncRetOp::SyncRet(code).syscall(self.id)?) }
+        unsafe { SyncRetOp::SyncRet(code).syscall(self.id) }
+    }
+}
+
+pub struct Retype {
+    id: CapId,
+}
+
+impl Retype {
+    pub const fn new(id: CapId) -> Self {
+        Self { id }
+    }
+
+    pub fn retype(&self, region: usize, kind: RetypeKind) -> Result<(), CapError> {
+        unsafe { RetypeOp { region, to: kind }.syscall(self.id) }
     }
 }
