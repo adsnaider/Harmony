@@ -64,6 +64,9 @@ pub enum RawOperation {
     HardwareAccessEnable,
     SyncCall,
     SyncRet,
+    Retype2Kernel,
+    Retype2User,
+    Retype2Untyped,
 }
 
 #[derive(Debug, Copy, Clone, TryFromPrimitive, IntoPrimitive)]
@@ -82,6 +85,7 @@ pub enum CapError {
     BadFrameType,
     SyncCallLimit,
     SyncRetBottom,
+    FrameInUse,
 }
 
 #[derive(Debug, Copy, Clone, TryFromPrimitive, IntoPrimitive)]
