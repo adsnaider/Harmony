@@ -37,24 +37,26 @@ pub fn init() {
 pub struct Thread {
     // FIXME: This is not the correct way to do this...
     exec_ctx: UnsafeCell<ExecCtx>,
+    component: Component,
+}
+
+#[derive(Debug, Clone)]
+pub struct Component {
     resources: KPtr<RawCapEntry>,
+    page_table: KPtr<AnyPageTable>,
 }
 
 impl Thread {
-    pub fn new(regs: Regs, l4_table: KPtr<AnyPageTable>, resources: KPtr<RawCapEntry>) -> Self {
-        let exec_ctx = ExecCtx::new(l4_table.into_raw(), regs);
-        Self::new_with_ctx(exec_ctx, resources)
-    }
-
-    pub fn new_with_ctx(ctx: ExecCtx, resources: KPtr<RawCapEntry>) -> Self {
+    pub fn new(regs: Regs, component: Component) -> Self {
+        let exec_ctx = ExecCtx::new(regs);
         Self {
-            exec_ctx: UnsafeCell::new(ctx),
-            resources,
+            exec_ctx: UnsafeCell::new(exec_ctx),
+            component,
         }
     }
 
-    pub fn addrspace(&self) -> Addrspace<'_> {
-        unsafe { Addrspace::from_frame((*self.exec_ctx.get()).l4_frame()) }
+    pub fn component(&self) -> &Component {
+        &self.component
     }
 
     pub fn current() -> Option<KPtr<Thread>> {
@@ -88,11 +90,25 @@ impl Thread {
             current.replace(this.clone());
         }
         log::info!("Set the active thread");
-        unsafe { (*this.exec_ctx.get()).dispatch() }
+        unsafe {
+            this.component.page_table.as_addrspace().make_active();
+            (*this.exec_ctx.get()).dispatch();
+        }
     }
 }
 
-impl Thread {
+impl Component {
+    pub fn new(resources: KPtr<RawCapEntry>, page_table: KPtr<AnyPageTable>) -> Self {
+        Self {
+            resources,
+            page_table,
+        }
+    }
+
+    pub fn addrspace(&self) -> Addrspace<'_> {
+        unsafe { self.page_table.as_addrspace() }
+    }
+
     pub fn exercise_cap(&self, capability: CapId, args: SyscallArgs) -> Result<usize, CapError> {
         log::debug!("Syscall for: {capability:?}, {args:?}");
         let slot = self.resources.clone().find(capability)?.get();
@@ -169,8 +185,11 @@ impl Thread {
                                     return Err(CapError::InvalidArgument);
                                 }
                                 Resource::Thread(
-                                    KPtr::new(frame, Thread::new(regs, page_table, cap_table))
-                                        .map_err(|_| CapError::BadFrameType)?,
+                                    KPtr::new(
+                                        frame,
+                                        Thread::new(regs, Component::new(cap_table, page_table)),
+                                    )
+                                    .map_err(|_| CapError::BadFrameType)?,
                                 )
                             }
                             ConstructArgs::PageTable(PageTableConsArgs { level }) => {

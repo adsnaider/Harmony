@@ -1,5 +1,7 @@
 //! Physical memory frames for the x86-64 architecture
 
+use x86_64_impl::structures::paging::PhysFrame;
+
 use super::{PhysAddr, FRAME_SIZE};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -34,5 +36,15 @@ impl RawFrame {
 
     pub fn addr(&self) -> PhysAddr {
         self.base
+    }
+}
+
+impl From<RawFrame> for PhysFrame {
+    fn from(value: RawFrame) -> Self {
+        unsafe {
+            PhysFrame::from_start_address_unchecked(x86_64_impl::PhysAddr::new_unsafe(
+                value.base.as_u64(),
+            ))
+        }
     }
 }
