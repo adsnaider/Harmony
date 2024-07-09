@@ -2,8 +2,6 @@
 
 use core::arch::asm;
 
-use super::paging::RawFrame;
-
 pub trait SaveState: Sized {
     fn save_state(self, regs: &mut Regs);
 }

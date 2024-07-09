@@ -7,6 +7,7 @@ use crate::raw::{syscall, CapError, CapId, RawOperation, SyscallArgs};
 
 pub mod cap_table;
 pub mod hardware;
+pub mod ipc;
 pub mod thread;
 
 pub enum InvalidOperation {

@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 #![feature(naked_functions)]
+#![feature(arbitrary_self_types)]
 #![cfg_attr(
     test,
     feature(custom_test_frameworks),
@@ -53,7 +54,7 @@ pub static PMO: AtomicLazyCell<VirtAddr> = AtomicLazyCell::new(|| {
 #[no_mangle]
 extern "C" fn kmain() -> ! {
     use arch::bootup::Process;
-    use arch::exec::{ExecCtx, NoopSaver};
+    use arch::exec::NoopSaver;
     use arch::paging::RawFrame;
     use bump_allocator::BumpAllocator;
     use caps::RawCapEntry;

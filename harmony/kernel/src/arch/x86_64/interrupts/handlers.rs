@@ -28,9 +28,6 @@ impl SyscallCtx {
     /// Must be currently handling a syscall
     pub unsafe fn current() -> Self {
         let stack_end: *mut u64 = gdt::interrupt_stack_end().as_mut_ptr();
-        let rsp = unsafe { *stack_end.sub(2) };
-        let rflags = unsafe { *stack_end.sub(3) };
-        let rip = unsafe { *stack_end.sub(5) };
         let mut preserved: MaybeUninit<PreservedRegs> = MaybeUninit::uninit();
         unsafe {
             core::ptr::copy_nonoverlapping(
@@ -40,9 +37,20 @@ impl SyscallCtx {
             );
         }
         Self {
-            control_regs: ControlRegs { rflags, rsp, rip },
+            control_regs: Self::current_control(),
             preserved_regs: unsafe { preserved.assume_init() },
         }
+    }
+
+    pub unsafe fn current_control() -> ControlRegs {
+        let (rsp, rflags, rip);
+        unsafe {
+            let stack_end: *mut u64 = gdt::interrupt_stack_end().as_mut_ptr();
+            rsp = *stack_end.sub(2);
+            rflags = *stack_end.sub(3);
+            rip = *stack_end.sub(5);
+        }
+        ControlRegs { rflags, rsp, rip }
     }
 
     /// Updates the rflags register on this syscall.

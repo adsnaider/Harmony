@@ -15,7 +15,7 @@ pub extern "sysv64" fn handle(a: usize, b: usize, c: usize, d: usize, e: usize, 
     log::debug!("cap: {capability:?}");
     let args = SyscallArgs::new(b, c, d, e, f);
     log::debug!("args: {args:?}");
-    match thread.component().exercise_cap(capability, args) {
+    match thread.exercise_cap(capability, args) {
         Ok(result) => result.try_into().unwrap(),
         Err(e) => e.to_errno(),
     }

@@ -8,7 +8,7 @@ use trie::{Ptr, Slot, SlotId, TrieEntry};
 
 use crate::arch::paging::page_table::AnyPageTable;
 use crate::arch::paging::PAGE_SIZE;
-use crate::component::Thread;
+use crate::component::{Component, Thread};
 use crate::kptr::KPtr;
 
 const SLOT_SIZE: usize = 64;
@@ -158,9 +158,9 @@ pub enum Resource {
     HardwareAccess,
     SyncCall {
         entry: usize,
-        cap_table: KPtr<RawCapEntry>,
-        page_table: KPtr<AnyPageTable>,
+        component: Component,
     },
+    SyncRet,
 }
 
 #[repr(transparent)]

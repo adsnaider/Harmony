@@ -7,12 +7,13 @@ use kapi::ops::cap_table::{
     CapTableOp, ConsArgs, ConstructArgs, PageTableConsArgs, SyncCallConsArgs, ThreadConsArgs,
 };
 use kapi::ops::hardware::HardwareOp;
+use kapi::ops::ipc::{SyncCallOp, SyncRetOp};
 use kapi::ops::thread::ThreadOp;
-use kapi::ops::SyscallOp as _;
+use kapi::ops::SyscallOp;
 use kapi::raw::{CapError, CapId, SyscallArgs};
 use sync::cell::AtomicOnceCell;
 
-use crate::arch::exec::{ControlRegs, ExecCtx, Regs, SaveState, ScratchRegs};
+use crate::arch::exec::{ControlRegs, ExecCtx, NoopSaver, Regs, SaveState, ScratchRegs};
 use crate::arch::interrupts::SyscallCtx;
 use crate::arch::paging::page_table::{Addrspace, AnyPageTable, PageTableFlags};
 use crate::arch::paging::{Page, RawFrame, VirtAddr};
@@ -38,7 +39,8 @@ pub fn init() {
 pub struct Thread {
     // FIXME: This is not the correct way to do this...
     exec_ctx: UnsafeCell<ExecCtx>,
-    component_stack: Vec<Component, 16>,
+    root_comp: Component,
+    component_stack: UnsafeCell<Vec<(Component, SyscallCtx), 16>>,
 }
 
 #[derive(Debug, Clone)]
@@ -52,12 +54,18 @@ impl Thread {
         let exec_ctx = ExecCtx::new(regs);
         Self {
             exec_ctx: UnsafeCell::new(exec_ctx),
-            component_stack: Vec::from_slice(&[component]).unwrap(),
+            root_comp: component,
+            component_stack: UnsafeCell::new(Vec::new()),
         }
     }
 
     pub fn component(&self) -> &Component {
-        self.component_stack.last().unwrap()
+        unsafe {
+            (*self.component_stack.get())
+                .last()
+                .map(|(comp, _)| comp)
+                .unwrap_or(&self.root_comp)
+        }
     }
 
     pub fn current() -> Option<KPtr<Thread>> {
@@ -96,23 +104,14 @@ impl Thread {
             (*this.exec_ctx.get()).dispatch();
         }
     }
-}
 
-impl Component {
-    pub fn new(resources: KPtr<RawCapEntry>, page_table: KPtr<AnyPageTable>) -> Self {
-        Self {
-            resources,
-            page_table,
-        }
-    }
-
-    pub fn addrspace(&self) -> Addrspace<'_> {
-        unsafe { self.page_table.as_addrspace() }
-    }
-
-    pub fn exercise_cap(&self, capability: CapId, args: SyscallArgs) -> Result<usize, CapError> {
+    pub fn exercise_cap(
+        self: KPtr<Self>,
+        capability: CapId,
+        args: SyscallArgs,
+    ) -> Result<usize, CapError> {
         log::debug!("Syscall for: {capability:?}, {args:?}");
-        let slot = self.resources.clone().find(capability)?.get();
+        let slot = self.component().resources.clone().find(capability)?.get();
         match slot.resource {
             Resource::Empty => Err(CapError::NotFound),
             Resource::CapEntry(capability_table) => {
@@ -122,8 +121,11 @@ impl Component {
                         other_table_cap,
                         slot,
                     } => {
-                        let other_table: KPtr<RawCapEntry> =
-                            self.resources.clone().get_resource_as(other_table_cap)?;
+                        let other_table: KPtr<RawCapEntry> = self
+                            .component()
+                            .resources
+                            .clone()
+                            .get_resource_as(other_table_cap)?;
                         let slot = capability_table.index_slot(slot);
                         slot.change(|cap| {
                             cap.child = Some(other_table);
@@ -148,8 +150,11 @@ impl Component {
                         )
                         .map_err(|_| CapError::InvalidArgument)?;
 
-                        let (frame, flags) =
-                            self.addrspace().get(region).ok_or(CapError::Internal)?;
+                        let (frame, flags) = self
+                            .component()
+                            .addrspace()
+                            .get(region)
+                            .ok_or(CapError::Internal)?;
                         if !flags.contains(PageTableFlags::PRESENT) {
                             return Err(CapError::MissingRightsToFrame);
                         }
@@ -178,10 +183,16 @@ impl Component {
                                     },
                                     ..Default::default()
                                 };
-                                let cap_table: KPtr<RawCapEntry> =
-                                    self.resources.clone().get_resource_as(cap_table)?;
-                                let (page_table, flags): (KPtr<AnyPageTable>, PageCapFlags) =
-                                    self.resources.clone().get_resource_as(page_table)?;
+                                let cap_table: KPtr<RawCapEntry> = self
+                                    .component()
+                                    .resources
+                                    .clone()
+                                    .get_resource_as(cap_table)?;
+                                let (page_table, flags): (KPtr<AnyPageTable>, PageCapFlags) = self
+                                    .component()
+                                    .resources
+                                    .clone()
+                                    .get_resource_as(page_table)?;
                                 if !flags.level() == 4 {
                                     return Err(CapError::InvalidArgument);
                                 }
@@ -214,15 +225,18 @@ impl Component {
                                 cap_table,
                                 page_table,
                             }) => {
-                                let cap_table: KPtr<RawCapEntry> =
-                                    self.resources.clone().get_resource_as(cap_table)?;
-                                let (page_table, _): (KPtr<AnyPageTable>, PageCapFlags) =
-                                    self.resources.clone().get_resource_as(page_table)?;
-                                Resource::SyncCall {
-                                    entry,
-                                    cap_table,
-                                    page_table,
-                                }
+                                let cap_table: KPtr<RawCapEntry> = self
+                                    .component()
+                                    .resources
+                                    .clone()
+                                    .get_resource_as(cap_table)?;
+                                let (page_table, _): (KPtr<AnyPageTable>, PageCapFlags) = self
+                                    .component()
+                                    .resources
+                                    .clone()
+                                    .get_resource_as(page_table)?;
+                                let component = Component::new(cap_table, page_table);
+                                Resource::SyncCall { entry, component }
                             }
                         };
                         capability_table.index_slot(slot).change(|cap| {
@@ -263,11 +277,56 @@ impl Component {
                     }
                 }
             }
-            Resource::SyncCall {
-                entry,
-                cap_table,
-                page_table,
-            } => todo!(),
+            Resource::SyncCall { entry, component } => {
+                let op = SyncCallOp::from_args(args)?;
+                match op {
+                    SyncCallOp::Call((rdi, rsi, rdx, rcx)) => {
+                        let regs = unsafe {
+                            (*self.component_stack.get())
+                                .push((component, SyscallCtx::current()))
+                                .map_err(|_| CapError::SyncCallLimit)?;
+                            (*self.exec_ctx.get()).regs_mut()
+                        };
+                        regs.scratch.rdi = rdi as u64;
+                        regs.scratch.rsi = rsi as u64;
+                        regs.scratch.rdx = rdx as u64;
+                        regs.scratch.rcx = rcx as u64;
+                        regs.control.rip = entry as u64;
+                        regs.control.rsp = 0;
+                        regs.control.rflags = 0x202;
+                        Self::dispatch(self, NoopSaver::new())
+                    }
+                }
+            }
+            Resource::SyncRet => {
+                let op = SyncRetOp::from_args(args)?;
+                match op {
+                    SyncRetOp::SyncRet(code) => unsafe {
+                        let (_comp, syscall_ctx) = (*self.component_stack.get())
+                            .pop()
+                            .ok_or(CapError::SyncRetBottom)?;
+                        // Set the return codes (rax for the syscall itself and rdi for the return of the invocation)
+                        (*self.exec_ctx.get()).regs_mut().scratch.rax = u64::max(0, code as u64);
+                        (*self.exec_ctx.get()).regs_mut().preserved = syscall_ctx.preserved_regs;
+                        (*self.exec_ctx.get()).regs_mut().control = syscall_ctx.control_regs;
+
+                        Self::dispatch(self, NoopSaver::new())
+                    },
+                }
+            }
         }
+    }
+}
+
+impl Component {
+    pub fn new(resources: KPtr<RawCapEntry>, page_table: KPtr<AnyPageTable>) -> Self {
+        Self {
+            resources,
+            page_table,
+        }
+    }
+
+    pub fn addrspace(&self) -> Addrspace<'_> {
+        unsafe { self.page_table.as_addrspace() }
     }
 }
