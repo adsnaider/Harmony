@@ -12,3 +12,4 @@ bytemuck = { version = "1.16.1", features = ["derive"] }
 [features]
 default = []
 from_errors = ["dep:sync"]
+userspace = []

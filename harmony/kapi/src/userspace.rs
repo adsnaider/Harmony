@@ -5,14 +5,14 @@
 
 use core::convert::Infallible;
 
-use kapi::ops::cap_table::{
+use crate::ops::cap_table::{
     CapTableOp, ConsArgs, ConstructArgs, SlotId, SyncCallConsArgs, ThreadConsArgs,
 };
-use kapi::ops::hardware::HardwareOp;
-use kapi::ops::ipc::{SyncCallOp, SyncRetOp};
-use kapi::ops::thread::ThreadOp;
-use kapi::ops::SyscallOp as _;
-use kapi::raw::{CapError, CapId};
+use crate::ops::hardware::HardwareOp;
+use crate::ops::ipc::{SyncCallOp, SyncRetOp};
+use crate::ops::thread::ThreadOp;
+use crate::ops::SyscallOp as _;
+use crate::raw::{CapError, CapId};
 
 pub struct PhysFrame(usize);
 

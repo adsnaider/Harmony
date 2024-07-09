@@ -5,7 +5,6 @@ members = [
   "harmony/sync",
   "harmony/trie",
   "harmony/userspace/booter",
-  "harmony/userspace/librs",
 ]
 
 resolver = "2"
