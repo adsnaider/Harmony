@@ -4,9 +4,9 @@
 
 mod serial;
 
-use librs::kapi::ops::cap_table::SlotId;
-use librs::kapi::raw::CapId;
-use librs::ops::{CapTable, HardwareAccess, PageTable, PhysFrame, SyncCall, Thread};
+use kapi::ops::cap_table::SlotId;
+use kapi::raw::CapId;
+use kapi::userspace::{CapTable, HardwareAccess, PageTable, PhysFrame, SyncCall, Thread};
 
 #[cfg(not(test))]
 #[panic_handler]
@@ -100,7 +100,7 @@ extern "C" fn sync_call(_a: usize, _b: usize, _c: usize, _d: usize) -> usize {
             "mov rdx, rax",
             "call {raw_syscall}",
             foo = sym foo,
-            raw_syscall = sym librs::kapi::raw::raw_syscall,
+            raw_syscall = sym kapi::raw::raw_syscall,
             options(noreturn),
         )
     }
