@@ -3,10 +3,13 @@
 //! This module provides a higher-level set of operations to raw
 //! kernel APIs.
 
+use core::convert::Infallible;
+
 use kapi::ops::cap_table::{
     CapTableOp, ConsArgs, ConstructArgs, SlotId, SyncCallConsArgs, ThreadConsArgs,
 };
 use kapi::ops::hardware::HardwareOp;
+use kapi::ops::ipc::{SyncCallOp, SyncRetOp};
 use kapi::ops::thread::ThreadOp;
 use kapi::ops::SyscallOp as _;
 use kapi::raw::{CapError, CapId};
@@ -122,5 +125,33 @@ impl HardwareAccess {
     pub fn enable_ports(&self) -> Result<(), CapError> {
         unsafe { HardwareOp::EnableIoPorts.syscall(self.id) }?;
         Ok(())
+    }
+}
+
+pub struct SyncCall {
+    id: CapId,
+}
+
+impl SyncCall {
+    pub const fn new(id: CapId) -> Self {
+        Self { id }
+    }
+
+    pub fn call(&self, a: usize, b: usize, c: usize, d: usize) -> Result<usize, CapError> {
+        unsafe { SyncCallOp::Call((a, b, c, d)).syscall(self.id) }
+    }
+}
+
+pub struct SyncRet {
+    id: CapId,
+}
+
+impl SyncRet {
+    pub const fn new(id: CapId) -> Self {
+        Self { id }
+    }
+
+    pub fn ret(&self, code: usize) -> Result<Infallible, CapError> {
+        unsafe { Ok(SyncRetOp::SyncRet(code).syscall(self.id)?) }
     }
 }

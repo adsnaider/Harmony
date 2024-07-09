@@ -5,7 +5,7 @@ mod serial;
 
 use librs::kapi::ops::cap_table::SlotId;
 use librs::kapi::raw::CapId;
-use librs::ops::{CapTable, HardwareAccess, PageTable, PhysFrame, Thread};
+use librs::ops::{CapTable, HardwareAccess, PageTable, PhysFrame, SyncCall, Thread};
 
 #[cfg(not(test))]
 #[panic_handler]
@@ -19,10 +19,13 @@ extern "C" fn foo(arg0: usize) -> ! {
     hardware_access.enable_ports().unwrap();
 
     sprintln!("{:?}", arg0 as *const Thread);
+
     let main_thread = unsafe { &*(arg0 as *const Thread) };
     sprintln!("{:?}", main_thread);
     sprintln!("In a thread!");
+    let sync_call = SyncCall::new(CapId::new(6));
     unsafe {
+        sync_call.call(0, 1, 2, 3).unwrap();
         main_thread.activate().unwrap();
     }
     unreachable!();
@@ -53,8 +56,12 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
                 PhysFrame::new(lowest_frame),
                 &current_thread as *const _ as usize,
             )
-            .unwrap()
+            .unwrap();
+        resources
+            .make_sync_call(sync_call, resources, page_table, SlotId::new(6).unwrap())
+            .unwrap();
     };
+
     let t2 = Thread::new(CapId::new(5));
     unsafe {
         t2.activate().unwrap();
@@ -64,7 +71,6 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
     loop {}
 }
 
-extern "C" fn sync_call(a: usize, b: usize, c: usize, d: usize) -> usize {
-    sprintln!("This is a synchronous invocation!");
-    0
+extern "C" fn sync_call(_a: usize, _b: usize, _c: usize, _d: usize) -> usize {
+    todo!();
 }
