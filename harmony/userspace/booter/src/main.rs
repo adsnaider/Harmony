@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+#![feature(naked_functions)]
 
 mod serial;
 
@@ -24,8 +25,14 @@ extern "C" fn foo(arg0: usize) -> ! {
     sprintln!("{:?}", main_thread);
     sprintln!("In a thread!");
     let sync_call = SyncCall::new(CapId::new(6));
+    let mut stack = [0u8; 4096];
     unsafe {
-        sync_call.call(0, 1, 2, 3).unwrap();
+        assert_eq!(
+            sync_call
+                .call(1, 2, 3, (&mut stack as *mut u8).add(stack.len()) as usize)
+                .unwrap(),
+            10
+        );
         main_thread.activate().unwrap();
     }
     unreachable!();
@@ -44,7 +51,7 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
 
     sprintln!("{:?}", &current_thread as *const Thread);
 
-    let mut stack = [0u8; 4096];
+    let mut stack = [0u8; 4096 * 2];
     unsafe {
         resources
             .make_thread(
@@ -71,6 +78,30 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
     loop {}
 }
 
+#[naked]
 extern "C" fn sync_call(_a: usize, _b: usize, _c: usize, _d: usize) -> usize {
-    todo!();
+    extern "C" fn foo(a: usize, b: usize, c: usize) -> usize {
+        let hardware_access = HardwareAccess::new(CapId::new(4));
+
+        hardware_access.enable_ports().unwrap();
+        sprintln!("Look ma! I'm a synchronous invocation");
+        assert_eq!(a, 1);
+        assert_eq!(b, 2);
+        assert_eq!(c, 3);
+        10
+    }
+
+    unsafe {
+        core::arch::asm!(
+            "mov rsp, rcx",
+            "call {foo}",
+            "mov rdi, 0",
+            "mov rsi, 13",
+            "mov rdx, rax",
+            "call {raw_syscall}",
+            foo = sym foo,
+            raw_syscall = sym librs::kapi::raw::raw_syscall,
+            options(noreturn),
+        )
+    }
 }
