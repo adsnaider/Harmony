@@ -9,8 +9,8 @@ pub use pages::Page;
 
 pub mod page_table;
 
-mod physical_address;
+pub mod physical_address;
 pub use physical_address::PhysAddr;
 
-mod virtual_address;
+pub mod virtual_address;
 pub use virtual_address::VirtAddr;

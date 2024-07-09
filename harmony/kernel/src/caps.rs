@@ -160,6 +160,7 @@ pub enum Resource {
         component: Component,
     },
     SyncRet,
+    MemoryTyping,
 }
 
 #[repr(transparent)]

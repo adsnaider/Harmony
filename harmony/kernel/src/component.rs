@@ -9,6 +9,7 @@ use kapi::ops::cap_table::{
 };
 use kapi::ops::hardware::HardwareOp;
 use kapi::ops::ipc::{SyncCallOp, SyncRetOp};
+use kapi::ops::memory::{RetypeKind, RetypeOp};
 use kapi::ops::thread::ThreadOp;
 use kapi::ops::SyscallOp;
 use kapi::raw::{CapError, CapId, SyscallArgs};
@@ -143,7 +144,7 @@ impl Thread {
                     CapTableOp::Construct(ConsArgs { kind, slot }) => {
                         let resource = match kind {
                             ConstructArgs::CapTable(CapTableConsArgs { region }) => {
-                                let frame = this.component().allocate_as_kernel(region)?;
+                                let frame = this.component().user_region_frame(region)?;
                                 let ptr = KPtr::new(frame, RawCapEntry::default())
                                     .map_err(|_| CapError::BadFrameType)?;
                                 Resource::CapEntry(ptr)
@@ -156,7 +157,7 @@ impl Thread {
                                 arg0,
                                 region,
                             }) => {
-                                let frame = this.component().allocate_as_kernel(region)?;
+                                let frame = this.component().user_region_frame(region)?;
                                 let regs = Regs {
                                     control: ControlRegs {
                                         rip: entry as u64,
@@ -195,7 +196,7 @@ impl Thread {
                                 region,
                                 _padding,
                             }) => {
-                                let frame = this.component().allocate_as_kernel(region)?;
+                                let frame = this.component().user_region_frame(region)?;
                                 if level > 4 || level == 0 {
                                     return Err(CapError::InvalidArgument);
                                 }
@@ -305,6 +306,22 @@ impl Thread {
                     },
                 }
             }
+            Resource::MemoryTyping => {
+                let op = RetypeOp::from_args(args)?;
+                let frame = this.component().user_region_frame(op.region)?;
+                match op.to {
+                    RetypeKind::Retype2Kernel => {
+                        frame.try_into_kernel().map_err(|_| CapError::FrameInUse)?;
+                    }
+                    RetypeKind::Retype2User => {
+                        frame.try_into_user().map_err(|_| CapError::FrameInUse)?;
+                    }
+                    RetypeKind::Retype2Untyped => {
+                        frame.try_into_untyped().map_err(|_| CapError::FrameInUse)?;
+                    }
+                }
+                Ok(0)
+            }
         }
     }
 }
@@ -321,7 +338,7 @@ impl Component {
         unsafe { self.page_table.as_addrspace() }
     }
 
-    fn allocate_as_kernel(&self, region: usize) -> Result<RawFrame, CapError> {
+    fn user_region_frame(&self, region: usize) -> Result<RawFrame, CapError> {
         if region > RawFrame::memory_limit() {
             return Err(CapError::InvalidFrame);
         }
