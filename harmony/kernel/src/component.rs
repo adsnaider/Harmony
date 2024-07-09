@@ -107,12 +107,12 @@ impl Thread {
     }
 
     pub fn exercise_cap(
-        self: KPtr<Self>,
+        this: KPtr<Self>,
         capability: CapId,
         args: SyscallArgs,
     ) -> Result<usize, CapError> {
         log::debug!("Syscall for: {capability:?}, {args:?}");
-        let slot = self.component().resources.clone().find(capability)?.get();
+        let slot = this.component().resources.clone().find(capability)?.get();
         match slot.resource {
             Resource::Empty => Err(CapError::NotFound),
             Resource::CapEntry(capability_table) => {
@@ -122,7 +122,7 @@ impl Thread {
                         other_table_cap,
                         slot,
                     } => {
-                        let other_table: KPtr<RawCapEntry> = self
+                        let other_table: KPtr<RawCapEntry> = this
                             .component()
                             .resources
                             .clone()
@@ -143,7 +143,7 @@ impl Thread {
                     CapTableOp::Construct(ConsArgs { kind, slot }) => {
                         let resource = match kind {
                             ConstructArgs::CapTable(CapTableConsArgs { region }) => {
-                                let frame = self.component().allocate_as_kernel(region)?;
+                                let frame = this.component().allocate_as_kernel(region)?;
                                 let ptr = KPtr::new(frame, RawCapEntry::default())
                                     .map_err(|_| CapError::BadFrameType)?;
                                 Resource::CapEntry(ptr)
@@ -156,7 +156,7 @@ impl Thread {
                                 arg0,
                                 region,
                             }) => {
-                                let frame = self.component().allocate_as_kernel(region)?;
+                                let frame = this.component().allocate_as_kernel(region)?;
                                 let regs = Regs {
                                     control: ControlRegs {
                                         rip: entry as u64,
@@ -169,12 +169,12 @@ impl Thread {
                                     },
                                     ..Default::default()
                                 };
-                                let cap_table: KPtr<RawCapEntry> = self
+                                let cap_table: KPtr<RawCapEntry> = this
                                     .component()
                                     .resources
                                     .clone()
                                     .get_resource_as(cap_table)?;
-                                let (page_table, flags): (KPtr<AnyPageTable>, PageCapFlags) = self
+                                let (page_table, flags): (KPtr<AnyPageTable>, PageCapFlags) = this
                                     .component()
                                     .resources
                                     .clone()
@@ -195,7 +195,7 @@ impl Thread {
                                 region,
                                 _padding,
                             }) => {
-                                let frame = self.component().allocate_as_kernel(region)?;
+                                let frame = this.component().allocate_as_kernel(region)?;
                                 if level > 4 || level == 0 {
                                     return Err(CapError::InvalidArgument);
                                 }
@@ -216,12 +216,12 @@ impl Thread {
                                 cap_table,
                                 page_table,
                             }) => {
-                                let cap_table: KPtr<RawCapEntry> = self
+                                let cap_table: KPtr<RawCapEntry> = this
                                     .component()
                                     .resources
                                     .clone()
                                     .get_resource_as(cap_table)?;
-                                let (page_table, _): (KPtr<AnyPageTable>, PageCapFlags) = self
+                                let (page_table, _): (KPtr<AnyPageTable>, PageCapFlags) = this
                                     .component()
                                     .resources
                                     .clone()
@@ -273,10 +273,10 @@ impl Thread {
                 match op {
                     SyncCallOp::Call((rdi, rsi, rdx, rcx)) => {
                         let regs = unsafe {
-                            (*self.component_stack.get())
+                            (*this.component_stack.get())
                                 .push((component, SyscallCtx::current()))
                                 .map_err(|_| CapError::SyncCallLimit)?;
-                            (*self.exec_ctx.get()).regs_mut()
+                            (*this.exec_ctx.get()).regs_mut()
                         };
                         regs.scratch.rdi = rdi as u64;
                         regs.scratch.rsi = rsi as u64;
@@ -285,7 +285,7 @@ impl Thread {
                         regs.control.rip = entry as u64;
                         regs.control.rsp = 0;
                         regs.control.rflags = 0x202;
-                        Self::dispatch(self, NoopSaver::new())
+                        Self::dispatch(this, NoopSaver::new())
                     }
                 }
             }
@@ -293,15 +293,15 @@ impl Thread {
                 let op = SyncRetOp::from_args(args)?;
                 match op {
                     SyncRetOp::SyncRet(code) => unsafe {
-                        let (_comp, syscall_ctx) = (*self.component_stack.get())
+                        let (_comp, syscall_ctx) = (*this.component_stack.get())
                             .pop()
                             .ok_or(CapError::SyncRetBottom)?;
                         // Set the return codes (rax for the syscall itself and rdi for the return of the invocation)
-                        (*self.exec_ctx.get()).regs_mut().scratch.rax = u64::max(0, code as u64);
-                        (*self.exec_ctx.get()).regs_mut().preserved = syscall_ctx.preserved_regs;
-                        (*self.exec_ctx.get()).regs_mut().control = syscall_ctx.control_regs;
+                        (*this.exec_ctx.get()).regs_mut().scratch.rax = u64::max(0, code as u64);
+                        (*this.exec_ctx.get()).regs_mut().preserved = syscall_ctx.preserved_regs;
+                        (*this.exec_ctx.get()).regs_mut().control = syscall_ctx.control_regs;
 
-                        Self::dispatch(self, NoopSaver::new())
+                        Self::dispatch(this, NoopSaver::new())
                     },
                 }
             }

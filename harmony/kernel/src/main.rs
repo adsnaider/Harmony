@@ -1,7 +1,6 @@
 #![no_std]
 #![no_main]
 #![feature(naked_functions)]
-#![feature(arbitrary_self_types)]
 #![cfg_attr(
     test,
     feature(custom_test_frameworks),

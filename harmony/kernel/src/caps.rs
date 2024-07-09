@@ -145,7 +145,6 @@ const _SIZE_OF_ENTRY: () = {
 };
 
 #[derive(Default, Debug, Clone)]
-#[repr(align(8))]
 pub enum Resource {
     #[default]
     Empty,

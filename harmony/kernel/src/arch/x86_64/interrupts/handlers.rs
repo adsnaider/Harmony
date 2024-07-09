@@ -42,7 +42,7 @@ impl SyscallCtx {
         }
     }
 
-    pub unsafe fn current_control() -> ControlRegs {
+    unsafe fn current_control() -> ControlRegs {
         let (rsp, rflags, rip);
         unsafe {
             let stack_end: *mut u64 = gdt::interrupt_stack_end().as_mut_ptr();
