@@ -25,7 +25,7 @@ pub enum StackNodeError {
 }
 
 impl<'a> StackNode<'a> {
-    pub const REQUIRED_ALIGNEMENT: usize = core::mem::align_of::<StackNodeInner<'static>>();
+    pub const REQUIRED_ALIGNEMENT: usize = 16;
     pub const NODE_SIZE: usize = core::mem::size_of::<StackNodeInner<'static>>();
 
     pub fn new(buffer: &'a mut [u8]) -> Result<Self, StackNodeError> {
@@ -134,9 +134,9 @@ macro_rules! stack_list_push {
     };
 }
 
-#[repr(align(8))]
+#[repr(align(16))]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct OveralignedU8(u8);
+pub struct OveralignedU8(pub u8);
 
 mod private {
     use crate::OveralignedU8;

@@ -15,6 +15,7 @@ default-members = ["harmony/kernel"]
 sync = { path = "harmony/sync" }
 trie = { path = "harmony/trie" }
 kapi = { path = "harmony/kapi" }
+stack_list = { path = "harmony/stack_list" }
 
 [profile.dev]
 debug = "full"

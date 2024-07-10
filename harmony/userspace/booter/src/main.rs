@@ -4,9 +4,13 @@
 
 mod serial;
 
+use core::ptr::{addr_of, addr_of_mut};
+
 use kapi::ops::cap_table::SlotId;
+use kapi::ops::memory::RetypeKind;
 use kapi::raw::CapId;
-use kapi::userspace::{CapTable, HardwareAccess, PageTable, PhysFrame, SyncCall, Thread};
+use kapi::userspace::{CapTable, HardwareAccess, PageTable, PhysFrame, Retype, SyncCall, Thread};
+use stack_list::{stack_list_pop, AlignedU8Ext as _, OveralignedU8, StackList, StackNode};
 
 #[cfg(not(test))]
 #[panic_handler]
@@ -25,21 +29,18 @@ extern "C" fn foo(arg0: usize) -> ! {
     sprintln!("{:?}", main_thread);
     sprintln!("In a thread!");
     let sync_call = SyncCall::new(CapId::new(7));
-    let mut stack = [0u8; 4096];
     unsafe {
-        assert_eq!(
-            sync_call
-                .call(1, 2, 3, (&mut stack as *mut u8).add(stack.len()) as usize)
-                .unwrap(),
-            10
-        );
+        assert_eq!(sync_call.call(1, 2, 3, 4).unwrap(), 10);
         main_thread.activate().unwrap();
     }
     unreachable!();
 }
 
+static SYNC_STACKS: StackList<'static> = StackList::new();
+
 #[no_mangle]
 extern "C" fn _start(lowest_frame: usize) -> ! {
+    let retype_cap = Retype::new(CapId::new(1));
     let resources = CapTable::new(CapId::new(2));
     let current_thread = Thread::new(CapId::new(3));
     let page_table = PageTable::new(CapId::new(4));
@@ -49,14 +50,19 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
 
     serial::init();
 
+    sprintln!("{:?}", &current_thread);
     sprintln!("{:?}", &current_thread as *const Thread);
 
-    let mut stack = [0u8; 4096 * 2];
+    let mut tstack = [0u8; 4096];
+    static mut SSTACK: [OveralignedU8; 4096] = [OveralignedU8(0); 4096];
+
+    let sstack = unsafe { StackNode::new((*addr_of_mut!(SSTACK)).as_u8_slice_mut()).unwrap() };
+    SYNC_STACKS.push_front(sstack);
     unsafe {
         resources
             .make_thread(
                 foo,
-                (&mut stack as *mut u8).add(stack.len()),
+                (&mut tstack as *mut u8).add(tstack.len()),
                 resources,
                 page_table,
                 SlotId::new(6).unwrap(),
@@ -75,6 +81,9 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
     }
 
     sprintln!("We are back!");
+    let stack = SYNC_STACKS.pop_front().unwrap().into_buffer();
+    assert_eq!(stack.as_ptr(), unsafe { addr_of!(SSTACK) } as *const u8);
+    assert_eq!(stack.len(), 4096);
     loop {}
 }
 
@@ -91,17 +100,38 @@ extern "C" fn sync_call(_a: usize, _b: usize, _c: usize, _d: usize) -> usize {
         10
     }
 
+    use stack_list::{stack_list_pop, stack_list_push};
     unsafe {
         core::arch::asm!(
-            "mov rsp, rcx",
+            "movq %rdi, %r12",
+            "movq %rsi, %r13",
+            "movq %rdx, %r14",
+            "movq %rcx, %r15",
+            "movq ${stacks}, %rdi",
+            stack_list_pop!(),
+            "movq %r12, %rdi",
+            "movq %r13, %rsi",
+            "movq %r14, %rdx",
+            "movq %r15, %rcx",
+            "movq 8(%rax), %r12",
+            "leaq (%rax, %r12, 1), %rsp",
             "call {foo}",
-            "mov rdi, 0",
-            "mov rsi, 13",
-            "mov rdx, rax",
-            "call {raw_syscall}",
+            "movq %rax, %r13", // save result
+            "movq ${stacks}, %rdi", // arg0
+            "movq %rsp, %rsi", // arg1 is our bottom of stack
+            "subq %r12, %rsi",
+            "movq %r12, 8(%rsi)", // Reset the stack node to include the size.
+            stack_list_push!(),
+            "movq %r13, %rax",
+            "movq $0, %rsp",
+            "movq $0, %rdi",
+            "movq $13, %rsi",
+            "movq %rax, %rdx",
+            "jmp {raw_syscall}",
+            stacks = sym SYNC_STACKS,
             foo = sym foo,
             raw_syscall = sym kapi::raw::raw_syscall,
-            options(noreturn),
+            options(noreturn, att_syntax),
         )
     }
 }

@@ -158,7 +158,13 @@ impl Retype {
         Self { id }
     }
 
-    pub fn retype(&self, region: usize, kind: RetypeKind) -> Result<(), CapError> {
-        unsafe { RetypeOp { region, to: kind }.syscall(self.id) }
+    pub fn retype(&self, frame: PhysFrame, kind: RetypeKind) -> Result<(), CapError> {
+        unsafe {
+            RetypeOp {
+                region: frame.0,
+                to: kind,
+            }
+            .syscall(self.id)
+        }
     }
 }
