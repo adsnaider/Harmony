@@ -45,9 +45,9 @@ checksum = "ed570934406eb16438a4e976b1b4500774099c13b8cb96eec99f620f05090ddf"
 name = "booter"
 version = "0.1.0"
 dependencies = [
- "bytemuck",
  "kapi",
  "log",
+ "stack_list",
  "sync",
  "uart_16550",
 ]
