@@ -2,6 +2,7 @@
 members = [
   "harmony/kapi",
   "harmony/kernel",
+  "harmony/stack_list",
   "harmony/sync",
   "harmony/trie",
   "harmony/userspace/booter",
