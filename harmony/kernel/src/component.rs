@@ -32,7 +32,6 @@ pub fn init() {
     ACTIVE_THREAD.set(threads).unwrap();
 }
 
-// TODO: Implement thread migration
 /// A user-space thread that provides a mechanism for dispatching.
 ///
 /// Each thread has its own address space, execution context, and resource
@@ -252,7 +251,6 @@ impl Thread {
                         let ctx = unsafe { SyscallCtx::current() };
                         Thread::dispatch(thread, ctx);
                     }
-                    ThreadOp::ChangeAffinity => todo!(),
                 }
             }
             Resource::PageTable { table: _, flags: _ } => todo!(),

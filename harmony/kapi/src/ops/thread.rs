@@ -4,7 +4,6 @@ use crate::raw::{RawOperation, SyscallArgs};
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ThreadOp {
     Activate,
-    ChangeAffinity,
 }
 
 impl SyscallOp for ThreadOp {
@@ -13,9 +12,6 @@ impl SyscallOp for ThreadOp {
     fn make_args(&self) -> SyscallArgs {
         match self {
             ThreadOp::Activate => SyscallArgs::new(RawOperation::ThreadActivate.into(), 0, 0, 0, 0),
-            ThreadOp::ChangeAffinity => {
-                todo!();
-            }
         }
     }
 
@@ -23,7 +19,6 @@ impl SyscallOp for ThreadOp {
         let op = RawOperation::try_from(args.op())?;
         match op {
             RawOperation::ThreadActivate => Ok(Self::Activate),
-            RawOperation::ThreadChangeAffinity => Ok(Self::ChangeAffinity),
             _ => Err(InvalidOperation::BadOp),
         }
     }

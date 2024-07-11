@@ -51,7 +51,6 @@ pub unsafe fn syscall(cap: CapId, args: SyscallArgs) -> Result<usize, CapError> 
 #[repr(usize)]
 pub enum RawOperation {
     ThreadActivate = 0,
-    ThreadChangeAffinity,
     CapTableLink,
     CapTableUnlink,
     CapTableConstruct,
