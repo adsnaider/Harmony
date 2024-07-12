@@ -10,7 +10,7 @@ use kapi::ops::cap_table::{
 use kapi::ops::hardware::HardwareOp;
 use kapi::ops::ipc::{SyncCallOp, SyncRetOp};
 use kapi::ops::memory::{RetypeKind, RetypeOp};
-use kapi::ops::paging::PageTableOp;
+use kapi::ops::paging::{PageTableOp, PermissionMask};
 use kapi::ops::thread::ThreadOp;
 use kapi::ops::SyscallOp;
 use kapi::raw::{CapError, CapId, SyscallArgs};
@@ -25,7 +25,7 @@ use crate::arch::paging::{Page, RawFrame, VirtAddr};
 use crate::caps::{CapEntryExtension as _, PageCapFlags, RawCapEntry, Resource};
 use crate::core_local::CoreLocal;
 use crate::kptr::KPtr;
-use crate::retyping::{AsTypeError, KernelFrame, UserFrame};
+use crate::retyping::{AsTypeError, KernelFrame};
 use crate::UNTYPED_MEMORY_OFFSET;
 
 static ACTIVE_THREAD: AtomicOnceCell<CoreLocal<RefCell<Option<KPtr<Thread>>>>> =
@@ -260,7 +260,11 @@ impl Thread {
             Resource::PageTable { table, flags } => {
                 let op = PageTableOp::from_args(args)?;
                 match op {
-                    PageTableOp::Link { other_table, slot } => {
+                    PageTableOp::Link {
+                        other_table,
+                        slot,
+                        permissions,
+                    } => {
                         let (other_table, other_flags): (KPtr<AnyPageTable>, PageCapFlags) = this
                             .component()
                             .resources
@@ -281,13 +285,9 @@ impl Thread {
                         let other_frame = other_table.into_raw();
                         // SAFETY: Whatever is done here can only affect userspace.
                         unsafe {
-                            if let Some((previous_frame, _)) = table.map(
-                                offset,
-                                other_frame,
-                                PageTableFlags::PRESENT
-                                    | PageTableFlags::USER_ACCESSIBLE
-                                    | PageTableFlags::WRITABLE,
-                            ) {
+                            if let Some((previous_frame, _)) =
+                                table.map(offset, other_frame, permissions_into(permissions))
+                            {
                                 KPtr::<AnyPageTable>::from_frame_unchecked(KernelFrame::from_raw(
                                     previous_frame,
                                 ));
@@ -316,7 +316,11 @@ impl Thread {
                         }
                         Ok(0)
                     }
-                    PageTableOp::MapFrame { user_frame, slot } => {
+                    PageTableOp::MapFrame {
+                        user_frame,
+                        slot,
+                        permissions,
+                    } => {
                         let offset = PageTableOffset::new_truncate(slot as u16);
                         if flags.level() != 0 {
                             return Err(CapError::InvalidArgument);
@@ -329,13 +333,9 @@ impl Thread {
                             .into_raw();
 
                         unsafe {
-                            if let Some((_previous_frame, _)) = table.map(
-                                offset,
-                                frame,
-                                PageTableFlags::PRESENT
-                                    | PageTableFlags::WRITABLE
-                                    | PageTableFlags::USER_ACCESSIBLE,
-                            ) {
+                            if let Some((_previous_frame, _)) =
+                                table.map(offset, frame, permissions_into(permissions))
+                            {
                                 // FIXME: This doesn't do any sort of flushing that guarantees the frame has been forgotten!
                                 // We can now drop the previous frame:
                                 // UserFrame::from_raw(previous_frame);
@@ -469,4 +469,15 @@ impl From<AsTypeError> for CapError {
     fn from(_value: AsTypeError) -> Self {
         Self::BadFrameType
     }
+}
+
+fn permissions_into(mask: PermissionMask) -> PageTableFlags {
+    let mut out = PageTableFlags::PRESENT;
+    if mask.contains(PermissionMask::WRITE) {
+        out |= PageTableFlags::WRITABLE;
+    }
+    if !mask.contains(PermissionMask::EXECUTE) {
+        out |= PageTableFlags::NO_EXECUTE;
+    }
+    out
 }

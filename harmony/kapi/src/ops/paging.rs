@@ -1,12 +1,34 @@
+use bitflags::bitflags;
+
 use super::{InvalidOperation, SyscallOp};
 use crate::raw::{CapId, RawOperation, SyscallArgs};
 
+bitflags! {
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+    pub struct PermissionMask: usize {
+        const WRITE = 1;
+        const EXECUTE = 2;
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum PageTableOp {
-    Link { other_table: CapId, slot: usize },
-    Unlink { slot: usize },
-    MapFrame { user_frame: usize, slot: usize },
-    UnmapFrame { slot: usize },
+    Link {
+        other_table: CapId,
+        slot: usize,
+        permissions: PermissionMask,
+    },
+    Unlink {
+        slot: usize,
+    },
+    MapFrame {
+        user_frame: usize,
+        slot: usize,
+        permissions: PermissionMask,
+    },
+    UnmapFrame {
+        slot: usize,
+    },
 }
 
 impl SyscallOp for PageTableOp {
@@ -14,21 +36,29 @@ impl SyscallOp for PageTableOp {
 
     fn make_args(&self) -> SyscallArgs<'_> {
         match *self {
-            PageTableOp::Link { other_table, slot } => SyscallArgs::new(
+            PageTableOp::Link {
+                other_table,
+                slot,
+                permissions,
+            } => SyscallArgs::new(
                 RawOperation::PageTableLink.into(),
                 other_table.into(),
                 slot,
-                0,
+                permissions.bits(),
                 0,
             ),
             PageTableOp::Unlink { slot } => {
                 SyscallArgs::new(RawOperation::PageTableUnlink.into(), slot, 0, 0, 0)
             }
-            PageTableOp::MapFrame { user_frame, slot } => SyscallArgs::new(
+            PageTableOp::MapFrame {
+                user_frame,
+                slot,
+                permissions,
+            } => SyscallArgs::new(
                 RawOperation::PageTableMapFrame.into(),
                 user_frame,
                 slot,
-                0,
+                permissions.bits(),
                 0,
             ),
             PageTableOp::UnmapFrame { slot } => {
@@ -43,6 +73,7 @@ impl SyscallOp for PageTableOp {
             RawOperation::PageTableLink => Ok(Self::Link {
                 other_table: CapId::try_from(args.args().0)?,
                 slot: args.args().1,
+                permissions: PermissionMask::from_bits_truncate(args.args().2),
             }),
             RawOperation::PageTableUnlink => Ok(Self::Unlink {
                 slot: args.args().0,
@@ -50,6 +81,7 @@ impl SyscallOp for PageTableOp {
             RawOperation::PageTableMapFrame => Ok(Self::MapFrame {
                 user_frame: args.args().0,
                 slot: args.args().1,
+                permissions: PermissionMask::from_bits_truncate(args.args().2),
             }),
             RawOperation::PageTableUnmapFrame => Ok(Self::UnmapFrame {
                 slot: args.args().1,
