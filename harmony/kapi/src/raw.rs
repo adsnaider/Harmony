@@ -63,6 +63,7 @@ pub enum RawOperation {
     MemoryRegionRetype,
     MemoryRegionSplit,
     HardwareAccessEnable,
+    HardwareFlushPage,
     SyncCall,
     SyncRet,
     Retype2Kernel,

@@ -19,8 +19,10 @@ use sync::cell::AtomicOnceCell;
 use crate::arch::exec::{ControlRegs, ExecCtx, NoopSaver, Regs, SaveState, ScratchRegs};
 use crate::arch::interrupts::SyscallCtx;
 use crate::arch::paging::page_table::{
-    Addrspace, AnyPageTable, PageTableFlags, PageTableOffset, PageTableOffsetError,
+    Addrspace, AnyPageTable, Flusher, PageTableFlags, PageTableOffset, PageTableOffsetError,
 };
+use crate::arch::paging::pages::Unaligned;
+use crate::arch::paging::virtual_address::BadVirtAddr;
 use crate::arch::paging::{Page, RawFrame, VirtAddr};
 use crate::caps::{CapEntryExtension as _, PageCapFlags, RawCapEntry, Resource};
 use crate::core_local::CoreLocal;
@@ -370,6 +372,14 @@ impl Thread {
                         }
                         Ok(0)
                     }
+                    HardwareOp::FlushPage { addr } => {
+                        let page = Page::try_from_start_address(VirtAddr::try_new(addr)?)?;
+                        if page.base().is_higher_half() {
+                            return Err(CapError::InvalidArgument);
+                        }
+                        Flusher::new(page).flush();
+                        Ok(0)
+                    }
                 }
             }
             Resource::SyncCall { entry, component } => {
@@ -468,6 +478,18 @@ impl From<PageTableOffsetError> for CapError {
 impl From<AsTypeError> for CapError {
     fn from(_value: AsTypeError) -> Self {
         Self::BadFrameType
+    }
+}
+
+impl From<BadVirtAddr> for CapError {
+    fn from(_value: BadVirtAddr) -> Self {
+        CapError::InvalidArgument
+    }
+}
+
+impl From<Unaligned> for CapError {
+    fn from(_value: Unaligned) -> Self {
+        CapError::InvalidArgument
     }
 }
 
