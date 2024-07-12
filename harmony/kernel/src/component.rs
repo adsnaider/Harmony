@@ -25,7 +25,7 @@ use crate::arch::paging::{Page, RawFrame, VirtAddr};
 use crate::caps::{CapEntryExtension as _, PageCapFlags, RawCapEntry, Resource};
 use crate::core_local::CoreLocal;
 use crate::kptr::KPtr;
-use crate::retyping::KernelFrame;
+use crate::retyping::{AsTypeError, KernelFrame, UserFrame};
 use crate::UNTYPED_MEMORY_OFFSET;
 
 static ACTIVE_THREAD: AtomicOnceCell<CoreLocal<RefCell<Option<KPtr<Thread>>>>> =
@@ -316,8 +316,47 @@ impl Thread {
                         }
                         Ok(0)
                     }
-                    PageTableOp::MapFrame { user_frame, slot } => todo!(),
-                    PageTableOp::UnmapFrame { slot } => todo!(),
+                    PageTableOp::MapFrame { user_frame, slot } => {
+                        let offset = PageTableOffset::new_truncate(slot as u16);
+                        if flags.level() != 0 {
+                            return Err(CapError::InvalidArgument);
+                        }
+
+                        let frame = this
+                            .component()
+                            .user_region_frame(user_frame)?
+                            .try_as_user()?
+                            .into_raw();
+
+                        unsafe {
+                            if let Some((_previous_frame, _)) = table.map(
+                                offset,
+                                frame,
+                                PageTableFlags::PRESENT
+                                    | PageTableFlags::WRITABLE
+                                    | PageTableFlags::USER_ACCESSIBLE,
+                            ) {
+                                // FIXME: This doesn't do any sort of flushing that guarantees the frame has been forgotten!
+                                // We can now drop the previous frame:
+                                // UserFrame::from_raw(previous_frame);
+                            }
+                        }
+                        Ok(0)
+                    }
+                    PageTableOp::UnmapFrame { slot } => {
+                        let offset = PageTableOffset::new_truncate(slot as u16);
+                        if flags.level() != 0 {
+                            return Err(CapError::InvalidArgument);
+                        }
+                        unsafe {
+                            if let Some((_previous_frame, _)) = table.unmap(offset) {
+                                // FIXME: This doesn't do any sort of flushing that guarantees the frame has been forgotten!
+                                // We can now drop the previous frame:
+                                // UserFrame::from_raw(previous_frame);
+                            }
+                        }
+                        Ok(0)
+                    }
                 }
             }
             Resource::HardwareAccess => {
@@ -423,5 +462,11 @@ impl Component {
 impl From<PageTableOffsetError> for CapError {
     fn from(_value: PageTableOffsetError) -> Self {
         Self::InvalidArgument
+    }
+}
+
+impl From<AsTypeError> for CapError {
+    fn from(_value: AsTypeError) -> Self {
+        Self::BadFrameType
     }
 }
