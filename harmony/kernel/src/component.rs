@@ -10,6 +10,7 @@ use kapi::ops::cap_table::{
 use kapi::ops::hardware::HardwareOp;
 use kapi::ops::ipc::{SyncCallOp, SyncRetOp};
 use kapi::ops::memory::{RetypeKind, RetypeOp};
+use kapi::ops::paging::PageTableOp;
 use kapi::ops::thread::ThreadOp;
 use kapi::ops::SyscallOp;
 use kapi::raw::{CapError, CapId, SyscallArgs};
@@ -17,11 +18,14 @@ use sync::cell::AtomicOnceCell;
 
 use crate::arch::exec::{ControlRegs, ExecCtx, NoopSaver, Regs, SaveState, ScratchRegs};
 use crate::arch::interrupts::SyscallCtx;
-use crate::arch::paging::page_table::{Addrspace, AnyPageTable, PageTableFlags};
+use crate::arch::paging::page_table::{
+    Addrspace, AnyPageTable, PageTableFlags, PageTableOffset, PageTableOffsetError,
+};
 use crate::arch::paging::{Page, RawFrame, VirtAddr};
 use crate::caps::{CapEntryExtension as _, PageCapFlags, RawCapEntry, Resource};
 use crate::core_local::CoreLocal;
 use crate::kptr::KPtr;
+use crate::retyping::KernelFrame;
 use crate::UNTYPED_MEMORY_OFFSET;
 
 static ACTIVE_THREAD: AtomicOnceCell<CoreLocal<RefCell<Option<KPtr<Thread>>>>> =
@@ -253,7 +257,69 @@ impl Thread {
                     }
                 }
             }
-            Resource::PageTable { table: _, flags: _ } => todo!(),
+            Resource::PageTable { table, flags } => {
+                let op = PageTableOp::from_args(args)?;
+                match op {
+                    PageTableOp::Link { other_table, slot } => {
+                        let (other_table, other_flags): (KPtr<AnyPageTable>, PageCapFlags) = this
+                            .component()
+                            .resources
+                            .clone()
+                            .get_resource_as(other_table)?;
+                        if other_flags.level() != flags.level() - 1 {
+                            return Err(CapError::InvalidArgument);
+                        }
+
+                        let offset = PageTableOffset::new_truncate(slot as u16);
+                        if flags.level() == 4 {
+                            if !offset.is_lower_half() {
+                                // Trying to modify the higher half kernel address space.
+                                return Err(CapError::InvalidArgument);
+                            }
+                        }
+
+                        let other_frame = other_table.into_raw();
+                        // SAFETY: Whatever is done here can only affect userspace.
+                        unsafe {
+                            if let Some((previous_frame, _)) = table.map(
+                                offset,
+                                other_frame,
+                                PageTableFlags::PRESENT
+                                    | PageTableFlags::USER_ACCESSIBLE
+                                    | PageTableFlags::WRITABLE,
+                            ) {
+                                KPtr::<AnyPageTable>::from_frame_unchecked(KernelFrame::from_raw(
+                                    previous_frame,
+                                ));
+                            }
+                        }
+                        // Note: How do we flush these entries. Probably let userspace handle that? How?
+                        Ok(0)
+                    }
+                    PageTableOp::Unlink { slot } => {
+                        let offset = PageTableOffset::new_truncate(slot as u16);
+                        if flags.level() == 4 {
+                            if !offset.is_lower_half() {
+                                // Trying to modify the higher half kernel address space.
+                                return Err(CapError::InvalidArgument);
+                            }
+                        }
+                        if flags.level() == 0 {
+                            return Err(CapError::InvalidArgument);
+                        }
+                        unsafe {
+                            if let Some((frame, _)) = table.unmap(offset) {
+                                KPtr::<AnyPageTable>::from_frame_unchecked(KernelFrame::from_raw(
+                                    frame,
+                                ));
+                            }
+                        }
+                        Ok(0)
+                    }
+                    PageTableOp::MapFrame { user_frame, slot } => todo!(),
+                    PageTableOp::UnmapFrame { slot } => todo!(),
+                }
+            }
             Resource::HardwareAccess => {
                 let op = HardwareOp::from_args(args)?;
                 match op {
@@ -351,5 +417,11 @@ impl Component {
             return Err(CapError::MissingRightsToFrame);
         }
         Ok(frame)
+    }
+}
+
+impl From<PageTableOffsetError> for CapError {
+    fn from(_value: PageTableOffsetError) -> Self {
+        Self::InvalidArgument
     }
 }
