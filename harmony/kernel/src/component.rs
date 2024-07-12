@@ -306,7 +306,7 @@ impl Thread {
                                 return Err(CapError::InvalidArgument);
                             }
                         }
-                        if flags.level() == 0 {
+                        if flags.level() == 1 {
                             return Err(CapError::InvalidArgument);
                         }
                         unsafe {
@@ -324,7 +324,7 @@ impl Thread {
                         permissions,
                     } => {
                         let offset = PageTableOffset::new_truncate(slot as u16);
-                        if flags.level() != 0 {
+                        if flags.level() != 1 {
                             return Err(CapError::InvalidArgument);
                         }
 
@@ -347,7 +347,7 @@ impl Thread {
                     }
                     PageTableOp::UnmapFrame { slot } => {
                         let offset = PageTableOffset::new_truncate(slot as u16);
-                        if flags.level() != 0 {
+                        if flags.level() != 1 {
                             return Err(CapError::InvalidArgument);
                         }
                         unsafe {
@@ -494,7 +494,7 @@ impl From<Unaligned> for CapError {
 }
 
 fn permissions_into(mask: PermissionMask) -> PageTableFlags {
-    let mut out = PageTableFlags::PRESENT;
+    let mut out = PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
     if mask.contains(PermissionMask::WRITE) {
         out |= PageTableFlags::WRITABLE;
     }
