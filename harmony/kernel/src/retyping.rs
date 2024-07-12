@@ -239,6 +239,15 @@ impl UserFrame {
         self.0
     }
 
+    /// Builds back a user frame from the raw frame
+    ///
+    /// # Safety
+    ///
+    /// The frame must have been created with `into_raw`.
+    pub unsafe fn from_raw(frame: RawFrame) -> Self {
+        Self(frame)
+    }
+
     pub fn into_raw(self) -> RawFrame {
         ManuallyDrop::new(self).0
     }

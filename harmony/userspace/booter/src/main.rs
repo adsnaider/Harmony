@@ -8,6 +8,7 @@ use core::ptr::{addr_of, addr_of_mut};
 
 use kapi::ops::cap_table::SlotId;
 use kapi::ops::memory::RetypeKind;
+use kapi::ops::paging::PermissionMask;
 use kapi::raw::CapId;
 use kapi::userspace::{CapTable, HardwareAccess, PageTable, PhysFrame, Retype, SyncCall, Thread};
 use stack_list::{stack_list_pop, AlignedU8Ext as _, OveralignedU8, StackList, StackNode};
@@ -38,6 +39,19 @@ extern "C" fn foo(arg0: usize) -> ! {
 
 static SYNC_STACKS: StackList<'static> = StackList::new();
 
+struct FrameBumper(PhysFrame);
+impl FrameBumper {
+    pub fn new(start: PhysFrame) -> Self {
+        Self(start)
+    }
+
+    pub fn next(&mut self) -> PhysFrame {
+        let frame = self.0;
+        self.0 = PhysFrame::new(frame.addr() + 0x1000);
+        frame
+    }
+}
+
 #[no_mangle]
 extern "C" fn _start(lowest_frame: usize) -> ! {
     let retype_cap = Retype::new(CapId::new(1));
@@ -47,26 +61,59 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
     let hardware_access = HardwareAccess::new(CapId::new(5));
 
     hardware_access.enable_ports().unwrap();
-
     serial::init();
+
+    let mut frames = FrameBumper::new(PhysFrame::new(lowest_frame));
+
+    resources
+        .make_page_table(SlotId::new(63).unwrap(), frames.next(), 3)
+        .unwrap();
+    let p3 = PageTable::new(CapId::new(63));
+    resources
+        .make_page_table(SlotId::new(62).unwrap(), frames.next(), 2)
+        .unwrap();
+    let p2 = PageTable::new(CapId::new(62));
+    resources
+        .make_page_table(SlotId::new(61).unwrap(), frames.next(), 1)
+        .unwrap();
+    let p1 = PageTable::new(CapId::new(61));
+
+    let thread_stack = frames.next();
+    retype_cap
+        .retype(thread_stack, RetypeKind::Retype2User)
+        .unwrap();
+
+    let sync_stack = frames.next();
+    retype_cap
+        .retype(sync_stack, RetypeKind::Retype2User)
+        .unwrap();
+
+    page_table.link(p3, 16, PermissionMask::WRITE).unwrap();
+    p3.link(p2, 0, PermissionMask::WRITE).unwrap();
+    p2.link(p1, 0, PermissionMask::WRITE).unwrap();
+    p1.map(0, thread_stack, PermissionMask::WRITE).unwrap();
+    p1.map(2, sync_stack, PermissionMask::WRITE).unwrap();
+
+    let tstack = 0x0000_0800_0000_0000 as *mut u8;
+    hardware_access.flush_page(tstack as usize).unwrap();
+    let sstack_ptr = 0x0000_0800_0000_2000 as *mut u8;
+    hardware_access.flush_page(sstack_ptr as usize).unwrap();
 
     sprintln!("{:?}", &current_thread);
     sprintln!("{:?}", &current_thread as *const Thread);
 
-    let mut tstack = [0u8; 4096];
-    static mut SSTACK: [OveralignedU8; 4096] = [OveralignedU8(0); 4096];
-
-    let sstack = unsafe { StackNode::new((*addr_of_mut!(SSTACK)).as_u8_slice_mut()).unwrap() };
+    let sstack = unsafe { core::slice::from_raw_parts_mut(sstack_ptr, 0x1000) };
+    let sstack = StackNode::new(sstack).unwrap();
     SYNC_STACKS.push_front(sstack);
     unsafe {
         resources
             .make_thread(
                 foo,
-                (&mut tstack as *mut u8).add(tstack.len()),
+                tstack.add(0x1000),
                 resources,
                 page_table,
                 SlotId::new(6).unwrap(),
-                PhysFrame::new(lowest_frame),
+                frames.next(),
                 &current_thread as *const _ as usize,
             )
             .unwrap();
@@ -82,7 +129,7 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
 
     sprintln!("We are back!");
     let stack = SYNC_STACKS.pop_front().unwrap().into_buffer();
-    assert_eq!(stack.as_ptr(), unsafe { addr_of!(SSTACK) } as *const u8);
+    assert_eq!(stack.as_ptr(), sstack_ptr);
     assert_eq!(stack.len(), 4096);
     loop {}
 }
@@ -125,12 +172,12 @@ extern "C" fn sync_call(_a: usize, _b: usize, _c: usize, _d: usize) -> usize {
             "movq %r13, %rax",
             "movq $0, %rsp",
             "movq $0, %rdi",
-            "movq $13, %rsi",
+            "movq $15, %rsi",
             "movq %rax, %rdx",
-            "jmp {raw_syscall}",
+            "int $0x80",
+            "ud2",
             stacks = sym SYNC_STACKS,
             foo = sym foo,
-            raw_syscall = sym kapi::raw::raw_syscall,
             options(noreturn, att_syntax),
         )
     }

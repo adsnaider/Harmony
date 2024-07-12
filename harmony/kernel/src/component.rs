@@ -10,6 +10,7 @@ use kapi::ops::cap_table::{
 use kapi::ops::hardware::HardwareOp;
 use kapi::ops::ipc::{SyncCallOp, SyncRetOp};
 use kapi::ops::memory::{RetypeKind, RetypeOp};
+use kapi::ops::paging::{PageTableOp, PermissionMask};
 use kapi::ops::thread::ThreadOp;
 use kapi::ops::SyscallOp;
 use kapi::raw::{CapError, CapId, SyscallArgs};
@@ -17,11 +18,16 @@ use sync::cell::AtomicOnceCell;
 
 use crate::arch::exec::{ControlRegs, ExecCtx, NoopSaver, Regs, SaveState, ScratchRegs};
 use crate::arch::interrupts::SyscallCtx;
-use crate::arch::paging::page_table::{Addrspace, AnyPageTable, PageTableFlags};
+use crate::arch::paging::page_table::{
+    Addrspace, AnyPageTable, Flusher, PageTableFlags, PageTableOffset, PageTableOffsetError,
+};
+use crate::arch::paging::pages::Unaligned;
+use crate::arch::paging::virtual_address::BadVirtAddr;
 use crate::arch::paging::{Page, RawFrame, VirtAddr};
 use crate::caps::{CapEntryExtension as _, PageCapFlags, RawCapEntry, Resource};
 use crate::core_local::CoreLocal;
 use crate::kptr::KPtr;
+use crate::retyping::{AsTypeError, KernelFrame};
 use crate::UNTYPED_MEMORY_OFFSET;
 
 static ACTIVE_THREAD: AtomicOnceCell<CoreLocal<RefCell<Option<KPtr<Thread>>>>> =
@@ -253,7 +259,107 @@ impl Thread {
                     }
                 }
             }
-            Resource::PageTable { table: _, flags: _ } => todo!(),
+            Resource::PageTable { table, flags } => {
+                let op = PageTableOp::from_args(args)?;
+                match op {
+                    PageTableOp::Link {
+                        other_table,
+                        slot,
+                        permissions,
+                    } => {
+                        let (other_table, other_flags): (KPtr<AnyPageTable>, PageCapFlags) = this
+                            .component()
+                            .resources
+                            .clone()
+                            .get_resource_as(other_table)?;
+                        if other_flags.level() != flags.level() - 1 {
+                            return Err(CapError::InvalidArgument);
+                        }
+
+                        let offset = PageTableOffset::new_truncate(slot as u16);
+                        if flags.level() == 4 {
+                            if !offset.is_lower_half() {
+                                // Trying to modify the higher half kernel address space.
+                                return Err(CapError::InvalidArgument);
+                            }
+                        }
+
+                        let other_frame = other_table.into_raw();
+                        // SAFETY: Whatever is done here can only affect userspace.
+                        unsafe {
+                            if let Some((previous_frame, _)) =
+                                table.map(offset, other_frame, permissions_into(permissions))
+                            {
+                                KPtr::<AnyPageTable>::from_frame_unchecked(KernelFrame::from_raw(
+                                    previous_frame,
+                                ));
+                            }
+                        }
+                        Ok(0)
+                    }
+                    PageTableOp::Unlink { slot } => {
+                        let offset = PageTableOffset::new_truncate(slot as u16);
+                        if flags.level() == 4 {
+                            if !offset.is_lower_half() {
+                                // Trying to modify the higher half kernel address space.
+                                return Err(CapError::InvalidArgument);
+                            }
+                        }
+                        if flags.level() == 1 {
+                            return Err(CapError::InvalidArgument);
+                        }
+                        unsafe {
+                            if let Some((frame, _)) = table.unmap(offset) {
+                                KPtr::<AnyPageTable>::from_frame_unchecked(KernelFrame::from_raw(
+                                    frame,
+                                ));
+                            }
+                        }
+                        Ok(0)
+                    }
+                    PageTableOp::MapFrame {
+                        user_frame,
+                        slot,
+                        permissions,
+                    } => {
+                        let offset = PageTableOffset::new_truncate(slot as u16);
+                        if flags.level() != 1 {
+                            return Err(CapError::InvalidArgument);
+                        }
+
+                        let frame = this
+                            .component()
+                            .user_region_frame(user_frame)?
+                            .try_as_user()?
+                            .into_raw();
+
+                        unsafe {
+                            if let Some((_previous_frame, _)) =
+                                table.map(offset, frame, permissions_into(permissions))
+                            {
+                                // FIXME: This doesn't do any sort of flushing that guarantees the frame has been forgotten!
+                                // We can now drop the previous frame:
+                                // UserFrame::from_raw(previous_frame);
+                            }
+                        }
+                        Ok(0)
+                    }
+                    PageTableOp::UnmapFrame { slot } => {
+                        let offset = PageTableOffset::new_truncate(slot as u16);
+                        if flags.level() != 1 {
+                            return Err(CapError::InvalidArgument);
+                        }
+                        unsafe {
+                            if let Some((_previous_frame, _)) = table.unmap(offset) {
+                                // FIXME: This doesn't do any sort of flushing that guarantees the frame has been forgotten!
+                                // We can now drop the previous frame:
+                                // UserFrame::from_raw(previous_frame);
+                            }
+                        }
+                        Ok(0)
+                    }
+                }
+            }
             Resource::HardwareAccess => {
                 let op = HardwareOp::from_args(args)?;
                 match op {
@@ -263,6 +369,14 @@ impl Thread {
                             let flags = SyscallCtx::get_flags();
                             SyscallCtx::update_flags(flags | IOPL3);
                         }
+                        Ok(0)
+                    }
+                    HardwareOp::FlushPage { addr } => {
+                        let page = Page::try_from_start_address(VirtAddr::try_new(addr)?)?;
+                        if page.base().is_higher_half() {
+                            return Err(CapError::InvalidArgument);
+                        }
+                        Flusher::new(page).flush();
                         Ok(0)
                     }
                 }
@@ -352,4 +466,39 @@ impl Component {
         }
         Ok(frame)
     }
+}
+
+impl From<PageTableOffsetError> for CapError {
+    fn from(_value: PageTableOffsetError) -> Self {
+        Self::InvalidArgument
+    }
+}
+
+impl From<AsTypeError> for CapError {
+    fn from(_value: AsTypeError) -> Self {
+        Self::BadFrameType
+    }
+}
+
+impl From<BadVirtAddr> for CapError {
+    fn from(_value: BadVirtAddr) -> Self {
+        CapError::InvalidArgument
+    }
+}
+
+impl From<Unaligned> for CapError {
+    fn from(_value: Unaligned) -> Self {
+        CapError::InvalidArgument
+    }
+}
+
+fn permissions_into(mask: PermissionMask) -> PageTableFlags {
+    let mut out = PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
+    if mask.contains(PermissionMask::WRITE) {
+        out |= PageTableFlags::WRITABLE;
+    }
+    if !mask.contains(PermissionMask::EXECUTE) {
+        out |= PageTableFlags::NO_EXECUTE;
+    }
+    out
 }

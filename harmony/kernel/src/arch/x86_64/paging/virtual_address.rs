@@ -66,6 +66,14 @@ impl VirtAddr {
         Self::new(0)
     }
 
+    pub const fn is_higher_half(&self) -> bool {
+        self.0 >= 0xFFFF_8000_0000_0000
+    }
+
+    pub const fn is_lower_half(&self) -> bool {
+        !self.is_higher_half()
+    }
+
     /// Returns the 9-bit level 1 page table index.
     #[inline]
     pub const fn p1_index(self) -> PageTableOffset {

@@ -4,6 +4,7 @@ use crate::raw::{RawOperation, SyscallArgs};
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum HardwareOp {
     EnableIoPorts,
+    FlushPage { addr: usize },
 }
 
 impl SyscallOp for HardwareOp {
@@ -14,6 +15,9 @@ impl SyscallOp for HardwareOp {
             HardwareOp::EnableIoPorts => {
                 SyscallArgs::new(RawOperation::HardwareAccessEnable.into(), 0, 0, 0, 0)
             }
+            &HardwareOp::FlushPage { addr } => {
+                SyscallArgs::new(RawOperation::HardwareFlushPage.into(), addr, 0, 0, 0)
+            }
         }
     }
 
@@ -21,6 +25,9 @@ impl SyscallOp for HardwareOp {
         let op = RawOperation::try_from(args.op())?;
         match op {
             RawOperation::HardwareAccessEnable => Ok(Self::EnableIoPorts),
+            RawOperation::HardwareFlushPage => Ok(Self::FlushPage {
+                addr: args.args().0,
+            }),
             _ => Err(InvalidOperation::BadOp),
         }
     }

@@ -9,6 +9,7 @@ pub mod cap_table;
 pub mod hardware;
 pub mod ipc;
 pub mod memory;
+pub mod paging;
 pub mod thread;
 
 pub enum InvalidOperation {

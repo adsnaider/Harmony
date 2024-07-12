@@ -31,6 +31,9 @@ pub struct Flusher {
 }
 
 impl Flusher {
+    pub fn new(page: Page) -> Self {
+        Self { page }
+    }
     pub fn flush(self) {
         tlb::flush(self.page.base().into())
     }
@@ -150,7 +153,7 @@ impl<'a> Addrspace<'a> {
                 }
             }
         }
-        Ok(Flusher { page })
+        Ok(Flusher::new(page))
     }
 
     /// Unmaps a virtual page from its physical frame.
@@ -173,7 +176,7 @@ impl<'a> Addrspace<'a> {
             if current_level.is_bottom() {
                 return entry
                     .reset()
-                    .map(|(frame, flags)| (Flusher { page }, frame, flags))
+                    .map(|(frame, flags)| (Flusher::new(page), frame, flags))
                     .ok_or(UnmapError::NotMapped);
             }
             let (frame, flags) = entry.get().ok_or(UnmapError::NotMapped)?;
