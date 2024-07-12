@@ -58,6 +58,8 @@ pub enum RawOperation {
     CapTableCopy,
     PageTableLink,
     PageTableUnlink,
+    PageTableMapFrame,
+    PageTableUnmapFrame,
     MemoryRegionRetype,
     MemoryRegionSplit,
     HardwareAccessEnable,

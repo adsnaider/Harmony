@@ -1,0 +1,62 @@
+use super::{InvalidOperation, SyscallOp};
+use crate::raw::{CapId, RawOperation, SyscallArgs};
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum PageTableOp {
+    Link { other_table: CapId, slot: usize },
+    Unlink { slot: usize },
+    MapFrame { user_frame: usize, slot: usize },
+    UnmapFrame { slot: usize },
+}
+
+impl SyscallOp for PageTableOp {
+    type R = ();
+
+    fn make_args(&self) -> SyscallArgs<'_> {
+        match *self {
+            PageTableOp::Link { other_table, slot } => SyscallArgs::new(
+                RawOperation::PageTableLink.into(),
+                other_table.into(),
+                slot,
+                0,
+                0,
+            ),
+            PageTableOp::Unlink { slot } => {
+                SyscallArgs::new(RawOperation::PageTableUnlink.into(), slot, 0, 0, 0)
+            }
+            PageTableOp::MapFrame { user_frame, slot } => SyscallArgs::new(
+                RawOperation::PageTableMapFrame.into(),
+                user_frame,
+                slot,
+                0,
+                0,
+            ),
+            PageTableOp::UnmapFrame { slot } => {
+                SyscallArgs::new(RawOperation::PageTableUnmapFrame.into(), slot, 0, 0, 0)
+            }
+        }
+    }
+
+    fn from_args(args: SyscallArgs) -> Result<Self, super::InvalidOperation> {
+        let op = RawOperation::try_from(args.op())?;
+        match op {
+            RawOperation::PageTableLink => Ok(Self::Link {
+                other_table: CapId::try_from(args.args().0)?,
+                slot: args.args().1,
+            }),
+            RawOperation::PageTableUnlink => Ok(Self::Unlink {
+                slot: args.args().0,
+            }),
+            RawOperation::PageTableMapFrame => Ok(Self::MapFrame {
+                user_frame: args.args().0,
+                slot: args.args().1,
+            }),
+            RawOperation::PageTableUnmapFrame => Ok(Self::UnmapFrame {
+                slot: args.args().1,
+            }),
+            _ => Err(InvalidOperation::BadOp),
+        }
+    }
+
+    fn convert_success_code(&self, _code: usize) -> Self::R {}
+}
