@@ -6,21 +6,28 @@
 use core::convert::Infallible;
 
 use crate::ops::cap_table::{
-    CapTableOp, ConsArgs, ConstructArgs, SlotId, SyncCallConsArgs, ThreadConsArgs,
+    CapTableOp, ConsArgs, ConstructArgs, PageTableConsArgs, SlotId, SyncCallConsArgs,
+    ThreadConsArgs,
 };
 use crate::ops::hardware::HardwareOp;
 use crate::ops::ipc::{SyncCallOp, SyncRetOp};
 use crate::ops::memory::{RetypeKind, RetypeOp};
+use crate::ops::paging::{PageTableOp, PermissionMask};
 use crate::ops::thread::ThreadOp;
 use crate::ops::SyscallOp as _;
 use crate::raw::{CapError, CapId};
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct PhysFrame(usize);
 
 impl PhysFrame {
     pub fn new(frame: usize) -> Self {
         assert!(frame % 4096 == 0);
         Self(frame)
+    }
+
+    pub fn addr(&self) -> usize {
+        self.0
     }
 }
 
@@ -77,6 +84,25 @@ impl CapTable {
         });
         unsafe { op.syscall(self.id) }
     }
+
+    pub fn make_page_table(
+        &self,
+        slot: SlotId<128>,
+        frame: PhysFrame,
+        level: u8,
+    ) -> Result<(), CapError> {
+        unsafe {
+            CapTableOp::Construct(ConsArgs {
+                kind: ConstructArgs::PageTable(PageTableConsArgs {
+                    region: frame.0,
+                    level,
+                    _padding: [0; 7],
+                }),
+                slot,
+            })
+            .syscall(self.id)
+        }
+    }
 }
 
 /// A wrapper over a thread capability.
@@ -105,6 +131,38 @@ impl PageTable {
     pub fn new(id: CapId) -> Self {
         Self { id }
     }
+
+    pub fn link(
+        &self,
+        other_table: PageTable,
+        slot: usize,
+        permissions: PermissionMask,
+    ) -> Result<(), CapError> {
+        unsafe {
+            PageTableOp::Link {
+                other_table: other_table.id,
+                slot,
+                permissions,
+            }
+            .syscall(self.id)
+        }
+    }
+
+    pub fn map(
+        &self,
+        slot: usize,
+        frame: PhysFrame,
+        permissions: PermissionMask,
+    ) -> Result<(), CapError> {
+        unsafe {
+            PageTableOp::MapFrame {
+                user_frame: frame.0,
+                slot,
+                permissions,
+            }
+            .syscall(self.id)
+        }
+    }
 }
 
 pub struct HardwareAccess {
@@ -118,6 +176,10 @@ impl HardwareAccess {
 
     pub fn enable_ports(&self) -> Result<(), CapError> {
         unsafe { HardwareOp::EnableIoPorts.syscall(self.id) }
+    }
+
+    pub fn flush_page(&self, page: usize) -> Result<(), CapError> {
+        unsafe { HardwareOp::FlushPage { addr: page }.syscall(self.id) }
     }
 }
 
