@@ -94,7 +94,6 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
     p1.map(0, thread_stack, PermissionMask::WRITE).unwrap();
     p1.map(2, sync_stack, PermissionMask::WRITE).unwrap();
 
-    // Address is 0x0000_0100_0000_0000;
     let tstack = 0x0000_0800_0000_0000 as *mut u8;
     hardware_access.flush_page(tstack as usize).unwrap();
     let sstack_ptr = 0x0000_0800_0000_2000 as *mut u8;

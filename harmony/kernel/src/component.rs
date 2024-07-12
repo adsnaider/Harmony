@@ -295,7 +295,6 @@ impl Thread {
                                 ));
                             }
                         }
-                        // Note: How do we flush these entries. Probably let userspace handle that? How?
                         Ok(0)
                     }
                     PageTableOp::Unlink { slot } => {

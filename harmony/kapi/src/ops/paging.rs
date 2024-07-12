@@ -6,8 +6,8 @@ use crate::raw::{CapId, RawOperation, SyscallArgs};
 bitflags! {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
     pub struct PermissionMask: usize {
-        const WRITE = 1;
-        const EXECUTE = 2;
+        const WRITE = 0x0001;
+        const EXECUTE = 0x0002;
     }
 }
 
