@@ -4,14 +4,12 @@
 
 mod serial;
 
-use core::ptr::{addr_of, addr_of_mut};
-
-use kapi::ops::cap_table::SlotId;
 use kapi::ops::memory::RetypeKind;
 use kapi::ops::paging::PermissionMask;
+use kapi::ops::SlotId;
 use kapi::raw::CapId;
 use kapi::userspace::{CapTable, HardwareAccess, PageTable, PhysFrame, Retype, SyncCall, Thread};
-use stack_list::{stack_list_pop, AlignedU8Ext as _, OveralignedU8, StackList, StackNode};
+use stack_list::{StackList, StackNode};
 
 #[cfg(not(test))]
 #[panic_handler]

@@ -6,15 +6,14 @@
 use core::convert::Infallible;
 
 use crate::ops::cap_table::{
-    CapTableOp, ConsArgs, ConstructArgs, PageTableConsArgs, SlotId, SyncCallConsArgs,
-    ThreadConsArgs,
+    CapTableOp, ConsArgs, ConstructArgs, PageTableConsArgs, SyncCallConsArgs, ThreadConsArgs,
 };
 use crate::ops::hardware::HardwareOp;
 use crate::ops::ipc::{SyncCallOp, SyncRetOp};
 use crate::ops::memory::{RetypeKind, RetypeOp};
 use crate::ops::paging::{PageTableOp, PermissionMask};
 use crate::ops::thread::ThreadOp;
-use crate::ops::SyscallOp as _;
+use crate::ops::{SlotId, SyscallOp as _};
 use crate::raw::{CapError, CapId};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -49,7 +48,7 @@ impl CapTable {
         stack_top: *mut u8,
         resources: CapTable,
         page_table: PageTable,
-        construct_slot: SlotId<128>,
+        construct_slot: SlotId,
         construct_frame: PhysFrame,
         arg0: usize,
     ) -> Result<(), CapError> {
@@ -72,7 +71,7 @@ impl CapTable {
         entry: extern "C" fn(usize, usize, usize, usize) -> usize,
         resources: CapTable,
         page_table: PageTable,
-        construct_slot: SlotId<128>,
+        construct_slot: SlotId,
     ) -> Result<(), CapError> {
         let op = CapTableOp::Construct(ConsArgs {
             kind: ConstructArgs::SyncCall(SyncCallConsArgs {
@@ -87,7 +86,7 @@ impl CapTable {
 
     pub fn make_page_table(
         &self,
-        slot: SlotId<128>,
+        slot: SlotId,
         frame: PhysFrame,
         level: u8,
     ) -> Result<(), CapError> {

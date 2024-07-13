@@ -2,9 +2,10 @@
 
 use core::convert::Infallible;
 
+use kapi::ops::SlotId;
 use kapi::raw::{CapError, CapId};
 use sync::cell::AtomicCell;
-use trie::{Ptr, Slot, SlotId, TrieEntry};
+use trie::{Ptr, Slot, TrieEntry};
 
 use crate::arch::paging::page_table::AnyPageTable;
 use crate::arch::paging::PAGE_SIZE;
@@ -61,7 +62,7 @@ impl TryFrom<Resource> for KPtr<Thread> {
 
 pub trait CapEntryExtension: Sized {
     fn find(self, cap: CapId) -> Result<impl Ptr<AtomicCapSlot>, CapError>;
-    fn index_slot(self, slot: SlotId<NUM_SLOTS>) -> impl Ptr<AtomicCapSlot>;
+    fn index_slot(self, slot: SlotId) -> impl Ptr<AtomicCapSlot>;
 
     fn get_capability(self, cap: CapId) -> Result<CapSlot, CapError> {
         Ok(self.find(cap)?.get())
@@ -85,7 +86,7 @@ impl CapEntryExtension for KPtr<RawCapEntry> {
             .ok_or(CapError::NotFound)
     }
 
-    fn index_slot(self, slot: SlotId<NUM_SLOTS>) -> impl Ptr<AtomicCapSlot> {
+    fn index_slot(self, slot: SlotId) -> impl Ptr<AtomicCapSlot> {
         RawCapEntry::index(self, slot)
     }
 }
@@ -141,6 +142,7 @@ impl Slot<NUM_SLOTS> for AtomicCapSlot {
 const _SIZE_OF_ENTRY: () = {
     assert!(core::mem::size_of::<AtomicCapSlot>() == SLOT_SIZE);
     assert!(core::mem::size_of::<RawCapEntry>() == PAGE_SIZE);
+    assert!(NUM_SLOTS == SlotId::count());
     assert!(PAGE_SIZE % core::mem::align_of::<RawCapEntry>() == 0);
 };
 

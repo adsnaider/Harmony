@@ -58,8 +58,8 @@ extern "C" fn kmain() -> ! {
     use bump_allocator::BumpAllocator;
     use caps::RawCapEntry;
     use component::{Component, Thread};
+    use kapi::ops::SlotId;
     use kptr::KPtr;
-    use trie::SlotId;
 
     use crate::caps::{CapEntryExtension, PageCapFlags, Resource};
 
