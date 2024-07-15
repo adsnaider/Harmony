@@ -166,8 +166,12 @@ impl SyscallArgs<'_> {
 pub struct CapId(u32);
 
 impl CapId {
-    pub fn new(id: u32) -> Self {
+    pub const fn new(id: u32) -> Self {
         Self(id)
+    }
+
+    pub const fn get(&self) -> u32 {
+        self.0
     }
 }
 

@@ -4,11 +4,13 @@
 
 mod serial;
 
+use kapi::ops::cap_table::{PageTableConsArgs, SyncCallConsArgs, ThreadConsArgs};
 use kapi::ops::memory::RetypeKind;
 use kapi::ops::paging::PermissionMask;
-use kapi::ops::SlotId;
 use kapi::raw::CapId;
-use kapi::userspace::{CapTable, HardwareAccess, PageTable, PhysFrame, Retype, SyncCall, Thread};
+use kapi::userspace::cap_managment::SelfCapabilityManager;
+use kapi::userspace::structures::{HardwareAccess, PhysFrame, Thread};
+use kapi::userspace::Booter;
 use stack_list::{StackList, StackNode};
 
 #[cfg(not(test))]
@@ -27,9 +29,7 @@ extern "C" fn foo(arg0: usize) -> ! {
     let main_thread = unsafe { &*(arg0 as *const Thread) };
     sprintln!("{:?}", main_thread);
     sprintln!("In a thread!");
-    let sync_call = SyncCall::new(CapId::new(7));
     unsafe {
-        assert_eq!(sync_call.call(1, 2, 3, 4).unwrap(), 10);
         main_thread.activate().unwrap();
     }
     unreachable!();
@@ -52,80 +52,90 @@ impl FrameBumper {
 
 #[no_mangle]
 extern "C" fn _start(lowest_frame: usize) -> ! {
-    let retype_cap = Retype::new(CapId::new(1));
-    let resources = CapTable::new(CapId::new(2));
-    let current_thread = Thread::new(CapId::new(3));
-    let page_table = PageTable::new(CapId::new(4));
-    let hardware_access = HardwareAccess::new(CapId::new(5));
+    let resources = Booter::make();
 
-    hardware_access.enable_ports().unwrap();
+    resources.hardware.enable_ports().unwrap();
     serial::init();
 
+    let mut cap_manager = SelfCapabilityManager::new_with_start(resources.self_caps, CapId::new(6));
     let mut frames = FrameBumper::new(PhysFrame::new(lowest_frame));
 
-    resources
-        .make_page_table(SlotId::new(63).unwrap(), frames.next(), 3)
+    let p3 = cap_manager
+        .allocate_capability()
+        .make_page_table(PageTableConsArgs::new(frames.next(), 3))
         .unwrap();
-    let p3 = PageTable::new(CapId::new(63));
-    resources
-        .make_page_table(SlotId::new(62).unwrap(), frames.next(), 2)
+    let p2 = cap_manager
+        .allocate_capability()
+        .make_page_table(PageTableConsArgs::new(frames.next(), 2))
         .unwrap();
-    let p2 = PageTable::new(CapId::new(62));
-    resources
-        .make_page_table(SlotId::new(61).unwrap(), frames.next(), 1)
+    let p1 = cap_manager
+        .allocate_capability()
+        .make_page_table(PageTableConsArgs::new(frames.next(), 1))
         .unwrap();
-    let p1 = PageTable::new(CapId::new(61));
 
     let thread_stack = frames.next();
-    retype_cap
+
+    resources
+        .retype
         .retype(thread_stack, RetypeKind::Retype2User)
         .unwrap();
 
     let sync_stack = frames.next();
-    retype_cap
+    resources
+        .retype
         .retype(sync_stack, RetypeKind::Retype2User)
         .unwrap();
 
-    page_table.link(p3, 16, PermissionMask::WRITE).unwrap();
+    resources
+        .self_paging
+        .link(p3, 16, PermissionMask::WRITE)
+        .unwrap();
     p3.link(p2, 0, PermissionMask::WRITE).unwrap();
     p2.link(p1, 0, PermissionMask::WRITE).unwrap();
     p1.map(0, thread_stack, PermissionMask::WRITE).unwrap();
     p1.map(2, sync_stack, PermissionMask::WRITE).unwrap();
 
     let tstack = 0x0000_0800_0000_0000 as *mut u8;
-    hardware_access.flush_page(tstack as usize).unwrap();
+    resources.hardware.flush_page(tstack as usize).unwrap();
     let sstack_ptr = 0x0000_0800_0000_2000 as *mut u8;
-    hardware_access.flush_page(sstack_ptr as usize).unwrap();
+    resources.hardware.flush_page(sstack_ptr as usize).unwrap();
 
-    sprintln!("{:?}", &current_thread);
-    sprintln!("{:?}", &current_thread as *const Thread);
+    sprintln!("{:?}", &resources.self_thread);
+    sprintln!("{:?}", &resources.self_thread as *const Thread);
 
     let sstack = unsafe { core::slice::from_raw_parts_mut(sstack_ptr, 0x1000) };
     let sstack = StackNode::new(sstack).unwrap();
     SYNC_STACKS.push_front(sstack);
+    let t2;
+    let scall;
     unsafe {
-        resources
-            .make_thread(
+        t2 = cap_manager
+            .allocate_capability()
+            .make_thread(ThreadConsArgs::new(
                 foo,
                 tstack.add(0x1000),
-                resources,
-                page_table,
-                SlotId::new(6).unwrap(),
+                resources.self_caps,
+                resources.self_paging,
                 frames.next(),
-                &current_thread as *const _ as usize,
-            )
+                &resources.self_thread as *const _ as usize,
+            ))
             .unwrap();
-        resources
-            .make_sync_call(sync_call, resources, page_table, SlotId::new(7).unwrap())
+        scall = cap_manager
+            .allocate_capability()
+            .make_sync_call(SyncCallConsArgs::new(
+                sync_call,
+                resources.self_caps,
+                resources.self_paging,
+            ))
             .unwrap();
-    };
+    }
 
-    let t2 = Thread::new(CapId::new(6));
     unsafe {
         t2.activate().unwrap();
     }
 
     sprintln!("We are back!");
+    assert_eq!(scall.call(1, 2, 3, 4).unwrap(), 10);
     let stack = SYNC_STACKS.pop_front().unwrap().into_buffer();
     assert_eq!(stack.as_ptr(), sstack_ptr);
     assert_eq!(stack.len(), 4096);
