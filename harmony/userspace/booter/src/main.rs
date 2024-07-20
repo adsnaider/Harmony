@@ -106,7 +106,7 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
 
     let sstack = unsafe { core::slice::from_raw_parts_mut(sstack_ptr, 0x1000) };
     let sstack = StackNode::new(sstack).unwrap();
-    // SYNC_STACKS.push_front(sstack);
+    SYNC_STACKS.push_front(sstack);
     let t2;
     let scall;
     unsafe {
@@ -137,9 +137,9 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
 
     sprintln!("We are back!");
     assert_eq!(scall.call(1, 2, 3, 4).unwrap(), 10);
-    // let stack = SYNC_STACKS.pop_front().unwrap().into_buffer();
-    // assert_eq!(stack.as_ptr(), sstack_ptr);
-    // assert_eq!(stack.len(), 4096);
+    let stack = SYNC_STACKS.pop_front().unwrap().into_buffer();
+    assert_eq!(stack.as_ptr(), sstack_ptr);
+    assert_eq!(stack.len(), 4096);
     sprintln!("All done!");
     loop {}
 }
