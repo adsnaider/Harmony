@@ -4,12 +4,14 @@
 
 mod serial;
 
+use core::cell::Cell;
+
 use kapi::ops::cap_table::{PageTableConsArgs, SyncCallConsArgs, ThreadConsArgs};
 use kapi::ops::memory::RetypeKind;
 use kapi::ops::paging::PermissionMask;
 use kapi::raw::CapId;
 use kapi::sync_call;
-use kapi::userspace::cap_managment::SelfCapabilityManager;
+use kapi::userspace::cap_managment::{FrameAllocator, SelfCapabilityManager};
 use kapi::userspace::structures::{HardwareAccess, PhysFrame, Thread};
 use kapi::userspace::Booter;
 use stack_list::{StackList, StackNode};
@@ -38,16 +40,22 @@ extern "C" fn foo(arg0: usize) -> ! {
 
 static SYNC_STACKS: StackList<'static> = StackList::new();
 
-struct FrameBumper(PhysFrame);
+struct FrameBumper(Cell<PhysFrame>);
 impl FrameBumper {
     pub fn new(start: PhysFrame) -> Self {
-        Self(start)
+        Self(Cell::new(start))
     }
 
-    pub fn next(&mut self) -> PhysFrame {
-        let frame = self.0;
-        self.0 = PhysFrame::new(frame.addr() + 0x1000);
+    pub fn next(&self) -> PhysFrame {
+        let frame = self.0.get();
+        self.0.set(PhysFrame::new(frame.addr() + 0x1000));
         frame
+    }
+}
+
+impl FrameAllocator for &'_ FrameBumper {
+    fn alloc_frame(&mut self) -> PhysFrame {
+        self.next()
     }
 }
 
@@ -58,8 +66,9 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
     resources.hardware.enable_ports().unwrap();
     serial::init();
 
-    let mut cap_manager = SelfCapabilityManager::new_with_start(resources.self_caps, CapId::new(6));
-    let mut frames = FrameBumper::new(PhysFrame::new(lowest_frame));
+    let frames = FrameBumper::new(PhysFrame::new(lowest_frame));
+    let mut cap_manager =
+        SelfCapabilityManager::new_with_start(resources.self_caps, CapId::new(6), &frames);
 
     let p3 = cap_manager
         .allocate_capability()

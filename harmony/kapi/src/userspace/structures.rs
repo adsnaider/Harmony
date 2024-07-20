@@ -40,6 +40,11 @@ impl CapTable {
         Self { id: cap }
     }
 
+    pub fn drop_resource(&self, slot: SlotId) -> Result<(), CapError> {
+        let op = CapTableOp::Drop { slot };
+        unsafe { op.syscall(self.id) }
+    }
+
     pub fn make_resource(&self, args: ConstructArgs, slot: SlotId) -> Result<(), CapError> {
         let op = CapTableOp::Construct(ConsArgs { kind: args, slot });
         unsafe { op.syscall(self.id) }
