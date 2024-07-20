@@ -47,7 +47,6 @@ version = "0.1.0"
 dependencies = [
  "kapi",
  "log",
- "stack_list",
  "sync",
  "uart_16550",
 ]
