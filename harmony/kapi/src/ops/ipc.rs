@@ -1,9 +1,10 @@
 //! Operation for the synchronous invocation call gate.
 
+use core::arch::asm;
 use core::convert::Infallible;
 
 use super::{InvalidOperation, SyscallOp};
-use crate::raw::{RawOperation, SyscallArgs};
+use crate::raw::{CapError, RawOperation, SyscallArgs};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum SyncCallOp {
@@ -11,7 +12,36 @@ pub enum SyncCallOp {
 }
 
 impl SyscallOp for SyncCallOp {
-    type R = usize;
+    type R = isize;
+
+    unsafe fn syscall(
+        self,
+        capability: crate::raw::CapId,
+    ) -> Result<Self::R, crate::raw::CapError> {
+        let args = self.make_args();
+        let op = args.op();
+        let (a, b, c, d) = args.args();
+        let kernel_code: isize;
+        let call_code: isize;
+
+        unsafe {
+            asm!("int 0x80",
+                inlateout("rdi") capability.get() => _,
+                inlateout("rsi") op => _,
+                inlateout("rdx") a => call_code,
+                inlateout("rcx") b => _,
+                inlateout("r8") c => _,
+                inlateout("r9") d => _,
+                lateout("rax") kernel_code,
+                lateout("r10") _,
+                lateout("r11") _,
+                options(preserves_flags, nostack)
+            );
+        }
+        usize::try_from(kernel_code)
+            .map_err(|_| CapError::try_from((-kernel_code) as u8).unwrap())?;
+        Ok(call_code)
+    }
 
     fn make_args(&self) -> crate::raw::SyscallArgs<'_> {
         match self {
@@ -29,8 +59,8 @@ impl SyscallOp for SyncCallOp {
         }
     }
 
-    fn convert_success_code(&self, code: usize) -> Self::R {
-        code
+    fn convert_success_code(&self, _code: usize) -> Self::R {
+        unimplemented!("SyncCall has 2 codes, the kernel and the result. Don't use this directly");
     }
 }
 

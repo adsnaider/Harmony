@@ -205,7 +205,7 @@ impl SyncCall {
         Self { id }
     }
 
-    pub fn call(&self, a: usize, b: usize, c: usize, d: usize) -> Result<usize, CapError> {
+    pub fn call(&self, a: usize, b: usize, c: usize, d: usize) -> Result<isize, CapError> {
         unsafe { SyncCallOp::Call((a, b, c, d)).syscall(self.id) }
     }
 }
