@@ -46,6 +46,6 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
     let frames = FrameBumper::new(PhysFrame::new(lowest_frame));
     let mut cap_manager =
         SelfCapabilityManager::new_with_start(resources.self_caps, CapId::new(6), &frames);
-    sprintln!("Initializing user space");
+    log::info!("Initializing user space");
     loop {}
 }

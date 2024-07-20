@@ -7,3 +7,4 @@ edition = "2021"
 kapi = { workspace = true, features = ["userspace"] }
 sync = { workspace = true }
 serial = { workspace = true }
+log = "0.4.21"
