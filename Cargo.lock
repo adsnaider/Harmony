@@ -421,6 +421,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ab8598aa408498679922eff7fa985c25d58a90771bd6be794434c5277eab1a6"
 
 [[package]]
+name = "smoke"
+version = "0.1.0"
+dependencies = [
+ "kapi",
+ "log",
+ "stack_list",
+ "sync",
+ "uart_16550",
+]
+
+[[package]]
 name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
