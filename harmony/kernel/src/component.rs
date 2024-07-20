@@ -277,11 +277,9 @@ impl Thread {
                         }
 
                         let offset = PageTableOffset::new_truncate(slot as u16);
-                        if flags.level() == 4 {
-                            if !offset.is_lower_half() {
-                                // Trying to modify the higher half kernel address space.
-                                return Err(CapError::InvalidArgument);
-                            }
+                        if flags.level() == 4 && !offset.is_lower_half() {
+                            // Trying to modify the higher half kernel address space.
+                            return Err(CapError::InvalidArgument);
                         }
 
                         let other_frame = other_table.into_raw();
@@ -299,11 +297,9 @@ impl Thread {
                     }
                     PageTableOp::Unlink { slot } => {
                         let offset = PageTableOffset::new_truncate(slot as u16);
-                        if flags.level() == 4 {
-                            if !offset.is_lower_half() {
-                                // Trying to modify the higher half kernel address space.
-                                return Err(CapError::InvalidArgument);
-                            }
+                        if flags.level() == 4 && !offset.is_lower_half() {
+                            // Trying to modify the higher half kernel address space.
+                            return Err(CapError::InvalidArgument);
                         }
                         if flags.level() == 1 {
                             return Err(CapError::InvalidArgument);
