@@ -4,8 +4,8 @@ pub use stack_list;
 macro_rules! sync_call {
     ($name:ident, $stacks:path, $fun:expr) => {
         #[naked]
-        extern "C" fn $name(_a: usize, _b: usize, _c: usize, _d: usize) -> usize {
-            extern "C" fn inner(a: usize, b: usize, c: usize, d: usize) -> usize {
+        extern "C" fn $name(_a: usize, _b: usize, _c: usize, _d: usize) -> isize {
+            extern "C" fn inner(a: usize, b: usize, c: usize, d: usize) -> isize {
                 $fun(a, b, c, d)
             }
 

@@ -77,7 +77,7 @@ impl CapTable {
 
     pub unsafe fn make_sync_call(
         &self,
-        entry: extern "C" fn(usize, usize, usize, usize) -> usize,
+        entry: extern "C" fn(usize, usize, usize, usize) -> isize,
         resources: CapTable,
         page_table: PageTable,
         construct_slot: SlotId,
@@ -281,7 +281,7 @@ impl PageTableConsArgs {
 
 impl SyncCallConsArgs {
     pub fn new(
-        entry: extern "C" fn(usize, usize, usize, usize) -> usize,
+        entry: extern "C" fn(usize, usize, usize, usize) -> isize,
         resources: CapTable,
         page_table: PageTable,
     ) -> Self {
