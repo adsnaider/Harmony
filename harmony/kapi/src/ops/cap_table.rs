@@ -1,9 +1,8 @@
 use core::slice;
 
 use bytemuck::{AnyBitPattern, NoUninit};
-pub use trie::SlotId;
 
-use super::{InvalidOperation, SyscallOp};
+use super::{InvalidOperation, SlotId, SyscallOp};
 use crate::raw::{CapId, RawOperation, SyscallArgs};
 
 #[derive(Debug, Copy, Clone)]
@@ -50,32 +49,32 @@ pub struct SyncCallConsArgs {
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct ConsArgs<const SLOT_COUNT: usize> {
+pub struct ConsArgs {
     pub kind: ConstructArgs,
-    pub slot: SlotId<SLOT_COUNT>,
+    pub slot: SlotId,
 }
 
 #[derive(Debug, Copy, Clone)]
-pub enum CapTableOp<const SLOT_COUNT: usize> {
+pub enum CapTableOp {
     Link {
-        slot: SlotId<SLOT_COUNT>,
+        slot: SlotId,
         other_table_cap: CapId,
     },
     Unlink {
-        slot: SlotId<SLOT_COUNT>,
+        slot: SlotId,
     },
-    Construct(ConsArgs<SLOT_COUNT>),
+    Construct(ConsArgs),
     Drop {
-        slot: SlotId<SLOT_COUNT>,
+        slot: SlotId,
     },
     Copy {
-        slot: SlotId<SLOT_COUNT>,
+        slot: SlotId,
         other_table_cap: CapId,
-        other_slot: SlotId<SLOT_COUNT>,
+        other_slot: SlotId,
     },
 }
 
-impl<const SLOT_COUNT: usize> SyscallOp for CapTableOp<SLOT_COUNT> {
+impl SyscallOp for CapTableOp {
     type R = ();
 
     fn make_args(&self) -> SyscallArgs {

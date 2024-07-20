@@ -106,16 +106,16 @@ macro_rules! stack_list_pop {
     () => {
         r#"
              movq    (%rdi), %rax
-            1:
+            33:
              testq   %rax, %rax
-             je      2f
+             je      34f
              movq    (%rax), %rcx
              lock    cmpxchgq %rcx, (%rdi)
-             jne     1b
-             jmp     3f
-            2:
+             jne     33b
+             jmp     35f
+            34:
              xorl    %eax, %eax
-            3:
+            35:
         "#
     };
 }
@@ -125,11 +125,11 @@ macro_rules! stack_list_push {
     () => {
         r#"
            movq    (%rdi), %rax
-           1:
+           36:
              movq    %rax, %rcx
              xchgq   %rcx, (%rsi)
              lock    cmpxchgq %rsi, (%rdi)
-             jne     1b
+             jne     36b
         "#
     };
 }

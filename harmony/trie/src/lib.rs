@@ -18,6 +18,10 @@ impl<const COUNT: usize> SlotId<COUNT> {
     pub fn new(id: usize) -> Result<Self, TrieIndexError> {
         Self::try_from(id)
     }
+
+    pub const fn count() -> usize {
+        COUNT
+    }
 }
 
 impl<const COUNT: usize> TryFrom<usize> for SlotId<COUNT> {

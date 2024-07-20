@@ -12,6 +12,8 @@ pub mod memory;
 pub mod paging;
 pub mod thread;
 
+pub type SlotId = trie::SlotId<64>;
+
 pub enum InvalidOperation {
     BadOp,
     InvalidArgument,

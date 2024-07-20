@@ -9,8 +9,9 @@ trie = { workspace = true }
 num_enum = { version = "0.7.2", default-features = false }
 bytemuck = { version = "1.16.1", features = ["derive"] }
 bitflags = "2.6.0"
+stack_list = { workspace = true, optional = true }
 
 [features]
 default = []
 from_errors = ["dep:sync"]
-userspace = []
+userspace = ["dep:stack_list"]
