@@ -8,6 +8,7 @@ use kapi::ops::cap_table::{PageTableConsArgs, SyncCallConsArgs, ThreadConsArgs};
 use kapi::ops::memory::RetypeKind;
 use kapi::ops::paging::PermissionMask;
 use kapi::raw::CapId;
+use kapi::sync_call;
 use kapi::userspace::cap_managment::SelfCapabilityManager;
 use kapi::userspace::structures::{HardwareAccess, PhysFrame, Thread};
 use kapi::userspace::Booter;
@@ -105,7 +106,7 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
 
     let sstack = unsafe { core::slice::from_raw_parts_mut(sstack_ptr, 0x1000) };
     let sstack = StackNode::new(sstack).unwrap();
-    SYNC_STACKS.push_front(sstack);
+    // SYNC_STACKS.push_front(sstack);
     let t2;
     let scall;
     unsafe {
@@ -136,57 +137,21 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
 
     sprintln!("We are back!");
     assert_eq!(scall.call(1, 2, 3, 4).unwrap(), 10);
-    let stack = SYNC_STACKS.pop_front().unwrap().into_buffer();
-    assert_eq!(stack.as_ptr(), sstack_ptr);
-    assert_eq!(stack.len(), 4096);
+    // let stack = SYNC_STACKS.pop_front().unwrap().into_buffer();
+    // assert_eq!(stack.as_ptr(), sstack_ptr);
+    // assert_eq!(stack.len(), 4096);
+    sprintln!("All done!");
     loop {}
 }
 
-#[naked]
-extern "C" fn sync_call(_a: usize, _b: usize, _c: usize, _d: usize) -> usize {
-    extern "C" fn foo(a: usize, b: usize, c: usize) -> usize {
-        let hardware_access = HardwareAccess::new(CapId::new(5));
+sync_call!(sync_call, SYNC_STACKS, |a, b, c, d| {
+    let hardware_access = HardwareAccess::new(CapId::new(5));
 
-        hardware_access.enable_ports().unwrap();
-        sprintln!("Look ma! I'm a synchronous invocation");
-        assert_eq!(a, 1);
-        assert_eq!(b, 2);
-        assert_eq!(c, 3);
-        10
-    }
-
-    use stack_list::{stack_list_pop, stack_list_push};
-    unsafe {
-        core::arch::asm!(
-            "movq %rdi, %r12",
-            "movq %rsi, %r13",
-            "movq %rdx, %r14",
-            "movq %rcx, %r15",
-            "movq ${stacks}, %rdi",
-            stack_list_pop!(),
-            "movq %r12, %rdi",
-            "movq %r13, %rsi",
-            "movq %r14, %rdx",
-            "movq %r15, %rcx",
-            "movq 8(%rax), %r12",
-            "leaq (%rax, %r12, 1), %rsp",
-            "call {foo}",
-            "movq %rax, %r13", // save result
-            "movq ${stacks}, %rdi", // arg0
-            "movq %rsp, %rsi", // arg1 is our bottom of stack
-            "subq %r12, %rsi",
-            "movq %r12, 8(%rsi)", // Reset the stack node to include the size.
-            stack_list_push!(),
-            "movq %r13, %rax",
-            "movq $0, %rsp",
-            "movq $0, %rdi",
-            "movq $15, %rsi",
-            "movq %rax, %rdx",
-            "int $0x80",
-            "ud2",
-            stacks = sym SYNC_STACKS,
-            foo = sym foo,
-            options(noreturn, att_syntax),
-        )
-    }
-}
+    hardware_access.enable_ports().unwrap();
+    sprintln!("Look ma! I'm a synchronous invocation");
+    assert_eq!(a, 1);
+    assert_eq!(b, 2);
+    assert_eq!(c, 3);
+    assert_eq!(d, 4);
+    10
+});

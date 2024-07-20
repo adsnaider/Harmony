@@ -8,6 +8,7 @@ use crate::raw::CapId;
 
 pub mod cap_managment;
 pub mod structures;
+pub mod sync_call;
 
 pub struct Booter {
     pub sync_ret: SyncRet,

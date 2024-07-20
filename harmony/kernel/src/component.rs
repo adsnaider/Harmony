@@ -410,7 +410,8 @@ impl Thread {
                             .pop()
                             .ok_or(CapError::SyncRetBottom)?;
                         // Set the return codes (rax for the syscall itself and rdi for the return of the invocation)
-                        (*this.exec_ctx.get()).regs_mut().scratch.rax = u64::max(0, code as u64);
+                        (*this.exec_ctx.get()).regs_mut().scratch.rax =
+                            i64::max(0, code as i64) as u64;
                         (*this.exec_ctx.get()).regs_mut().preserved = syscall_ctx.preserved_regs;
                         (*this.exec_ctx.get()).regs_mut().control = syscall_ctx.control_regs;
 

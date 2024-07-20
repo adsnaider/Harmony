@@ -165,6 +165,7 @@ dependencies = [
  "bitflags 2.6.0",
  "bytemuck",
  "num_enum",
+ "stack_list",
  "sync",
  "trie",
 ]
