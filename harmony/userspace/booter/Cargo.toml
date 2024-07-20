@@ -6,6 +6,4 @@ edition = "2021"
 [dependencies]
 kapi = { workspace = true, features = ["userspace"] }
 sync = { workspace = true }
-
-uart_16550 = "0.3.0"
-log = "0.4.22"
+serial = { workspace = true }
