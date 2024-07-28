@@ -2,7 +2,7 @@ use super::page_table::{PageTableLevel, PageTableOffset};
 use super::PhysAddr;
 
 #[repr(transparent)]
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
 pub struct VirtAddr(usize);
 
 impl core::fmt::Debug for VirtAddr {

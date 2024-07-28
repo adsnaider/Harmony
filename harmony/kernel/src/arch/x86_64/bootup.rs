@@ -1,8 +1,9 @@
 //! Boot process initialization
 
-use goblin::elf::program_header::{PF_R, PF_W, PF_X, PT_LOAD};
-use goblin::elf64::header::{Header, SIZEOF_EHDR};
-use goblin::elf64::program_header::ProgramHeader;
+use core::mem::MaybeUninit;
+use core::ops::Range;
+
+use loader::{MemFlags, Program, SegmentLoadError, SegmentLoader};
 
 use super::paging::page_table::AnyPageTable;
 use crate::arch::exec::{ControlRegs, Regs};
@@ -20,6 +21,98 @@ pub struct Process {
 #[derive(Debug)]
 pub enum LoadError {}
 
+pub struct Loader<'a, 'b> {
+    address_space: Addrspace<'a>,
+    fallocator: &'b mut BumpAllocator,
+}
+
+impl SegmentLoader for Loader<'_, '_> {
+    fn request_virtual_memory_range(
+        &mut self,
+        range: Range<usize>,
+        rwx: MemFlags,
+    ) -> Result<&mut [MaybeUninit<u8>], SegmentLoadError> {
+        if range.is_empty() {
+            return Ok(&mut []);
+        }
+        let start = VirtAddr::new(range.start);
+        let last_byte = VirtAddr::new(range.end - 1);
+        if last_byte.is_higher_half() {
+            return Err(SegmentLoadError::InvalidVirtualRange);
+        }
+        let start_page = Page::containing_address(start).index();
+        let end_page = Page::containing_address(last_byte).index();
+
+        let mut pflags = PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
+        if !rwx.readable() {
+            return Err(SegmentLoadError::BadMemoryFlags);
+        }
+        if rwx.writeable() {
+            pflags |= PageTableFlags::WRITABLE;
+        }
+        if !rwx.executable() {
+            pflags |= PageTableFlags::NO_EXECUTE;
+        }
+        let kernel_addrspace = Addrspace::current();
+        // Virtual address used for writing into the loaded process.
+        const WRITE_START_PAGE: usize = 1;
+        let num_pages = end_page - start_page + 1;
+        for i in 0..num_pages {
+            let page = Page::from_index(start_page + i).unwrap();
+            let write_page = Page::from_index(WRITE_START_PAGE + i).unwrap();
+            let frame = self.fallocator.alloc_user_frame().unwrap().into_raw();
+            log::info!("Mapping {page:?} to {frame:?} with {pflags:?}");
+            unsafe {
+                let _ = self
+                    .address_space
+                    .map_to(
+                        page,
+                        frame,
+                        pflags,
+                        // Parent flags are the least restrictive since they will be reused for many pages.
+                        PageTableFlags::PRESENT
+                            | PageTableFlags::WRITABLE
+                            | PageTableFlags::USER_ACCESSIBLE,
+                        self.fallocator,
+                    )
+                    .unwrap();
+
+                if let Ok((flusher, _, _)) = kernel_addrspace.unmap(write_page) {
+                    flusher.flush();
+                }
+                kernel_addrspace
+                    .map_to(
+                        write_page,
+                        frame,
+                        PageTableFlags::PRESENT
+                            | PageTableFlags::WRITABLE
+                            | PageTableFlags::NO_EXECUTE,
+                        PageTableFlags::PRESENT
+                            | PageTableFlags::WRITABLE
+                            | PageTableFlags::NO_EXECUTE,
+                        self.fallocator,
+                    )
+                    .unwrap()
+                    .flush();
+            }
+        }
+
+        let write_start = unsafe {
+            Page::from_index(WRITE_START_PAGE)
+                .unwrap()
+                .base()
+                .as_mut_ptr::<MaybeUninit<u8>>()
+                .add(start.as_usize() % PAGE_SIZE)
+        };
+        let vrange = unsafe { core::slice::from_raw_parts_mut(write_start, range.len()) };
+        Ok(vrange)
+    }
+
+    unsafe fn release_virtual_memory_range(&mut self, _range: Range<usize>) {
+        panic!("Can't release the booter's resources as there's nothing else to be run");
+    }
+}
+
 impl Process {
     pub fn load(
         program: &[u8],
@@ -31,10 +124,7 @@ impl Process {
         assert!(untyped_memory_offset % PAGE_SIZE == 0);
         assert!(untyped_memory_length % PAGE_SIZE == 0);
         assert!(untyped_memory_offset + untyped_memory_length < 0xFFFF_8000_0000_0000);
-        assert!(
-            program.as_ptr() as usize % 16 == 0,
-            "ELF must be aligned to 16 bytes"
-        );
+        let program = Program::new(program).unwrap();
 
         log::debug!("Setting up process address space");
         let l4_table = {
@@ -42,29 +132,13 @@ impl Process {
             AnyPageTable::new_l4(l4_frame).unwrap()
         };
         let addrspace = unsafe { l4_table.as_addrspace() };
-        let header = Header::from_bytes(program[..SIZEOF_EHDR].try_into().unwrap());
-        let entry = header.e_entry;
-        log::trace!("Entry: {:X}", entry);
-        let phdrs = unsafe {
-            assert!(
-                program.len()
-                    > usize::try_from(header.e_phoff).unwrap()
-                        + usize::from(header.e_phentsize) * usize::from(header.e_phnum)
-            );
-            let phdr_start: *const ProgramHeader = program
-                .as_ptr()
-                .add(header.e_phoff.try_into().unwrap())
-                .cast();
-            assert!(phdr_start as usize % core::mem::align_of::<ProgramHeader>() == 0);
-            ProgramHeader::from_raw_parts(phdr_start, header.e_phnum.into())
+
+        let mut loader = Loader {
+            address_space: addrspace,
+            fallocator: &mut fallocator,
         };
-        for ph in phdrs {
-            if ph.p_type == PT_LOAD {
-                log::debug!("Loading segment");
-                let segment = Segment::new(program, ph);
-                segment.load(&addrspace, &mut fallocator);
-            }
-        }
+        let process = program.load(&mut loader).unwrap();
+        log::trace!("Entry: {:X}", process.entry);
 
         log::debug!("Setting up stack pages");
         let rsp = untyped_memory_offset;
@@ -117,7 +191,7 @@ impl Process {
 
         log::info!("Initialized user process");
         Ok(Self {
-            entry,
+            entry: process.entry,
             rsp: untyped_memory_offset as u64,
             l4_table,
         })
@@ -135,75 +209,5 @@ impl Process {
             },
             self.l4_table,
         )
-    }
-}
-
-struct Segment<'prog, 'head> {
-    program: &'prog [u8],
-    header: &'head ProgramHeader,
-}
-
-impl<'prog, 'head> Segment<'prog, 'head> {
-    pub fn new(program: &'prog [u8], header: &'head ProgramHeader) -> Self {
-        Self { program, header }
-    }
-
-    pub fn load(&self, address_space: &Addrspace, fallocator: &mut BumpAllocator) {
-        let vm_range = self.header.p_vaddr..(self.header.p_vaddr + self.header.p_memsz);
-        let file_range = self.header.p_offset..(self.header.p_offset + self.header.p_filesz);
-
-        assert!(vm_range.end <= 0xFFFF800000000000);
-        assert!(file_range.end <= self.program.len() as u64);
-        assert!(self.header.p_memsz >= self.header.p_filesz);
-        let mut vcurrent = vm_range.start;
-        let mut fcurrent = file_range.start;
-        while vcurrent < vm_range.end {
-            let frame = fallocator.alloc_user_frame().unwrap().into_raw();
-            let page = Page::containing_address(VirtAddr::new(vcurrent as usize));
-            let flags = self.header.p_flags;
-            let mut pflags = PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
-            assert!(flags & PF_R != 0);
-            if flags & PF_W != 0 {
-                pflags |= PageTableFlags::WRITABLE;
-            }
-            if flags & PF_X == 0 {
-                pflags |= PageTableFlags::NO_EXECUTE;
-            }
-            log::info!("Mapping {page:?} to {frame:?} with {pflags:?}");
-            // SAFETY: Just mapping the elf data.
-            unsafe {
-                address_space
-                    .map_to(
-                        page,
-                        frame,
-                        pflags,
-                        PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE,
-                        fallocator,
-                    )
-                    .unwrap()
-                    .flush();
-            }
-
-            let offset_page: *mut u8 = frame.base().to_virtual().as_mut_ptr();
-
-            let count = usize::min(
-                (file_range.end - fcurrent) as usize,
-                PAGE_SIZE - vcurrent as usize % PAGE_SIZE,
-            );
-
-            // SAFETY: Hopefully no bugs here...
-            unsafe {
-                core::ptr::write_bytes(offset_page, 0, PAGE_SIZE);
-                if count > 0 {
-                    core::ptr::copy(
-                        self.program.as_ptr().add(fcurrent as usize),
-                        offset_page.add(vcurrent as usize % PAGE_SIZE),
-                        count,
-                    )
-                }
-            }
-            vcurrent += PAGE_SIZE as u64 - vcurrent % PAGE_SIZE as u64;
-            fcurrent += count as u64;
-        }
     }
 }

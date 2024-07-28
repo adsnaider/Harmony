@@ -175,11 +175,11 @@ name = "kernel"
 version = "0.1.0"
 dependencies = [
  "elain",
- "goblin",
  "heapless",
  "include_bytes_aligned",
  "kapi",
  "limine",
+ "loader",
  "log",
  "pic8259",
  "sync",

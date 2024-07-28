@@ -1,3 +1,4 @@
+use super::virtual_address::BadVirtAddr;
 use super::{VirtAddr, PAGE_SIZE};
 
 #[repr(transparent)]
@@ -10,11 +11,14 @@ pub struct Page {
 pub struct Unaligned;
 
 impl Page {
-    pub fn from_start_address(addr: VirtAddr) -> Self {
-        Self::try_from_start_address(addr).unwrap()
+    pub const fn from_start_address(addr: VirtAddr) -> Self {
+        match Self::try_from_start_address(addr) {
+            Err(Unaligned) => panic!("Unaligned start address"),
+            Ok(this) => this,
+        }
     }
 
-    pub fn try_from_start_address(addr: VirtAddr) -> Result<Self, Unaligned> {
+    pub const fn try_from_start_address(addr: VirtAddr) -> Result<Self, Unaligned> {
         if addr.as_usize() % PAGE_SIZE != 0 {
             return Err(Unaligned);
         }
@@ -30,5 +34,18 @@ impl Page {
 
     pub fn base(&self) -> VirtAddr {
         self.start_address
+    }
+
+    /// Returns the page defined by `base = index * PAGE_SIZE`
+    pub const fn from_index(index: usize) -> Result<Self, BadVirtAddr> {
+        match VirtAddr::try_new(index * PAGE_SIZE) {
+            Ok(addr) => Ok(Self::from_start_address(addr)),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Returns the index of this page (inverse of `from_index`)
+    pub const fn index(&self) -> usize {
+        self.start_address.as_usize() / PAGE_SIZE
     }
 }
