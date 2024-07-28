@@ -8,3 +8,4 @@ kapi = { workspace = true, features = ["userspace"] }
 sync = { workspace = true }
 serial = { workspace = true }
 log = "0.4.21"
+include_bytes_aligned = "0.1.3"

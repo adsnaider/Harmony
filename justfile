@@ -32,12 +32,20 @@ setup:
 initrd: booter
 	cd {{build_dir}} && tar -H ustar -cf initrd.tar booter
 
-booter: setup
+booter: setup memory_manager
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export RUSTFLAGS="-Clink-arg=-no-pie -Crelocation-model=static"
 	BOOTER_BIN=`cargo build -p booter --profile {{profile}} --target {{_target}} --message-format=json | {{_extractor}}`
 	cp "$BOOTER_BIN" "{{build_dir}}/booter"
+
+memory_manager:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	export RUSTFLAGS="-Clink-arg=-no-pie -Crelocation-model=static"
+	BIN=`cargo build -p memory_manager --profile {{profile}} --target {{_target}} --message-format=json | {{_extractor}}`
+	cp "$BIN" "{{build_dir}}/memory_manager"
+	ln -sf {{profile}}/memory_manager {{artifact_dir}}/memory_manager
 
 kernel: setup
 	#!/usr/bin/env bash
