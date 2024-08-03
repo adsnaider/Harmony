@@ -77,7 +77,7 @@ test-iso: limine build
 		-no-emul-boot -boot-load-size 4 -boot-info-table \
 		--efi-boot boot/limine/limine-uefi-cd.bin \
 		-efi-boot-part --efi-boot-image --protective-msdos-label \
-		{{_iso_root}} -o {{image_path}}
+		{{_iso_root}} -o {{test_image_path}}
 	@echo "Test ISO Image Built: {{test_image_path}}"
 
 dbg_dir: setup
@@ -92,6 +92,16 @@ emulate: dbg_dir iso
 		-bios /usr/share/ovmf/OVMF.fd \
 		-chardev stdio,id=char0,logfile=serial.log,signal=off \
 		-serial chardev:char0 \
+		{{_qemu_args}}
+
+ktest: test-iso
+	@./go.sh 33 qemu-system-x86_64 \
+		-cdrom {{test_image_path}} \
+		-bios /usr/share/ovmf/OVMF.fd \
+		-chardev stdio,id=char0,logfile=serial.log,signal=off \
+		-serial chardev:char0 \
+		-device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+		-display none \
 		{{_qemu_args}}
 
 clean:
