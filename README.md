@@ -13,21 +13,20 @@ tools to build and emulate the OS.
 * `qemu-system-x86_64` for emulating.
 * OVMF (currently hardcoded to `/usr/share/ovmf/OVMF.fd`)
 * `mkisofs` for building an ISO.
+* [`just`](https://github.com/casey/just?tab=readme-ov-file#installation) for running commands
 
 ### Emulation with QEMU
 
-The builder/ crate is a simple binary that can generate the UEFI or BIOS images.
+There are `just` rules for building and running the images.
 
-There are make rules to make building/running the images easier.
-
-`make emulate` or `PROFILE=release make emulate`
+`just emulate` or `just profile=release emulate`
 
 This should launch qemu and you should be able to see the OS running. The
 generated `serial.log` will include the full serial output.
 
-Additionally you can set `DEBUGGER=yes` to run qemu with a remote debugger.
+Additionally you can set `debugger=yes` to run qemu with a remote debugger.
 
-`DEBUGGER=yes make emulate`
+`just debugger=yes emulate`
 
 Once QEMU is launched, you can open gdb on a terminal. The `.gdbinit` should
 set everything up automatically for you so that you can insert breakpoints
@@ -42,25 +41,25 @@ set auto-load safe-path \
 
 ### Testing
 
-Running `make test` will run unit tests across the entire project.
+Running `just test` will run unit tests across the entire project.
 
-Running `make ktest` will run kernel integration tests on Qemu. This will
+Running `just ktest` will run kernel integration tests on Qemu. This will
 produce a `test.log` that contains the serial output.
 
 ### Building an ISO image
 
-`make iso` or `PROFILE=release make iso`
+`just iso` or `just profile=release iso`
 
-This will build the ISO image and save it to `.build/harmony.iso`. You can flash this
+This will build the ISO image and save it to `.build/[profile]/harmony.iso`. You can flash this
 image to a USB drive for instance and boot from it to see the OS running on
 actual hardware.
 
 ### Configuration
 
-Configuration is passed through environment flags. Currently
+Configuration options are passed through environment flags. Currently
 these are the possible configurations:
 
-* KERNEL_LOG_LEVEL [`debug`|`info`|`warn`|`error`] - controls the log level
+* RUST_LOG [`trace` | `debug`| `info` | `warn` | `error`] - controls the log level
 (Defaults to `info`).
 
 The only hardware architecture that is currently supported is x86_64.
