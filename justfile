@@ -17,6 +17,8 @@ _iso_root := build_dir / "iso_root"
 qemu_user_args := env_var_or_default("QEMU_ARGS", "")
 _qemu_args := if debugger == "yes" { qemu_user_args + " -s -S" } else { qemu_user_args }
 
+default: iso
+
 check:
 	cargo check --target {{_target}} --tests
 
