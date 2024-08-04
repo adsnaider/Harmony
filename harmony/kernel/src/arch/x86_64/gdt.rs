@@ -78,7 +78,6 @@ static TSS: AtomicLazyCell<TaskStateSegment> = AtomicLazyCell::new(|| {
 
 pub(super) fn interrupt_stack_end() -> VirtAddr {
     let start: VirtAddr = VirtAddr::new(unsafe { INTERRUPT_STACK.as_ptr() as u64 });
-    debug_assert_eq!(start.as_u64(), 0xffffffff80000000);
     start + INTERRUPT_STACK_SIZE as u64
 }
 
