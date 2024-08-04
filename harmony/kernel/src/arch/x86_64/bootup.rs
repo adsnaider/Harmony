@@ -175,7 +175,7 @@ impl Process {
             .checked_sub(stack_pages * PAGE_SIZE)
             .unwrap();
         log::info!("Setting up stack pages at {:X?}", stack_bottom..stack_top);
-        let _ = loader
+        loader
             .load_zeroed(stack_bottom..stack_top, MemFlags::READ | MemFlags::WRITE)
             .unwrap();
 

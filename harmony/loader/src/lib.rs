@@ -208,6 +208,11 @@ impl<E> From<LoaderError<E>> for SegmentLoadError<E> {
 pub trait Loader {
     type Error;
 
+    /// Loads the `source` as specified by the function `F` into the virtual range of the loaded process.
+    ///
+    /// # Notes
+    ///
+    /// * `source` is a generalized byte slice. The start of the `at` range is taken from the 0th element in `source`.
     fn load_with<F>(
         &mut self,
         at: Range<usize>,
@@ -238,19 +243,13 @@ pub trait Loader {
         Ok(())
     }
 
-    /// Loads the `source` input into the VM range denoted by `at`.
-    ///
-    /// If the virtual range is larger than the source, the source will be loaded
-    /// to the beginning of `at` and the remaining bits will be zeroed
+    /// Requests a virtual memory range that will be zeroed.
     fn load_zeroed(&mut self, at: Range<usize>, rwx: MemFlags) -> Result<(), Self::Error> {
         self.load_with(at, |_| MaybeUninit::new(0), rwx)?;
         Ok(())
     }
 
-    /// Loads the `source` input into the VM range denoted by `at`.
-    ///
-    /// If the virtual range is larger than the source, the source will be loaded
-    /// to the beginning of `at` and the remaining bits will be zeroed
+    /// Requests a virtual memory range that will be left uninitialized on the process's memory space
     fn load_uninit(&mut self, at: Range<usize>, rwx: MemFlags) -> Result<(), Self::Error> {
         // SAFETY: u8 are valid on any bit pattern.
         self.load_with(at, |_| MaybeUninit::uninit(), rwx)?;
