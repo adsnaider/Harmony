@@ -50,6 +50,7 @@ dependencies = [
  "log",
  "serial",
  "sync",
+ "tar-no-std",
 ]
 
 [[package]]

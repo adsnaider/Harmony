@@ -9,6 +9,7 @@ use kapi::userspace::cap_managment::{FrameAllocator, SelfCapabilityManager};
 use kapi::userspace::structures::PhysFrame;
 use kapi::userspace::Booter;
 use serial::sprintln;
+use tar_no_std::TarArchiveRef;
 
 #[cfg(not(test))]
 #[panic_handler]
@@ -53,7 +54,16 @@ extern "C" fn _start(lowest_frame: usize, initrd: *const u8, initrd_size: usize)
     let frames = FrameBumper::new(PhysFrame::new(lowest_frame));
     let mut cap_manager =
         SelfCapabilityManager::new_with_start(resources.self_caps, CapId::new(6), &frames);
-    let mm = include_bytes_aligned::include_bytes_aligned!(16, "../../../../.build/memory_manager");
+
+    let initrd = TarArchiveRef::new(initrd).expect("Bad initramfs");
+    let _memory_manager = initrd
+        .entries()
+        .find(|entry| {
+            entry.filename().as_str().expect("Invalid entry in initrd") == "memory_manager"
+        })
+        .expect("Missing memory_manager from initrd")
+        .data();
+
     log::info!("Initializing user space");
     loop {}
 }

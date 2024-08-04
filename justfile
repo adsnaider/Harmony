@@ -29,10 +29,10 @@ setup:
 	rm -rf {{build_dir}}
 	mkdir -p {{build_dir}}
 
-initrd: booter
-	cd {{build_dir}} && tar -H ustar -cf initrd.tar booter
+initrd: booter memory_manager
+	cd {{build_dir}} && tar -H ustar -cf initrd.tar booter memory_manager
 
-booter: setup memory_manager
+booter: setup
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export RUSTFLAGS="-Clink-arg=-no-pie -Crelocation-model=static"
