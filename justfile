@@ -29,15 +29,17 @@ setup:
 	rm -rf {{build_dir}}
 	mkdir -p {{build_dir}}
 
+initrd: booter
+	cd {{build_dir}} && tar -H ustar -cf initrd.tar booter
+
 booter: setup
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export RUSTFLAGS="-Clink-arg=-no-pie -Crelocation-model=static"
 	BOOTER_BIN=`cargo build -p booter --profile {{profile}} --target {{_target}} --message-format=json | {{_extractor}}`
 	cp "$BOOTER_BIN" "{{build_dir}}/booter"
-	ln -sf "{{profile}}/booter" "{{artifact_dir}}/booter"
 
-kernel: setup booter
+kernel: setup
 	#!/usr/bin/env bash
 	set -euo pipefail
 	KERNEL_BIN=`cargo build --profile {{profile}} --target {{_target}} --message-format=json | {{_extractor}}`
@@ -87,10 +89,11 @@ clean:
 	cargo clean
 
 [private]
-iso_generic kernel_path limine_cfg output_path: limine build
+iso_generic kernel_path limine_cfg output_path: limine build initrd
 	rm -rf {{_iso_root}}
 	mkdir -p {{_iso_root}}/boot
 	cp -v "$kernel_path" {{_iso_root}}/boot
+	cp -v {{build_dir}}/initrd.tar {{_iso_root}}/boot
 	mkdir -p {{_iso_root}}/boot/limine
 	cp -v "$limine_cfg" limine/limine-bios.sys limine/limine-bios-cd.bin limine/limine-uefi-cd.bin {{_iso_root}}/boot/limine
 	mkdir -p {{_iso_root}}/EFI/BOOT

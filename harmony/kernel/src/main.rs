@@ -60,6 +60,8 @@ extern "C" fn kmain() -> ! {
     use component::{Component, Thread};
     use kapi::ops::SlotId;
     use kptr::KPtr;
+    use limine::request::ModuleRequest;
+    use tar_no_std::TarArchiveRef;
 
     use crate::caps::{CapEntryExtension, PageCapFlags, Resource};
 
@@ -68,7 +70,26 @@ extern "C" fn kmain() -> ! {
 
     {
         let (mut boot_regs, boot_page_table) = {
-            let proc = include_bytes_aligned::include_bytes_aligned!(16, "../../../.build/booter");
+            static MODULES_REQUEST: ModuleRequest = ModuleRequest::new();
+
+            let modules = MODULES_REQUEST.get_response().unwrap().modules();
+            let initrd = modules
+                .iter()
+                .find(|module| module.path().ends_with(b"initrd.tar"))
+                .expect("Bootloader didn't provide the initrd image");
+            let initrd = unsafe {
+                core::slice::from_raw_parts(initrd.addr(), initrd.size().try_into().unwrap())
+            };
+
+            let archive = TarArchiveRef::new(initrd).expect("Invalid initrd image");
+            let proc = archive
+                .entries()
+                .find(|entry| {
+                    entry.filename().as_str().expect("Invalid entry in initrd") == "booter"
+                })
+                .expect("Missing booter from initrd")
+                .data();
+
             log::info!("Loading user process");
             let process =
                 Process::load(proc, 10, UNTYPED_MEMORY_OFFSET, RawFrame::memory_limit()).unwrap();
@@ -153,14 +174,10 @@ extern "C" fn kmain() -> ! {
 }
 
 pub fn init() {
-    #[used]
     static BASE_REVISION: BaseRevision = BaseRevision::with_revision(1);
-
-    #[used]
     static mut MEMORY_MAP: MemoryMapRequest = MemoryMapRequest::new();
-
-    #[used]
     static STACK_SIZE: StackSizeRequest = StackSizeRequest::new().with_size(0x32000);
+
     interrupts::disable();
 
     serial::init();
