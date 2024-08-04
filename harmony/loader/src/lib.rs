@@ -165,7 +165,7 @@ pub enum SegmentLoadError<E> {
     LoaderError(E),
     InvalidFileRange,
     InvalidVirtualRange,
-    FileRangeLargerThanVirtualRange,
+    SourceLargerThanVirtualRange,
     RangeOverflow,
 }
 
@@ -185,30 +185,37 @@ where
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LoadZeroedError<E> {
+pub enum LoaderError<E> {
     LoaderError(E),
-    FileRangeLargerThanVirtualRange,
+    SourceLargerThanVirtualRange,
 }
 
-impl<E> From<E> for LoadZeroedError<E> {
+impl<E> From<E> for LoaderError<E> {
     fn from(value: E) -> Self {
         Self::LoaderError(value)
     }
 }
 
-impl<E> From<LoadZeroedError<E>> for SegmentLoadError<E> {
-    fn from(value: LoadZeroedError<E>) -> Self {
+impl<E> From<LoaderError<E>> for SegmentLoadError<E> {
+    fn from(value: LoaderError<E>) -> Self {
         match value {
-            LoadZeroedError::LoaderError(e) => Self::LoaderError(e),
-            LoadZeroedError::FileRangeLargerThanVirtualRange => {
-                Self::FileRangeLargerThanVirtualRange
-            }
+            LoaderError::LoaderError(e) => Self::LoaderError(e),
+            LoaderError::SourceLargerThanVirtualRange => Self::SourceLargerThanVirtualRange,
         }
     }
 }
 
 pub trait Loader {
     type Error;
+
+    fn load_with<F>(
+        &mut self,
+        at: Range<usize>,
+        source: F,
+        rwx: MemFlags,
+    ) -> Result<(), Self::Error>
+    where
+        F: Fn(usize) -> MaybeUninit<u8>;
 
     /// Loads the `source` input into the VM range denoted by `at`.
     ///
@@ -219,19 +226,36 @@ pub trait Loader {
         at: Range<usize>,
         source: &[u8],
         rwx: MemFlags,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<(), LoaderError<Self::Error>> {
+        if source.len() > at.len() {
+            return Err(LoaderError::SourceLargerThanVirtualRange);
+        }
+        self.load_with(
+            at,
+            |i| MaybeUninit::new(source.get(i).copied().unwrap_or(0)),
+            rwx,
+        )?;
+        Ok(())
+    }
 
     /// Loads the `source` input into the VM range denoted by `at`.
     ///
     /// If the virtual range is larger than the source, the source will be loaded
     /// to the beginning of `at` and the remaining bits will be zeroed
-    fn load_zeroed(&mut self, at: Range<usize>, rwx: MemFlags) -> Result<(), Self::Error>;
+    fn load_zeroed(&mut self, at: Range<usize>, rwx: MemFlags) -> Result<(), Self::Error> {
+        self.load_with(at, |_| MaybeUninit::new(0), rwx)?;
+        Ok(())
+    }
 
     /// Loads the `source` input into the VM range denoted by `at`.
     ///
     /// If the virtual range is larger than the source, the source will be loaded
     /// to the beginning of `at` and the remaining bits will be zeroed
-    fn load_uninit(&mut self, at: Range<usize>, rwx: MemFlags) -> Result<(), Self::Error>;
+    fn load_uninit(&mut self, at: Range<usize>, rwx: MemFlags) -> Result<(), Self::Error> {
+        // SAFETY: u8 are valid on any bit pattern.
+        self.load_with(at, |_| MaybeUninit::uninit(), rwx)?;
+        Ok(())
+    }
 
     /// Releases the virtual memory range previously loaded.
     ///

@@ -47,6 +47,7 @@ version = "0.1.0"
 dependencies = [
  "include_bytes_aligned",
  "kapi",
+ "loader",
  "log",
  "serial",
  "sync",

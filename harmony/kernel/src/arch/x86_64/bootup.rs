@@ -1,5 +1,6 @@
 //! Boot process initialization
 
+use core::mem::MaybeUninit;
 use core::ops::Range;
 
 use loader::{Loader, MemFlags, Program};
@@ -33,7 +34,11 @@ pub enum LoadError {
 }
 
 impl BootstrapLoader<'_, '_> {
-    fn request_page(&mut self, page: Page, rwx: MemFlags) -> Result<&mut [u8], LoadError> {
+    fn request_page(
+        &mut self,
+        page: Page,
+        rwx: MemFlags,
+    ) -> Result<&mut [MaybeUninit<u8>], LoadError> {
         let pflags = if rwx.is_empty() {
             PageTableFlags::PRESENT
         } else {
@@ -98,56 +103,35 @@ impl BootstrapLoader<'_, '_> {
 
 impl Loader for BootstrapLoader<'_, '_> {
     type Error = LoadError;
-    fn load_source(
+
+    fn load_with<F>(
         &mut self,
         at: Range<usize>,
-        mut source: &[u8],
+        source: F,
         rwx: MemFlags,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Self::Error>
+    where
+        F: Fn(usize) -> MaybeUninit<u8>,
+    {
         log::info!("Loading source at {at:X?}");
-        if source.len() > at.len() {
-            return Err(LoadError::FileRangeLargerThanVirtualRange);
-        }
         let mut vaddr = at.start;
+        let mut source_addr = 0;
+
         let start_page = at.start / Page::size();
         let end_page = at.end.div_ceil(Page::size());
         for page in start_page..end_page {
             let page = Page::from_index(page).unwrap();
             let dest = self.request_page(page, rwx)?;
-            dest.fill(0);
 
             let dest_start = vaddr % Page::size();
             let dest_end = Page::size();
+            let count = usize::min(dest_end - dest_start, at.end - vaddr);
 
-            let source_start = 0;
-            let source_end = source.len();
-
-            let count = usize::min(dest_end - dest_start, source_end - source_start);
-            dest[dest_start..(dest_start + count)]
-                .copy_from_slice(&source[source_start..(source_start + count)]);
-            source = &source[(source_start + count)..];
+            for i in 0..count {
+                dest[dest_start + i] = source(source_addr + i);
+            }
+            source_addr += count;
             vaddr += count;
-        }
-        Ok(())
-    }
-
-    fn load_zeroed(&mut self, at: Range<usize>, rwx: MemFlags) -> Result<(), Self::Error> {
-        let start_page = at.start / Page::size();
-        let end_page = at.end.div_ceil(Page::size());
-        for page in start_page..end_page {
-            let page = Page::from_index(page).unwrap();
-            let dest = self.request_page(page, rwx)?;
-            dest.fill(0);
-        }
-        Ok(())
-    }
-
-    fn load_uninit(&mut self, at: Range<usize>, rwx: MemFlags) -> Result<(), Self::Error> {
-        let start_page = at.start / Page::size();
-        let end_page = at.end.div_ceil(Page::size());
-        for page in start_page..end_page {
-            let page = Page::from_index(page).unwrap();
-            let _ = self.request_page(page, rwx);
         }
         Ok(())
     }

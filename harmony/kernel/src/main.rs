@@ -70,6 +70,7 @@ extern "C" fn kmain() -> ! {
 
     {
         let (mut boot_regs, boot_page_table) = {
+            #[used]
             static MODULES_REQUEST: ModuleRequest = ModuleRequest::new();
 
             let modules = MODULES_REQUEST.get_response().unwrap().modules();
@@ -180,8 +181,11 @@ extern "C" fn kmain() -> ! {
 }
 
 pub fn init() {
+    #[used]
     static BASE_REVISION: BaseRevision = BaseRevision::with_revision(1);
+    #[used]
     static mut MEMORY_MAP: MemoryMapRequest = MemoryMapRequest::new();
+    #[used]
     static STACK_SIZE: StackSizeRequest = StackSizeRequest::new().with_size(0x32000);
 
     interrupts::disable();

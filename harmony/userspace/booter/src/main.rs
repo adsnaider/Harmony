@@ -3,17 +3,20 @@
 #![feature(naked_functions)]
 
 use core::cell::Cell;
+use core::mem::MaybeUninit;
+use core::ops::Range;
 
 use kapi::raw::CapId;
 use kapi::userspace::cap_managment::{FrameAllocator, SelfCapabilityManager};
 use kapi::userspace::structures::PhysFrame;
 use kapi::userspace::Booter;
-use serial::sprintln;
+use loader::{Loader, MemFlags};
 use tar_no_std::TarArchiveRef;
 
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
+    use serial::sprintln;
     sprintln!("{}", info);
     loop {}
 }
@@ -66,4 +69,29 @@ extern "C" fn _start(lowest_frame: usize, initrd: *const u8, initrd_size: usize)
 
     log::info!("Initializing user space");
     loop {}
+}
+
+pub struct ElfLoader {}
+
+#[derive(Debug, Clone, Copy)]
+pub enum LoadError {}
+
+impl Loader for ElfLoader {
+    type Error = LoadError;
+
+    fn load_with<F>(
+        &mut self,
+        at: Range<usize>,
+        source: F,
+        rwx: MemFlags,
+    ) -> Result<(), Self::Error>
+    where
+        F: Fn(usize) -> MaybeUninit<u8>,
+    {
+        todo!()
+    }
+
+    unsafe fn unload(&mut self, vrange: core::ops::Range<usize>) {
+        todo!()
+    }
 }
