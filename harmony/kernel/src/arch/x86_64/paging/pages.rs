@@ -18,6 +18,10 @@ impl Page {
         }
     }
 
+    pub const fn size() -> usize {
+        PAGE_SIZE
+    }
+
     pub const fn try_from_start_address(addr: VirtAddr) -> Result<Self, Unaligned> {
         if addr.as_usize() % PAGE_SIZE != 0 {
             return Err(Unaligned);

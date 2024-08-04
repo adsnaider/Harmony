@@ -22,37 +22,49 @@ pub struct Program<'a> {
 
 #[derive(Debug)]
 pub struct Process {
-    pub entry: u64,
+    entry: u64,
+    top_of_text: usize,
 }
 
-#[derive(Debug, Copy, Clone)]
-pub enum Error {
+impl Process {
+    pub fn entry(&self) -> u64 {
+        self.entry
+    }
+
+    /// Returns the virtual address denoting the top of the .text section
+    pub fn top_of_text(&self) -> usize {
+        self.top_of_text
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum ElfError {
     BadElf,
     InvalidOffsets,
     NotAligned,
 }
 
 impl<'a> Program<'a> {
-    pub fn new(program: &'a [u8]) -> Result<Self, Error> {
+    pub fn new(program: &'a [u8]) -> Result<Self, ElfError> {
         if program.as_ptr() as usize % 16 != 0 {
-            return Err(Error::NotAligned);
+            return Err(ElfError::NotAligned);
         }
         let header = Header::from_bytes(
             program[..SIZEOF_EHDR]
                 .try_into()
-                .map_err(|_| Error::BadElf)?,
+                .map_err(|_| ElfError::BadElf)?,
         );
         let program_headers = {
-            let phoff: usize = header.e_phoff.try_into().map_err(|_| Error::BadElf)?;
+            let phoff: usize = header.e_phoff.try_into().map_err(|_| ElfError::BadElf)?;
             let entry_size: usize = header.e_phentsize.into();
             let entries: usize = header.e_phnum.into();
 
             let length = entry_size
                 .checked_mul(entries)
-                .ok_or(Error::InvalidOffsets)?;
-            let end = phoff.checked_add(length).ok_or(Error::InvalidOffsets)?;
+                .ok_or(ElfError::InvalidOffsets)?;
+            let end = phoff.checked_add(length).ok_or(ElfError::InvalidOffsets)?;
             if end > program.len() {
-                return Err(Error::InvalidOffsets);
+                return Err(ElfError::InvalidOffsets);
             }
 
             unsafe {
@@ -67,13 +79,14 @@ impl<'a> Program<'a> {
         })
     }
 
-    pub fn load<L>(&self, loader: &mut L) -> Result<Process, SegmentLoadError>
+    pub fn load<L>(&self, loader: &mut L) -> Result<Process, SegmentLoadError<L::Error>>
     where
-        L: SegmentLoader,
+        L: Loader,
     {
         match self.load_headers(loader) {
-            Ok(_) => Ok(Process {
+            Ok(top_of_text) => Ok(Process {
                 entry: self.header.e_entry,
+                top_of_text,
             }),
             Err((loaded_count, e)) => {
                 // SAFETY: This segment was previously loaded and will only be unloaded once.
@@ -83,10 +96,11 @@ impl<'a> Program<'a> {
         }
     }
 
-    fn load_headers<L: SegmentLoader>(
+    fn load_headers<L: Loader>(
         &self,
         loader: &mut L,
-    ) -> Result<(), (usize, SegmentLoadError)> {
+    ) -> Result<usize, (usize, SegmentLoadError<L::Error>)> {
+        let mut top_of_text = 0;
         for (i, phdr) in self
             .program_headers
             .iter()
@@ -97,15 +111,16 @@ impl<'a> Program<'a> {
                 program: self.program,
                 header: phdr,
             };
-            loader.load(segment).map_err(|e| (i, e))?;
+            let range = segment.load(loader).map_err(|e| (i, e))?;
+            top_of_text = usize::max(top_of_text, range.end);
         }
-        Ok(())
+        Ok(top_of_text)
     }
 
     /// # Safety
     ///
     /// The count must accurately track currently loaded segments.
-    unsafe fn unload_headers<L: SegmentLoader>(&self, loader: &mut L, count: usize) {
+    unsafe fn unload_headers<L: Loader>(&self, loader: &mut L, count: usize) {
         for phdr in self
             .program_headers
             .iter()
@@ -117,7 +132,7 @@ impl<'a> Program<'a> {
                 header: phdr,
             };
             // SAFETY: Preconditions.
-            unsafe { loader.unload(segment) };
+            unsafe { segment.unload(loader) };
         }
     }
 }
@@ -146,12 +161,18 @@ impl MemFlags {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub enum SegmentLoadError {
+pub enum SegmentLoadError<E> {
+    LoaderError(E),
     InvalidFileRange,
     InvalidVirtualRange,
     FileRangeLargerThanVirtualRange,
     RangeOverflow,
-    BadMemoryFlags,
+}
+
+impl<E> From<E> for SegmentLoadError<E> {
+    fn from(value: E) -> Self {
+        SegmentLoadError::LoaderError(value)
+    }
 }
 
 fn range_convert<T, U, E>(range: Range<T>) -> Result<Range<U>, E>
@@ -163,48 +184,94 @@ where
     Ok(Range { start, end })
 }
 
-pub trait SegmentLoader {
-    /// Requests a virtual memory range mapping from the loader
-    ///
-    /// The behavior of this function is one in which the returned slice in the Ok case
-    /// should directly mapped to the virtual memory range of the process/segment being
-    /// loaded. The resulting slice must be the same length as the requested range or
-    /// the load implementation may panic.
-    fn request_virtual_memory_range(
-        &mut self,
-        range: Range<usize>,
-        rwx: MemFlags,
-    ) -> Result<&mut [MaybeUninit<u8>], SegmentLoadError>;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoadZeroedError<E> {
+    LoaderError(E),
+    FileRangeLargerThanVirtualRange,
+}
 
-    /// Releases the virtual memory range previously requested
+impl<E> From<E> for LoadZeroedError<E> {
+    fn from(value: E) -> Self {
+        Self::LoaderError(value)
+    }
+}
+
+impl<E> From<LoadZeroedError<E>> for SegmentLoadError<E> {
+    fn from(value: LoadZeroedError<E>) -> Self {
+        match value {
+            LoadZeroedError::LoaderError(e) => Self::LoaderError(e),
+            LoadZeroedError::FileRangeLargerThanVirtualRange => {
+                Self::FileRangeLargerThanVirtualRange
+            }
+        }
+    }
+}
+
+pub trait Loader {
+    type Error;
+
+    /// Loads the `source` input into the VM range denoted by `at`.
+    ///
+    /// If the virtual range is larger than the source, the source will be loaded
+    /// to the beginning of `at` and the remaining bits will be zeroed
+    fn load_source(
+        &mut self,
+        at: Range<usize>,
+        source: &[u8],
+        rwx: MemFlags,
+    ) -> Result<(), Self::Error>;
+
+    /// Loads the `source` input into the VM range denoted by `at`.
+    ///
+    /// If the virtual range is larger than the source, the source will be loaded
+    /// to the beginning of `at` and the remaining bits will be zeroed
+    fn load_zeroed(&mut self, at: Range<usize>, rwx: MemFlags) -> Result<(), Self::Error>;
+
+    /// Loads the `source` input into the VM range denoted by `at`.
+    ///
+    /// If the virtual range is larger than the source, the source will be loaded
+    /// to the beginning of `at` and the remaining bits will be zeroed
+    fn load_uninit(&mut self, at: Range<usize>, rwx: MemFlags) -> Result<(), Self::Error>;
+
+    /// Releases the virtual memory range previously loaded.
     ///
     /// # Safety
     ///
-    /// The caller must have requested the range with `request_virtual_memory_range` which must
+    /// The caller must have requested the range with `load_source` which must
     /// have returned `Ok`. This function may only be called once per requested memory range.
-    unsafe fn release_virtual_memory_range(&mut self, range: Range<usize>);
+    unsafe fn unload(&mut self, vrange: Range<usize>);
+}
 
-    fn load(&mut self, segment: Segment<'_, '_>) -> Result<(), SegmentLoadError> {
+pub struct Segment<'prog, 'head> {
+    pub program: &'prog [u8],
+    pub header: &'head ProgramHeader,
+}
+
+impl<'prog, 'head> Segment<'prog, 'head> {
+    pub fn load<L: Loader>(
+        &self,
+        loader: &mut L,
+    ) -> Result<Range<usize>, SegmentLoadError<L::Error>> {
         let vm_range = range_convert(
-            segment.header.p_vaddr
-                ..(segment
+            self.header.p_vaddr
+                ..(self
                     .header
                     .p_vaddr
-                    .checked_add(segment.header.p_memsz)
+                    .checked_add(self.header.p_memsz)
                     .ok_or(SegmentLoadError::RangeOverflow)?),
         )
         .map_err(|_| SegmentLoadError::InvalidVirtualRange)?;
         let file_range: Range<usize> = range_convert(
-            segment.header.p_offset
-                ..(segment
+            self.header.p_offset
+                ..(self
                     .header
                     .p_offset
-                    .checked_add(segment.header.p_filesz)
+                    .checked_add(self.header.p_filesz)
                     .ok_or(SegmentLoadError::RangeOverflow)?),
         )
         .map_err(|_| SegmentLoadError::InvalidFileRange)?;
 
-        let flags = segment.header.p_flags;
+        let flags = self.header.p_flags;
         let mut mem_flags = MemFlags::empty();
         if flags & PF_R != 0 {
             mem_flags |= MemFlags::READ;
@@ -215,31 +282,13 @@ pub trait SegmentLoader {
         if flags & PF_X != 0 {
             mem_flags |= MemFlags::EXECUTE;
         }
-
-        let dest = self.request_virtual_memory_range(vm_range.clone(), mem_flags)?;
-        assert_eq!(
-            dest.len(),
-            vm_range.len(),
-            "Requested virtual memory range doesn't match expected size"
-        );
-        // SAFETY: It's okay to zero a byte slice.
-        let dest = unsafe {
-            core::ptr::write_bytes(dest.as_mut_ptr(), 0, dest.len());
-            &mut *(dest as *mut [MaybeUninit<u8>] as *mut [u8])
-        };
-
-        let source = segment
+        log::debug!("Loading segment at {:X?} with {:?}", &vm_range, &mem_flags);
+        let source = self
             .program
             .get(file_range)
             .ok_or(SegmentLoadError::InvalidFileRange)?;
-
-        if source.len() > dest.len() {
-            return Err(SegmentLoadError::FileRangeLargerThanVirtualRange);
-        }
-        for (source, dest) in source.iter().zip(dest.iter_mut()) {
-            unsafe { core::ptr::write_volatile(dest as *mut u8, *source) };
-        }
-        Ok(())
+        loader.load_source(vm_range.clone(), source, mem_flags)?;
+        Ok(vm_range)
     }
 
     /// Unloads the loaded segment, releasing the resources utilized
@@ -248,22 +297,17 @@ pub trait SegmentLoader {
     ///
     /// The segment must have been loaded with this loader and it may not
     /// have been unloaded already. This has similar semantics to alloc/free.
-    unsafe fn unload(&mut self, segment: Segment<'_, '_>) {
+    unsafe fn unload<L: Loader>(&self, loader: &mut L) {
         // NOTE: We don't need to do checked arithmetic here because the segment was previously
         // loaded so the ranges are proper.
-        let vm_range = segment.header.p_vaddr as usize
-            ..(segment.header.p_vaddr as usize + segment.header.p_memsz as usize);
+        let vm_range = self.header.p_vaddr as usize
+            ..(self.header.p_vaddr as usize + self.header.p_memsz as usize);
 
         // SAFETY: Preconditions guarantee this will only be called once per loaded segment.
         unsafe {
-            self.release_virtual_memory_range(vm_range);
+            loader.unload(vm_range);
         }
     }
-}
-
-pub struct Segment<'prog, 'head> {
-    pub program: &'prog [u8],
-    pub header: &'head ProgramHeader,
 }
 
 #[cfg(test)]

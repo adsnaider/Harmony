@@ -37,11 +37,18 @@ impl FrameAllocator for &'_ FrameBumper {
 }
 
 #[no_mangle]
-extern "C" fn _start(lowest_frame: usize) -> ! {
+extern "C" fn _start(lowest_frame: usize, initrd: *const u8, initrd_size: usize) -> ! {
     let resources = Booter::make();
 
     resources.hardware.enable_ports().unwrap();
     serial::init();
+    let initrd = unsafe { core::slice::from_raw_parts(initrd, initrd_size) };
+    log::info!(
+        "Jumped to userspace: next_frame: {}, initrd: ({:?}, {})",
+        lowest_frame,
+        initrd.as_ptr(),
+        initrd.len()
+    );
 
     let frames = FrameBumper::new(PhysFrame::new(lowest_frame));
     let mut cap_manager =

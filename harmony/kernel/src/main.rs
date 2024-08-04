@@ -91,8 +91,14 @@ extern "C" fn kmain() -> ! {
                 .data();
 
             log::info!("Loading user process");
-            let process =
-                Process::load(proc, 10, UNTYPED_MEMORY_OFFSET, RawFrame::memory_limit()).unwrap();
+            let process = Process::load(
+                proc,
+                10,
+                UNTYPED_MEMORY_OFFSET,
+                RawFrame::memory_limit(),
+                initrd,
+            )
+            .unwrap();
             process.into_parts()
         };
         let mut fallocator = BumpAllocator::new();
