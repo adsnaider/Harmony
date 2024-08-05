@@ -10,7 +10,7 @@ use kapi::raw::CapId;
 use kapi::userspace::cap_managment::{FrameAllocator, SelfCapabilityManager};
 use kapi::userspace::structures::PhysFrame;
 use kapi::userspace::Booter;
-use loader::{Loader, MemFlags};
+use loader::{Loader, MemFlags, Program};
 use tar_no_std::TarArchiveRef;
 
 #[cfg(not(test))]
@@ -54,12 +54,12 @@ extern "C" fn _start(lowest_frame: usize, initrd: *const u8, initrd_size: usize)
         initrd.len()
     );
 
-    let frames = FrameBumper::new(PhysFrame::new(lowest_frame));
+    let fallocator = FrameBumper::new(PhysFrame::new(lowest_frame));
     let mut cap_manager =
-        SelfCapabilityManager::new_with_start(resources.self_caps, CapId::new(6), &frames);
+        SelfCapabilityManager::new_with_start(resources.self_caps, CapId::new(6), &fallocator);
 
     let initrd = TarArchiveRef::new(initrd).expect("Bad initramfs");
-    let _memory_manager = initrd
+    let memory_manager = initrd
         .entries()
         .find(|entry| {
             entry.filename().as_str().expect("Invalid entry in initrd") == "memory_manager"
@@ -68,15 +68,25 @@ extern "C" fn _start(lowest_frame: usize, initrd: *const u8, initrd_size: usize)
         .data();
 
     log::info!("Initializing user space");
+
+    let mut loader = HarmonyLoader {
+        fallocator: &fallocator,
+    };
+    let mem_manager = Program::new(memory_manager)
+        .expect("Found invalid ELF in initramfs")
+        .load(&mut loader)
+        .expect("Couldn't load ELF");
     loop {}
 }
 
-pub struct ElfLoader {}
+pub struct HarmonyLoader<'a> {
+    fallocator: &'a FrameBumper,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum LoadError {}
 
-impl Loader for ElfLoader {
+impl Loader for HarmonyLoader<'_> {
     type Error = LoadError;
 
     fn load_with<F>(
