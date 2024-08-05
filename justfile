@@ -35,6 +35,7 @@ initrd: booter memory_manager
 booter: setup
 	#!/usr/bin/env bash
 	set -euo pipefail
+	export CARGO_TARGET_DIR="target/userspace"
 	export RUSTFLAGS="-Clink-arg=-no-pie -Crelocation-model=static"
 	BOOTER_BIN=`cargo build -p booter --profile {{profile}} --target {{_target}} --message-format=json | {{_extractor}}`
 	cp "$BOOTER_BIN" "{{build_dir}}/booter"
@@ -42,6 +43,7 @@ booter: setup
 memory_manager:
 	#!/usr/bin/env bash
 	set -euo pipefail
+	export CARGO_TARGET_DIR="target/userspace"
 	export RUSTFLAGS="-Clink-arg=-no-pie -Crelocation-model=static"
 	BIN=`cargo build -p memory_manager --profile {{profile}} --target {{_target}} --message-format=json | {{_extractor}}`
 	cp "$BIN" "{{build_dir}}/memory_manager"
@@ -50,7 +52,8 @@ memory_manager:
 kernel: setup
 	#!/usr/bin/env bash
 	set -euo pipefail
-	KERNEL_BIN=`cargo build --profile {{profile}} --target {{_target}} --message-format=json | {{_extractor}}`
+	export CARGO_TARGET_DIR="target/kernel/"
+	KERNEL_BIN=`cargo build -p kernel --profile {{profile}} --target {{_target}} --message-format=json | {{_extractor}}`
 	cp -fs "$KERNEL_BIN" "{{build_dir}}/kernel"
 	KERNEL_TEST_BIN=`cargo test --profile {{profile}} --target {{_target}} --no-run --message-format=json | {{_extractor}}`
 	cp -fs "$KERNEL_TEST_BIN" "{{build_dir}}/kernel_test"
