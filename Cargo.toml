@@ -7,6 +7,7 @@ members = [
   "harmony/sync",
   "harmony/trie",
   "harmony/userspace/booter",
+  "harmony/userspace/memory_manager",
   "harmony/userspace/examples/*",
   "harmony/userspace/serial",
 ]

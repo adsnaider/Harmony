@@ -30,3 +30,23 @@ impl Booter {
         }
     }
 }
+
+pub struct MemoryManager {
+    pub sync_ret: SyncRet,
+    pub self_caps: CapTable,
+    pub self_paging: PageTable,
+    pub retype: Retype,
+    pub hardware: HardwareAccess,
+}
+
+impl MemoryManager {
+    pub const fn make() -> Self {
+        Self {
+            sync_ret: SyncRet::new(CapId::new(0)),
+            self_caps: CapTable::new(CapId::new(1)),
+            self_paging: PageTable::new(CapId::new(2)),
+            retype: Retype::new(CapId::new(3)),
+            hardware: HardwareAccess::new(CapId::new(4)),
+        }
+    }
+}
