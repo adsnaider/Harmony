@@ -61,9 +61,9 @@ test-iso: limine build
 
 dbg_dir: setup
 	mkdir -p {{artifact_dir}}/debugger/
-	ln -sf {{build_dir}}/kernel {{artifact_dir}}/debugger
-	ln -sf {{build_dir}}/kernel_test {{artifact_dir}}/debugger
-	ln -sf {{build_dir}}/booter {{artifact_dir}}/debugger
+	ln -sf ../{{profile}}/kernel {{artifact_dir}}/debugger
+	ln -sf ../{{profile}}/kernel_test {{artifact_dir}}/debugger
+	ln -sf ../{{profile}}/booter {{artifact_dir}}/debugger
 
 emulate: dbg_dir iso
 	@./go.sh 33 qemu-system-x86_64 \
