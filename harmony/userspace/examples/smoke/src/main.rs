@@ -2,8 +2,6 @@
 #![no_main]
 #![feature(naked_functions)]
 
-mod serial;
-
 use core::cell::Cell;
 
 use kapi::ops::cap_table::{PageTableConsArgs, SyncCallConsArgs, ThreadConsArgs};
@@ -14,6 +12,7 @@ use kapi::sync_call;
 use kapi::userspace::cap_managment::{FrameAllocator, SelfCapabilityManager};
 use kapi::userspace::structures::{HardwareAccess, PhysFrame, Thread};
 use kapi::userspace::Booter;
+use serial::sprintln;
 use stack_list::{StackList, StackNode};
 
 #[cfg(not(test))]

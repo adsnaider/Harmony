@@ -30,8 +30,6 @@ pub mod syscall;
 #[cfg(test)]
 mod testing;
 
-mod serial;
-
 pub type MemoryMap = &'static mut [&'static mut Entry];
 
 pub const UNTYPED_MEMORY_OFFSET: usize = 0x0000_7000_0000_0000;

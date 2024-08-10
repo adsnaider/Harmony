@@ -2,14 +2,13 @@
 #![no_main]
 #![feature(naked_functions)]
 
-mod serial;
-
 use core::cell::Cell;
 
 use kapi::raw::CapId;
 use kapi::userspace::cap_managment::{FrameAllocator, SelfCapabilityManager};
 use kapi::userspace::structures::PhysFrame;
 use kapi::userspace::Booter;
+use serial::sprintln;
 
 #[cfg(not(test))]
 #[panic_handler]

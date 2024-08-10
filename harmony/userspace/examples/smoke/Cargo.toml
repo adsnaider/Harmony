@@ -7,6 +7,7 @@ edition = "2021"
 kapi = { workspace = true, features = ["userspace"] }
 sync = { workspace = true }
 stack_list = { workspace = true }
+serial = { workspace = true }
 
 uart_16550 = "0.3.0"
 log = "0.4.22"

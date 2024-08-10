@@ -9,6 +9,7 @@ edition = "2021"
 sync = { workspace = true }
 trie = { workspace = true }
 kapi = { workspace = true, features = ["from_errors"] }
+serial = { workspace = true }
 
 limine = { version = "0.2.0", features = ["ipaddr"] }
 uart_16550 = "0.3.0"
