@@ -1,4 +1,4 @@
-use crate::{sprint, sprintln};
+use serial::{sprint, sprintln};
 
 #[cfg(test)]
 #[no_mangle]
@@ -12,6 +12,8 @@ unsafe extern "C" fn kmain() -> ! {
 #[cfg(target_os = "none")]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
+    use serial::sprintln;
+
     sprintln!("{}", info);
     exit_qemu(QemuExitCode::Failed)
 }

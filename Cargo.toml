@@ -7,6 +7,7 @@ members = [
   "harmony/trie",
   "harmony/userspace/booter",
   "harmony/userspace/examples/*",
+  "harmony/userspace/serial",
 ]
 
 resolver = "2"
@@ -17,6 +18,7 @@ sync = { path = "harmony/sync" }
 trie = { path = "harmony/trie" }
 kapi = { path = "harmony/kapi" }
 stack_list = { path = "harmony/stack_list" }
+serial = { path = "harmony/userspace/serial" }
 
 [profile.dev]
 debug = "full"

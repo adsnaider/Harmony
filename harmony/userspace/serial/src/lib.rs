@@ -1,11 +1,12 @@
 //! Helpers to communicate with the serial port.
+#![no_std]
 
 use log::{LevelFilter, Metadata, Record};
 use sync::cell::AtomicLazyCell;
 use uart_16550::SerialPort;
 
 /// Initializes serial port and logger. sprint! and log macros after this.
-pub(super) fn init() {
+pub fn init() {
     log::set_logger(&LOGGER)
         .map(|()| log::set_max_level(*LOG_LEVEL))
         .expect("Couldn't set the serial logger");
@@ -33,7 +34,7 @@ pub fn _print(args: ::core::fmt::Arguments) {
 #[macro_export]
 macro_rules! sprint {
     ($($arg:tt)*) => {
-        $crate::serial::_print(format_args!($($arg)*));
+        $crate::_print(::core::format_args!($($arg)*));
     };
 }
 
@@ -41,16 +42,16 @@ macro_rules! sprint {
 #[macro_export]
 macro_rules! sprintln {
     () => ($crate::sprint!("\n"));
-    ($fmt:expr) => ($crate::sprint!(concat!($fmt, "\n")));
+    ($fmt:expr) => ($crate::sprint!(::core::concat!($fmt, "\n")));
     ($fmt:expr, $($arg:tt)*) => ($crate::sprint!(
-        concat!($fmt, "\n"), $($arg)*));
+        ::core::concat!($fmt, "\n"), $($arg)*));
 }
 
 /// Prints a debug expression to the serial port.
 #[macro_export]
 macro_rules! sdbg {
     () => {
-        $crate::sprintln!("[{}:{}]", file!(), line!())
+        $crate::sprintln!("[{}:{}]", ::core::file!(), ::core::line!())
     };
     ($val:expr $(,)?) => {
         // Use of `match` here is intentional because it affects the lifetimes
@@ -58,7 +59,7 @@ macro_rules! sdbg {
         match $val {
             tmp => {
                 $crate::sprintln!("[{}:{}] {} = {:#?}",
-                    file!(), line!(), stringify!($val), &tmp);
+                    ::core::file!(), ::core::line!(), ::core::stringify!($val), &tmp);
                 tmp
             }
         }
@@ -72,14 +73,14 @@ macro_rules! sdbg {
 static LOGGER: Logger = Logger {};
 
 static LOG_LEVEL: AtomicLazyCell<LevelFilter> = AtomicLazyCell::new(|| {
-    let level = option_env!("RUST_LOG").unwrap_or("info");
+    let level = core::option_env!("RUST_LOG").unwrap_or("info");
     match level {
         "trace" => LevelFilter::Trace,
         "debug" => LevelFilter::Debug,
         "info" => LevelFilter::Info,
         "warn" => LevelFilter::Warn,
         "error" => LevelFilter::Error,
-        other => panic!("Unknown LOG LEVEL: {other}"),
+        other => core::panic!("Unknown LOG LEVEL: {other}"),
     }
 });
 
