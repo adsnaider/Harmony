@@ -4,6 +4,7 @@
 
 use core::cell::Cell;
 
+use entry::entry;
 use kapi::raw::CapId;
 use kapi::userspace::cap_managment::{FrameAllocator, SelfCapabilityManager};
 use kapi::userspace::structures::PhysFrame;
@@ -35,8 +36,8 @@ impl FrameAllocator for &'_ FrameBumper {
     }
 }
 
-#[no_mangle]
-extern "C" fn _start(lowest_frame: usize) -> ! {
+#[entry]
+fn main(lowest_frame: usize) -> ! {
     let resources = Booter::make();
 
     resources.hardware.enable_ports().unwrap();

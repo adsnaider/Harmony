@@ -107,8 +107,6 @@ extern "C" fn kmain() -> ! {
         thread = {
             let frame = fallocator.alloc_untyped_frame().unwrap();
             boot_regs.scratch.rdi = fallocator.next_available().base().as_u64();
-            // Sysv64 alignment
-            boot_regs.control.rsp -= 8;
             KPtr::new(
                 frame,
                 Thread::new(
