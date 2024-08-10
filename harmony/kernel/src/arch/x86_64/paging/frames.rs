@@ -2,6 +2,7 @@
 
 use x86_64_impl::structures::paging::PhysFrame;
 
+use super::physical_address::BadAddress;
 use super::{PhysAddr, FRAME_SIZE};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -20,6 +21,11 @@ impl RawFrame {
 
     pub fn base(&self) -> PhysAddr {
         self.base
+    }
+
+    pub fn from_index(index: u64) -> Result<Self, BadAddress> {
+        let start = index * FRAME_SIZE;
+        Ok(Self::from_start_address(PhysAddr::try_new(start)?))
     }
 
     pub fn try_from_start_address(base: PhysAddr) -> Result<Self, UnalignedAddress> {
