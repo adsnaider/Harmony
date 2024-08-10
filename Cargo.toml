@@ -2,6 +2,7 @@
 members = [
   "harmony/kapi",
   "harmony/kernel",
+  "harmony/loader",
   "harmony/stack_list",
   "harmony/sync",
   "harmony/trie",
@@ -19,6 +20,7 @@ trie = { path = "harmony/trie" }
 kapi = { path = "harmony/kapi" }
 stack_list = { path = "harmony/stack_list" }
 serial = { path = "harmony/userspace/serial" }
+loader = { path = "harmony/loader" }
 
 [profile.dev]
 debug = "full"
