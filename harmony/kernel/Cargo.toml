@@ -10,6 +10,7 @@ sync = { workspace = true }
 trie = { workspace = true }
 kapi = { workspace = true, features = ["from_errors"] }
 serial = { workspace = true }
+loader = { workspace = true }
 
 limine = { version = "0.2.0", features = ["ipaddr"] }
 uart_16550 = "0.3.0"
@@ -22,8 +23,3 @@ tar-no-std = "0.3.2"
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 x86_64_impl = { package = "x86_64", version = "0.15" }
-
-[target.'cfg(target_arch = "x86_64")'.dependencies.goblin]
-version = "0.8"
-default-features = false
-features = ["elf64"]

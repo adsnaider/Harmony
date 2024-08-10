@@ -10,6 +10,7 @@ use crate::kptr::KPtr;
 use crate::retyping::RetypeError;
 
 #[repr(transparent)]
+#[derive(Copy, Clone)]
 pub struct Addrspace<'a>(&'a AnyPageTable);
 
 #[derive(Debug)]
