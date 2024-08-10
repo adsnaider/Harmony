@@ -8,12 +8,11 @@ use kapi::raw::CapId;
 use kapi::userspace::cap_managment::{FrameAllocator, SelfCapabilityManager};
 use kapi::userspace::structures::PhysFrame;
 use kapi::userspace::Booter;
-use serial::sprintln;
 
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    sprintln!("{}", info);
+    log::error!("{}", info);
     loop {}
 }
 
@@ -46,6 +45,6 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
     let frames = FrameBumper::new(PhysFrame::new(lowest_frame));
     let _cap_manager =
         SelfCapabilityManager::new_with_start(resources.self_caps, CapId::new(6), &frames);
-    sprintln!("Initializing user space");
+    log::info!("Initializing user space");
     loop {}
 }
