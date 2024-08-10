@@ -1,0 +1,13 @@
+[package]
+name = "loader"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bitflags = "2.6.0"
+log = "0.4.21"
+
+[target.'cfg(target_arch = "x86_64")'.dependencies.goblin]
+version = "0.8"
+default-features = false
+features = ["elf64"]
