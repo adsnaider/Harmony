@@ -90,6 +90,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3522094fae7d65c8313a135fe45fa7e22ec2110c9d387063b66d235281f7f771"
 
 [[package]]
+name = "entry"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn 2.0.72",
+]
+
+[[package]]
 name = "errno"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"

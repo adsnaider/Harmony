@@ -10,6 +10,7 @@ members = [
   "harmony/userspace/memory_manager",
   "harmony/userspace/examples/*",
   "harmony/userspace/serial",
+  "harmony/entry",
 ]
 
 resolver = "2"
@@ -22,6 +23,7 @@ kapi = { path = "harmony/kapi" }
 stack_list = { path = "harmony/stack_list" }
 serial = { path = "harmony/userspace/serial" }
 loader = { path = "harmony/loader" }
+entry = { path = "harmony/entry" }
 
 [profile.dev]
 debug = "full"
