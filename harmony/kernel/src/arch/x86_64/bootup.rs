@@ -5,6 +5,7 @@ use core::ops::Range;
 
 use loader::{Loader, MemFlags, Program};
 
+use super::exec::ScratchRegs;
 use super::paging::page_table::AnyPageTable;
 use super::paging::RawFrame;
 use crate::arch::exec::{ControlRegs, Regs};
@@ -17,6 +18,7 @@ pub struct Process {
     pub entry: u64,
     pub rsp: u64,
     pub l4_table: KPtr<AnyPageTable>,
+    pub initrd: (*const u8, usize),
 }
 
 pub struct BootstrapLoader<'a, 'b> {
@@ -139,6 +141,7 @@ impl Process {
         stack_pages: usize,
         untyped_memory_offset: usize,
         untyped_memory_length: usize,
+        initrd: &[u8],
     ) -> Result<Self, LoadError> {
         let mut fallocator = BumpAllocator::new();
         assert!(untyped_memory_offset % PAGE_SIZE == 0);
@@ -184,12 +187,19 @@ impl Process {
                 .map_page(page, frame, PageTableFlags::PRESENT)
                 .unwrap();
         }
+        // And also pass through the initrd image
+        let initrd_start = process.top_of_text().div_ceil(Page::size()) * Page::size();
+        let initrd_end = initrd_start + initrd.len();
+        loader
+            .load_source(initrd_start..initrd_end, initrd, MemFlags::READ)
+            .unwrap();
 
         log::info!("Initialized user process");
         Ok(Self {
             entry: process.entry(),
             rsp: untyped_memory_offset as u64,
             l4_table,
+            initrd: (initrd_start as *const u8, initrd.len()),
         })
     }
 
@@ -200,6 +210,12 @@ impl Process {
                     rsp: self.rsp,
                     rip: self.entry,
                     rflags: 0x202,
+                },
+                scratch: ScratchRegs {
+                    rdi: 0,
+                    rsi: self.initrd.0 as usize as u64,
+                    rdx: self.initrd.1 as u64,
+                    ..Default::default()
                 },
                 ..Default::default()
             },
