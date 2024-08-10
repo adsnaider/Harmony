@@ -56,10 +56,10 @@ limine:
 	make -C limine
 
 iso: limine build
-	just iso_generic {{build_dir}}/kernel limine.cfg {{image_path}}
+	just profile={{profile}} arch={{arch}} artifact_dir={{artifact_dir}} iso_generic {{build_dir}}/kernel limine.cfg {{image_path}}
 
 test-iso: limine build
-	just iso_generic {{build_dir}}/kernel_test limine-test.cfg {{test_image_path}}
+	just profile={{profile}} arch={{arch}} artifact_dir={{artifact_dir}} iso_generic {{build_dir}}/kernel_test limine-test.cfg {{test_image_path}}
 
 dbg_dir: setup
 	mkdir -p {{artifact_dir}}/debugger/
