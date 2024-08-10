@@ -29,25 +29,33 @@ setup:
 	rm -rf {{build_dir}}
 	mkdir -p {{build_dir}}
 
-initrd: booter
-	cd {{build_dir}} && tar -H ustar -cf initrd.tar booter
+initrd: booter memory_manager
+	cd {{build_dir}} && tar -H ustar -cf initrd.tar booter memory_manager
 
 booter: setup
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export CARGO_TARGET_DIR="{{artifact_dir}}/target/userspace/"
 	export RUSTFLAGS="-Clink-arg=-no-pie -Crelocation-model=static"
-	BOOTER_BIN=`cargo build -p booter --profile {{profile}} --target {{_target}} --message-format=json | {{_extractor}}`
-	cp "$BOOTER_BIN" "{{build_dir}}/booter"
+	BIN=`cargo build -p booter --profile {{profile}} --target {{_target}} --message-format=json | {{_extractor}}`
+	cp "$BIN" "{{build_dir}}/booter"
+
+memory_manager: setup
+	#!/usr/bin/env bash
+	set -euo pipefail
+	export CARGO_TARGET_DIR="{{artifact_dir}}/target/userspace/"
+	export RUSTFLAGS="-Clink-arg=-no-pie -Crelocation-model=static"
+	BIN=`cargo build -p memory_manager --profile {{profile}} --target {{_target}} --message-format=json | {{_extractor}}`
+	cp "$BIN" "{{build_dir}}/memory_manager"
 
 kernel: setup
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export CARGO_TARGET_DIR="{{artifact_dir}}/target/kernel/"
-	KERNEL_BIN=`cargo build --profile {{profile}} --target {{_target}} --message-format=json | {{_extractor}}`
-	cp -fs "$KERNEL_BIN" "{{build_dir}}/kernel"
-	KERNEL_TEST_BIN=`cargo test --profile {{profile}} --target {{_target}} --no-run --message-format=json | {{_extractor}}`
-	cp -fs "$KERNEL_TEST_BIN" "{{build_dir}}/kernel_test"
+	BIN=`cargo build --profile {{profile}} --target {{_target}} --message-format=json | {{_extractor}}`
+	cp -fs "$BIN" "{{build_dir}}/kernel"
+	TEST_BIN=`cargo test --profile {{profile}} --target {{_target}} --no-run --message-format=json | {{_extractor}}`
+	cp -fs "$TEST_BIN" "{{build_dir}}/kernel_test"
 
 build: kernel
 
