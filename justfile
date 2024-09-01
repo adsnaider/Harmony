@@ -6,24 +6,29 @@ arch := env_var("ARCH")
 profile := env_var("PROFILE")
 debugger := "no"
 
-_target := arch + "-unknown-none"
+[private]
+target := arch + "-unknown-none"
 
 artifact_dir := ".build"
 build_dir := artifact_dir / profile
 image_path := build_dir / "harmony.iso"
 test_image_path := build_dir / "harmony-test.iso"
-_extractor := "jq -r '.filenames | last' | tail -2 | head -1"
-_iso_root := build_dir / "iso_root"
+
+[private]
+extractor := "jq -r '.filenames | last' | tail -2 | head -1"
+[private]
+iso_root := build_dir / "iso_root"
 qemu_user_args := env_var_or_default("QEMU_ARGS", "")
-_qemu_args := if debugger == "yes" { qemu_user_args + " -s -S" } else { qemu_user_args }
+[private]
+qemu_args := if debugger == "yes" { qemu_user_args + " -s -S" } else { qemu_user_args }
 
 default: iso
 
 check:
-	cargo check --target {{_target}} --tests
+	cargo check --target {{target}} --tests
 
 clippy:
-	cargo clippy --target {{_target}} --tests
+	cargo clippy --target {{target}} --tests
 
 setup:
 	rm -rf {{build_dir}}
@@ -37,7 +42,7 @@ booter: setup
 	set -euo pipefail
 	export CARGO_TARGET_DIR="{{artifact_dir}}/target/userspace/"
 	export RUSTFLAGS="-Clink-arg=-no-pie -Crelocation-model=static"
-	BIN=`cargo build -p booter --profile {{profile}} --target {{_target}} --message-format=json | {{_extractor}}`
+	BIN=`cargo build -p booter --profile {{profile}} --target {{target}} --message-format=json | {{extractor}}`
 	cp "$BIN" "{{build_dir}}/booter"
 
 memory_manager: setup
@@ -45,16 +50,16 @@ memory_manager: setup
 	set -euo pipefail
 	export CARGO_TARGET_DIR="{{artifact_dir}}/target/userspace/"
 	export RUSTFLAGS="-Clink-arg=-no-pie -Crelocation-model=static"
-	BIN=`cargo build -p memory_manager --profile {{profile}} --target {{_target}} --message-format=json | {{_extractor}}`
+	BIN=`cargo build -p memory_manager --profile {{profile}} --target {{target}} --message-format=json | {{extractor}}`
 	cp "$BIN" "{{build_dir}}/memory_manager"
 
 kernel: setup
 	#!/usr/bin/env bash
 	set -euo pipefail
 	export CARGO_TARGET_DIR="{{artifact_dir}}/target/kernel/"
-	BIN=`cargo build --profile {{profile}} --target {{_target}} --message-format=json | {{_extractor}}`
+	BIN=`cargo build --profile {{profile}} --target {{target}} --message-format=json | {{extractor}}`
 	cp -fs "$BIN" "{{build_dir}}/kernel"
-	TEST_BIN=`cargo test --profile {{profile}} --target {{_target}} --no-run --message-format=json | {{_extractor}}`
+	TEST_BIN=`cargo test --profile {{profile}} --target {{target}} --no-run --message-format=json | {{extractor}}`
 	cp -fs "$TEST_BIN" "{{build_dir}}/kernel_test"
 
 build: kernel
@@ -81,7 +86,7 @@ emulate: dbg_dir iso
 		-bios /usr/share/ovmf/OVMF.fd \
 		-chardev stdio,id=char0,logfile=serial.log,signal=off \
 		-serial chardev:char0 \
-		{{_qemu_args}}
+		{{qemu_args}}
 
 ktest: test-iso
 	@./go.sh 33 qemu-system-x86_64 \
@@ -91,7 +96,7 @@ ktest: test-iso
 		-serial chardev:char0 \
 		-device isa-debug-exit,iobase=0xf4,iosize=0x04 \
 		-display none \
-		{{_qemu_args}}
+		{{qemu_args}}
 
 clean:
 	rm -rf {{artifact_dir}}
@@ -100,18 +105,18 @@ clean:
 
 [private]
 iso_generic kernel_path limine_cfg output_path: limine build initrd
-	rm -rf {{_iso_root}}
-	mkdir -p {{_iso_root}}/boot
-	cp -v "$kernel_path" {{_iso_root}}/boot
-	cp -v {{build_dir}}/initrd.tar {{_iso_root}}/boot
-	mkdir -p {{_iso_root}}/boot/limine
-	cp -v "$limine_cfg" limine/limine-bios.sys limine/limine-bios-cd.bin limine/limine-uefi-cd.bin {{_iso_root}}/boot/limine
-	mkdir -p {{_iso_root}}/EFI/BOOT
-	cp -v limine/BOOTX64.EFI {{_iso_root}}/EFI/BOOT/
-	cp -v limine/BOOTIA32.EFI {{_iso_root}}/EFI/BOOT/
+	rm -rf {{iso_root}}
+	mkdir -p {{iso_root}}/boot
+	cp -v "$kernel_path" {{iso_root}}/boot
+	cp -v {{build_dir}}/initrd.tar {{iso_root}}/boot
+	mkdir -p {{iso_root}}/boot/limine
+	cp -v "$limine_cfg" limine/limine-bios.sys limine/limine-bios-cd.bin limine/limine-uefi-cd.bin {{iso_root}}/boot/limine
+	mkdir -p {{iso_root}}/EFI/BOOT
+	cp -v limine/BOOTX64.EFI {{iso_root}}/EFI/BOOT/
+	cp -v limine/BOOTIA32.EFI {{iso_root}}/EFI/BOOT/
 	xorriso -as mkisofs -b boot/limine/limine-bios-cd.bin \
 		-no-emul-boot -boot-load-size 4 -boot-info-table \
 		--efi-boot boot/limine/limine-uefi-cd.bin \
 		-efi-boot-part --efi-boot-image --protective-msdos-label \
-		{{_iso_root}} -o "$output_path"
+		{{iso_root}} -o "$output_path"
 	@echo "ISO Image Built: $output_path"
