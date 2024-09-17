@@ -111,10 +111,16 @@ impl SyscallOp for CapTableOp {
             }
             CapTableOp::Drop { slot: _ } => todo!(),
             CapTableOp::Copy {
-                slot: _,
-                other_table_cap: _,
-                other_slot: _,
-            } => todo!(),
+                slot,
+                other_table_cap,
+                other_slot,
+            } => SyscallArgs::new(
+                RawOperation::CapTableCopy.into(),
+                slot.into(),
+                other_table_cap.into(),
+                other_slot.into(),
+                0,
+            ),
         }
     }
 
@@ -163,7 +169,14 @@ impl SyscallOp for CapTableOp {
                 }))
             }
             RawOperation::CapTableDrop => todo!(),
-            RawOperation::CapTableCopy => todo!(),
+            RawOperation::CapTableCopy => {
+                let (slot, other_table_cap, other_slot, ..) = args.args();
+                Ok(Self::Copy {
+                    slot: slot.try_into()?,
+                    other_table_cap: other_table_cap.try_into()?,
+                    other_slot: other_slot.try_into()?,
+                })
+            }
             _ => Err(InvalidOperation::BadOp),
         }
     }
