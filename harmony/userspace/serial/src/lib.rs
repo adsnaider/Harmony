@@ -93,7 +93,11 @@ impl log::Log for Logger {
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
-            crate::sprintln!("{} - {}", record.level(), record.args());
+            crate::sprint!("[{}]\t", record.level());
+            if let (Some(file), Some(line)) = (record.file(), record.line()) {
+                crate::sprint!("@ {}:{}", file, line);
+            }
+            crate::sprintln!(" : {}", record.args());
         }
     }
 
