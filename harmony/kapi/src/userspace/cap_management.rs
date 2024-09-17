@@ -58,6 +58,10 @@ impl CapSlot {
     pub fn deallocate(self) -> Result<(), CapError> {
         self.table.drop_resource(self.slot)
     }
+
+    pub fn copy_into(&self, to_table: CapTable, to_slot: SlotId) -> Result<(), CapError> {
+        self.table.copy_resource(self.slot, to_table, to_slot)
+    }
 }
 
 impl<A: FrameAllocator> SelfCapabilityManager<A> {
