@@ -6,7 +6,7 @@
 use self::structures::{CapTable, HardwareAccess, PageTable, Retype, SyncRet, Thread};
 use crate::raw::CapId;
 
-pub mod cap_managment;
+pub mod cap_management;
 pub mod structures;
 pub mod sync_call;
 

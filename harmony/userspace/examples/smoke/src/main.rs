@@ -9,7 +9,7 @@ use kapi::ops::memory::RetypeKind;
 use kapi::ops::paging::PermissionMask;
 use kapi::raw::CapId;
 use kapi::sync_call;
-use kapi::userspace::cap_managment::{FrameAllocator, SelfCapabilityManager};
+use kapi::userspace::cap_management::{FrameAllocator, SelfCapabilityManager};
 use kapi::userspace::structures::{HardwareAccess, PhysFrame, Thread};
 use kapi::userspace::Booter;
 use serial::sprintln;
