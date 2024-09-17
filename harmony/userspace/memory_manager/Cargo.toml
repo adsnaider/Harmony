@@ -6,4 +6,5 @@ edition = "2021"
 [dependencies]
 serial = { workspace = true }
 kapi = { workspace = true, features = ["userspace"] }
+entry = { workspace = true }
 log = "0.4.21"

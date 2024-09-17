@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 
+use entry::entry;
 use kapi::userspace::MemoryManager;
 
 #[cfg(not(test))]
@@ -12,8 +13,8 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
-#[no_mangle]
-extern "C" fn _start() -> ! {
+#[entry]
+fn main() -> ! {
     let MemoryManager {
         sync_ret,
         self_caps,
@@ -21,7 +22,7 @@ extern "C" fn _start() -> ! {
         retype,
         hardware,
     } = MemoryManager::make();
-    hardware.enable_ports();
+    hardware.enable_ports().unwrap();
     serial::init();
     log::info!("Initializing memory manager");
     loop {}
