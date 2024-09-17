@@ -71,14 +71,17 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
 
     let p3 = cap_manager
         .allocate_capability()
+        .unwrap()
         .make_page_table(PageTableConsArgs::new(frames.next(), 3))
         .unwrap();
     let p2 = cap_manager
         .allocate_capability()
+        .unwrap()
         .make_page_table(PageTableConsArgs::new(frames.next(), 2))
         .unwrap();
     let p1 = cap_manager
         .allocate_capability()
+        .unwrap()
         .make_page_table(PageTableConsArgs::new(frames.next(), 1))
         .unwrap();
 
@@ -120,6 +123,7 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
     unsafe {
         t2 = cap_manager
             .allocate_capability()
+            .unwrap()
             .make_thread(ThreadConsArgs::new(
                 foo,
                 tstack.add(0x1000),
@@ -131,6 +135,7 @@ extern "C" fn _start(lowest_frame: usize) -> ! {
             .unwrap();
         scall = cap_manager
             .allocate_capability()
+            .unwrap()
             .make_sync_call(SyncCallConsArgs::new(
                 sync_call,
                 resources.self_caps,
