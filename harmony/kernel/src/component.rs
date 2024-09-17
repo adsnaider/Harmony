@@ -243,10 +243,24 @@ impl Thread {
                     }
                     CapTableOp::Drop { slot: _ } => todo!(),
                     CapTableOp::Copy {
-                        slot: _,
-                        other_table_cap: _,
-                        other_slot: _,
-                    } => todo!(),
+                        slot,
+                        other_table_cap,
+                        other_slot,
+                    } => {
+                        log::info!("Copying resources into : {other_table_cap:?} @ {other_slot:?}");
+                        let other_table: KPtr<RawCapEntry> = this
+                            .component()
+                            .resources
+                            .clone()
+                            .get_resource_as(other_table_cap)?;
+                        log::info!("Got other table");
+                        let resource = capability_table.index_slot(slot).get().resource.clone();
+                        other_table
+                            .index_slot(other_slot)
+                            .change(|slot| slot.resource = resource);
+
+                        Ok(0)
+                    }
                 }
             }
             Resource::Thread(thread) => {

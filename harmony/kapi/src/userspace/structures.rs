@@ -50,6 +50,20 @@ impl CapTable {
         unsafe { op.syscall(self.id) }
     }
 
+    pub fn copy_resource(
+        &self,
+        slot: SlotId,
+        to_table: CapTable,
+        to_slot: SlotId,
+    ) -> Result<(), CapError> {
+        let op = CapTableOp::Copy {
+            slot,
+            other_table_cap: to_table.id,
+            other_slot: to_slot,
+        };
+        unsafe { op.syscall(self.id) }
+    }
+
     /// Constructs
     pub fn make_thread(
         &self,
