@@ -6,7 +6,7 @@ use core::cell::Cell;
 
 use entry::entry;
 use kapi::raw::CapId;
-use kapi::userspace::cap_managment::{FrameAllocator, SelfCapabilityManager};
+use kapi::userspace::cap_management::{FrameAllocator, SelfCapabilityManager};
 use kapi::userspace::structures::PhysFrame;
 use kapi::userspace::Booter;
 use tar_no_std::TarArchiveRef;
