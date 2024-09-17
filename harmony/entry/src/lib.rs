@@ -14,6 +14,10 @@ pub fn entry(_attr: TokenStream, fun: TokenStream) -> TokenStream {
         "Entry function must not specify an ABI"
     );
     assert!(
+        entry_fun.sig.abi.is_none(),
+        "Entry function must not specify an ABI"
+    );
+    assert!(
         entry_fun.attrs.is_empty(),
         "Attributes are not allowed on entry function"
     );
