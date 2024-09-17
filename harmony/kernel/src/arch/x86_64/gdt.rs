@@ -40,7 +40,7 @@ impl OverAlignedU8 {
     }
 }
 
-const INTERRUPT_STACK_SIZE: usize = PAGE_SIZE * 10;
+const INTERRUPT_STACK_SIZE: usize = PAGE_SIZE * 32;
 
 #[used]
 #[link_section = ".interrupt_stack"]
