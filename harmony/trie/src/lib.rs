@@ -22,6 +22,10 @@ impl<const COUNT: usize> SlotId<COUNT> {
     pub const fn count() -> usize {
         COUNT
     }
+
+    pub const fn bits() -> usize {
+        COUNT.trailing_zeros() as usize
+    }
 }
 
 impl<const COUNT: usize> TryFrom<usize> for SlotId<COUNT> {
@@ -200,6 +204,25 @@ mod tests {
                 .payload
                 .get(),
             0
+        );
+    }
+    #[test]
+    fn connections2() {
+        type MyTrie = TrieEntry<64, MySlot<64>>;
+        let trie: Rc<MyTrie> = Rc::new(TrieEntry::default());
+
+        assert!(MyTrie::get(trie.clone(), 64).unwrap().is_none());
+        let slot = MyTrie::get(trie.clone(), 0).unwrap().unwrap();
+        let l1: Rc<MyTrie> = Rc::new(TrieEntry::default());
+        l1.slots[4].payload.set(10);
+        assert!(slot.set_child(Some(l1)).is_none());
+        assert_eq!(
+            MyTrie::get(trie.clone(), 4 << 6)
+                .unwrap()
+                .unwrap()
+                .payload
+                .get(),
+            10
         );
     }
 }
