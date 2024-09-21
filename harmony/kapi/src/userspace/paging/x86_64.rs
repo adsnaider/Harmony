@@ -4,7 +4,6 @@ use heapless::Vec;
 
 use self::addr::{Frame, Page, PageTableLevel, PageTableOffset};
 use crate::ops::paging::PermissionMask;
-use crate::raw::CapError;
 use crate::userspace::structures::PageTable;
 
 pub mod addr;
@@ -37,10 +36,6 @@ impl Addrspace {
             l4_table,
             mappings: Vec::new(),
         }
-    }
-
-    pub fn get(&mut self, page: Page) -> Option<(Frame, PermissionMask)> {
-        todo!();
     }
 
     pub unsafe fn map_to<A: PageTableAllocator>(

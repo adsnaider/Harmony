@@ -11,8 +11,9 @@ bytemuck = { version = "1.16.1", features = ["derive"] }
 bitflags = "2.6.0"
 stack_list = { workspace = true, optional = true }
 log = "0.4.21"
+heapless = { version = "0.8.0", optional = true }
 
 [features]
 default = []
 from_errors = ["dep:sync"]
-userspace = ["dep:stack_list"]
+userspace = ["dep:stack_list", "dep:heapless"]

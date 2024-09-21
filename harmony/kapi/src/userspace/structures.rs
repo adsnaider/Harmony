@@ -3,6 +3,7 @@
 
 use core::convert::Infallible;
 
+use super::paging::addr::Frame;
 use crate::ops::cap_table::{
     CapTableConsArgs, CapTableOp, ConsArgs, ConstructArgs, PageTableConsArgs, SyncCallConsArgs,
     ThreadConsArgs,
@@ -14,20 +15,6 @@ use crate::ops::paging::{PageTableOp, PermissionMask};
 use crate::ops::thread::ThreadOp;
 use crate::ops::{SlotId, SyscallOp as _};
 use crate::raw::{CapError, CapId};
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct PhysFrame(usize);
-
-impl PhysFrame {
-    pub const fn new(frame: usize) -> Self {
-        assert!(frame % 4096 == 0);
-        Self(frame)
-    }
-
-    pub const fn addr(&self) -> usize {
-        self.0
-    }
-}
 
 /// A wrapper over a capability table capability.
 #[derive(Debug, Clone, Copy)]
@@ -72,7 +59,7 @@ impl CapTable {
         resources: CapTable,
         page_table: PageTable,
         construct_slot: SlotId,
-        construct_frame: PhysFrame,
+        construct_frame: Frame,
         arg0: usize,
     ) -> Result<(), CapError> {
         let op = CapTableOp::Construct(ConsArgs {
@@ -82,7 +69,7 @@ impl CapTable {
                 cap_table: resources.id,
                 page_table: page_table.id,
                 arg0,
-                region: construct_frame.0,
+                region: construct_frame.addr().into(),
             }),
             slot: construct_slot,
         });
@@ -107,16 +94,11 @@ impl CapTable {
         unsafe { op.syscall(self.id) }
     }
 
-    pub fn make_page_table(
-        &self,
-        slot: SlotId,
-        frame: PhysFrame,
-        level: u8,
-    ) -> Result<(), CapError> {
+    pub fn make_page_table(&self, slot: SlotId, frame: Frame, level: u8) -> Result<(), CapError> {
         unsafe {
             CapTableOp::Construct(ConsArgs {
                 kind: ConstructArgs::PageTable(PageTableConsArgs {
-                    region: frame.0,
+                    region: frame.addr().into(),
                     level,
                     _padding: [0; 7],
                 }),
@@ -126,12 +108,24 @@ impl CapTable {
         }
     }
 
-    pub fn make_cap_table(&self, slot: SlotId, frame: PhysFrame) -> Result<(), CapError> {
+    pub fn make_cap_table(&self, slot: SlotId, frame: Frame) -> Result<(), CapError> {
         unsafe {
             CapTableOp::Construct(ConsArgs {
-                kind: ConstructArgs::CapTable(CapTableConsArgs { region: frame.0 }),
+                kind: ConstructArgs::CapTable(CapTableConsArgs {
+                    region: frame.addr().into(),
+                }),
                 slot,
             })
+            .syscall(self.id)
+        }
+    }
+
+    pub fn link_table(&self, slot: SlotId, table: CapTable) -> Result<(), CapError> {
+        unsafe {
+            CapTableOp::Link {
+                slot,
+                other_table_cap: table.id,
+            }
             .syscall(self.id)
         }
     }
@@ -154,7 +148,7 @@ impl Thread {
 }
 
 /// A wrapper over a page table capability.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PageTable {
     id: CapId,
 }
@@ -183,17 +177,25 @@ impl PageTable {
     pub fn map(
         &self,
         slot: usize,
-        frame: PhysFrame,
+        frame: Frame,
         permissions: PermissionMask,
     ) -> Result<(), CapError> {
         unsafe {
             PageTableOp::MapFrame {
-                user_frame: frame.0,
+                user_frame: frame.addr().into(),
                 slot,
                 permissions,
             }
             .syscall(self.id)
         }
+    }
+
+    pub fn unlink(&self, slot: usize) -> Result<(), CapError> {
+        unsafe { PageTableOp::Unlink { slot }.syscall(self.id) }
+    }
+
+    pub fn unmap(&self, slot: usize) -> Result<(), CapError> {
+        unsafe { PageTableOp::UnmapFrame { slot }.syscall(self.id) }
     }
 }
 
@@ -252,10 +254,10 @@ impl Retype {
         Self { id }
     }
 
-    pub fn retype(&self, frame: PhysFrame, kind: RetypeKind) -> Result<(), CapError> {
+    pub fn retype(&self, frame: Frame, kind: RetypeKind) -> Result<(), CapError> {
         unsafe {
             RetypeOp {
-                region: frame.0,
+                region: frame.addr().into(),
                 to: kind,
             }
             .syscall(self.id)
@@ -263,13 +265,20 @@ impl Retype {
     }
 }
 
+impl CapTableConsArgs {
+    pub fn new(frame: Frame) -> Self {
+        Self {
+            region: frame.addr().into(),
+        }
+    }
+}
 impl ThreadConsArgs {
     pub fn new(
         entry: extern "C" fn(usize) -> !,
         stack_top: *mut u8,
         resources: CapTable,
         page_table: PageTable,
-        construct_frame: PhysFrame,
+        construct_frame: Frame,
         arg0: usize,
     ) -> Self {
         Self {
@@ -278,15 +287,15 @@ impl ThreadConsArgs {
             cap_table: resources.id,
             page_table: page_table.id,
             arg0,
-            region: construct_frame.addr(),
+            region: construct_frame.addr().into(),
         }
     }
 }
 
 impl PageTableConsArgs {
-    pub const fn new(frame: PhysFrame, level: u8) -> Self {
+    pub fn new(frame: Frame, level: u8) -> Self {
         Self {
-            region: frame.addr(),
+            region: frame.addr().into(),
             level,
             _padding: [0; 7],
         }

@@ -1,4 +1,5 @@
-use super::structures::{CapTable, PageTable, PhysFrame, SyncCall, Thread};
+use super::paging::addr::Frame;
+use super::structures::{CapTable, PageTable, SyncCall, Thread};
 use crate::ops::cap_table::{
     CapTableConsArgs, ConstructArgs, PageTableConsArgs, SyncCallConsArgs, ThreadConsArgs,
 };
@@ -17,7 +18,7 @@ pub struct SelfCapabilityManager<A: FrameAllocator> {
 }
 
 pub trait FrameAllocator {
-    fn alloc_frame(&mut self) -> PhysFrame;
+    fn alloc_frame(&mut self) -> Frame;
 }
 
 pub struct CapSlot {
