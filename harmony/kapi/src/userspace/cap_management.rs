@@ -316,11 +316,7 @@ impl<A: FrameAllocator> SelfCapabilityManager<A> {
                     .link_table(parent_slot.slot, table)
                     .unwrap();
 
-                Ok(CapSlot {
-                    id: new_cap,
-                    table,
-                    slot: SlotId::new(new_cap.get() as usize >> 6).unwrap(),
-                })
+                Ok(CapSlot::from_root_and_cap(self.root_table, new_cap))
             }
         }
     }
