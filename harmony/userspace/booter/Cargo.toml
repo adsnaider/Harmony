@@ -8,5 +8,6 @@ kapi = { workspace = true, features = ["userspace"] }
 sync = { workspace = true }
 serial = { workspace = true }
 entry = { workspace = true }
+loader = { workspace = true }
 log = "0.4.21"
 tar-no-std = "0.3.2"

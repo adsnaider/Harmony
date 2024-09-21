@@ -47,6 +47,7 @@ version = "0.1.0"
 dependencies = [
  "entry",
  "kapi",
+ "loader",
  "log",
  "serial",
  "sync",
