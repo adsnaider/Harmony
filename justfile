@@ -62,7 +62,7 @@ kernel: setup
 	TEST_BIN=`cargo test --profile {{profile}} --target {{target}} --no-run --message-format=json | {{extractor}}`
 	cp -fs "$TEST_BIN" "{{build_dir}}/kernel_test"
 
-build: kernel
+build: kernel initrd
 
 limine:
 	{{path_exists("limine/")}} || git clone https://github.com/limine-bootloader/limine.git --branch=v7.x-binary --depth=1
