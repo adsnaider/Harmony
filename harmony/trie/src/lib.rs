@@ -19,6 +19,10 @@ impl<const COUNT: usize> SlotId<COUNT> {
         Self::try_from(id)
     }
 
+    pub fn tail() -> Self {
+        Self::new(Self::count() - 1).unwrap()
+    }
+
     pub const fn count() -> usize {
         COUNT
     }
