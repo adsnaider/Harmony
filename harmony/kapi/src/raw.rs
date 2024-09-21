@@ -5,6 +5,8 @@ use core::num::TryFromIntError;
 use bytemuck::{AnyBitPattern, NoUninit};
 use num_enum::{IntoPrimitive, TryFromPrimitive, TryFromPrimitiveError};
 
+use crate::ops::SlotId;
+
 /// Performs a raw syscall
 ///
 /// # Safety
@@ -166,12 +168,41 @@ impl SyscallArgs<'_> {
 pub struct CapId(u32);
 
 impl CapId {
+    pub const NUM_OFFSETS: usize = 32usize.div_ceil(SlotId::bits());
     pub const fn new(id: u32) -> Self {
         Self(id)
     }
 
     pub const fn get(&self) -> u32 {
         self.0
+    }
+
+    pub const fn offsets(&self) -> [u32; Self::NUM_OFFSETS] {
+        let mut cap = self.get();
+        let mut out = [0; CapId::NUM_OFFSETS];
+        let mut i = 0;
+        while cap > 0 {
+            const MASK: u32 = SlotId::count() as u32 - 1;
+            let offset = cap & MASK;
+            out[i] = offset;
+            cap >>= SlotId::bits();
+            i += 1;
+        }
+        out
+    }
+
+    pub fn from_offsets(offsets: [u32; Self::NUM_OFFSETS]) -> Self {
+        let mut cap = 0;
+        let trailing_zeros = offsets
+            .iter()
+            .position(|&off| off != 0)
+            .unwrap_or(offsets.len());
+        let valid_offsets = offsets.len() - trailing_zeros;
+        for off in offsets.iter().copied().rev().take(valid_offsets) {
+            cap <<= SlotId::bits();
+            cap |= off;
+        }
+        Self::new(cap)
     }
 }
 
