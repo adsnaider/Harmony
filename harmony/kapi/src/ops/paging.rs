@@ -84,7 +84,7 @@ impl SyscallOp for PageTableOp {
                 permissions: PermissionMask::from_bits_truncate(args.args().2),
             }),
             RawOperation::PageTableUnmapFrame => Ok(Self::UnmapFrame {
-                slot: args.args().1,
+                slot: args.args().0,
             }),
             _ => Err(InvalidOperation::BadOp),
         }
