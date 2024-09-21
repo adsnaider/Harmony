@@ -43,6 +43,7 @@ pub fn init() {
 /// Each thread has its own address space, execution context, and resource
 /// table.
 #[repr(align(4096))]
+#[derive(Debug)]
 pub struct Thread {
     // FIXME: This is not the correct way to do this...
     exec_ctx: UnsafeCell<ExecCtx>,
@@ -267,6 +268,7 @@ impl Thread {
                 let operation = ThreadOp::from_args(args)?;
                 match operation {
                     ThreadOp::Activate => {
+                        log::debug!("Switching to thread: {:?}", &*thread);
                         // SAFETY: Running a syscall.
                         let ctx = unsafe { SyscallCtx::current() };
                         Thread::dispatch(thread, ctx);
@@ -299,15 +301,11 @@ impl Thread {
                         let other_frame = other_table.into_raw();
                         // SAFETY: Whatever is done here can only affect userspace.
                         unsafe {
-                            if let Some((previous_frame, _)) =
-                                table.map(offset, other_frame, permissions_into(permissions))
-                            {
-                                KPtr::<AnyPageTable>::from_frame_unchecked(KernelFrame::from_raw(
-                                    previous_frame,
-                                ));
-                            }
+                            table
+                                .try_map(offset, other_frame, permissions_into(permissions))
+                                .map(|()| 0)
+                                .map_err(|_| CapError::ResourceInUse)
                         }
-                        Ok(0)
                     }
                     PageTableOp::Unlink { slot } => {
                         let offset = PageTableOffset::new_truncate(slot as u16);
@@ -344,15 +342,11 @@ impl Thread {
                             .into_raw();
 
                         unsafe {
-                            if let Some((_previous_frame, _)) =
-                                table.map(offset, frame, permissions_into(permissions))
-                            {
-                                // FIXME: This doesn't do any sort of flushing that guarantees the frame has been forgotten!
-                                // We can now drop the previous frame:
-                                // UserFrame::from_raw(previous_frame);
-                            }
+                            table
+                                .try_map(offset, frame, permissions_into(permissions))
+                                .map(|()| 0)
+                                .map_err(|_| CapError::ResourceInUse)
                         }
-                        Ok(0)
                     }
                     PageTableOp::UnmapFrame { slot } => {
                         let offset = PageTableOffset::new_truncate(slot as u16);
