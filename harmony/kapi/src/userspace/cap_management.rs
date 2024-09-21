@@ -267,7 +267,6 @@ impl CapGenerator {
 enum CapAllocation {
     Simple(CapId),
     RequiresTable { table_cap: CapId, new_cap: CapId },
->>>>>>> Stashed changes
 }
 
 impl<A: FrameAllocator> SelfCapabilityManager<A> {
