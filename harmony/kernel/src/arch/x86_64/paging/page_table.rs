@@ -264,6 +264,21 @@ impl AnyPageTable {
         self.get(offset).set(frame, attributes)
     }
 
+    /// Atomically sets the frame and attributes on the page table offset provided if none present
+    ///
+    /// # Safety
+    ///
+    /// This is one of those methods that fundamentally change memory and can cause undefined
+    /// behaviour even when the usage is semantically reasonable.
+    pub unsafe fn try_map(
+        &self,
+        offset: PageTableOffset,
+        frame: RawFrame,
+        attributes: PageTableFlags,
+    ) -> Result<(), (RawFrame, PageTableFlags)> {
+        self.get(offset).try_set(frame, attributes)
+    }
+
     /// Atomically unamps the entry (leaving it available for use again).
     ///
     /// # Safety
@@ -343,6 +358,20 @@ impl PageTableEntry {
         ))
     }
 
+    unsafe fn try_set_bits(&self, bits: u64) -> Result<(), (RawFrame, PageTableFlags)> {
+        self.0
+            .compare_exchange(0, bits, Ordering::Relaxed, Ordering::Relaxed)
+            .map(|_| ())
+            .map_err(|old| {
+                let addr = old & Self::FRAME_MASK;
+                let attributes = PageTableFlags::from_bits(old & Self::FLAGS_MASK).unwrap();
+                (
+                    RawFrame::from_start_address(PhysAddr::new(addr)),
+                    attributes,
+                )
+            })
+    }
+
     /// Atomically sets this entry to the frame and the attributes
     ///
     /// # Safety
@@ -354,6 +383,19 @@ impl PageTableEntry {
         attributes: PageTableFlags,
     ) -> Option<(RawFrame, PageTableFlags)> {
         unsafe { self.set_bits(attributes.bits() | frame.base().as_u64()) }
+    }
+
+    /// Atomically sets this entry to the frame and the attributes if none present
+    ///
+    /// # Safety
+    ///
+    /// This could fundamentally change memory, leading to unsoundness.
+    pub unsafe fn try_set(
+        &self,
+        frame: RawFrame,
+        attributes: PageTableFlags,
+    ) -> Result<(), (RawFrame, PageTableFlags)> {
+        unsafe { self.try_set_bits(attributes.bits() | frame.base().as_u64()) }
     }
 
     /// Atomically unsets this entry, leaving it empty
