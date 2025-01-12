@@ -9,11 +9,10 @@ Harmony OS (pronounced "harmonious") is an experimental, hobby OS written entire
 I've only tested this on an x86_64 linux computer. You will need the following
 tools to build and emulate the OS.
 
-* [Rust](https://rustup.rs/)
-* `qemu-system-x86_64` for emulating.
-* OVMF (currently hardcoded to `/usr/share/ovmf/OVMF.fd`)
-* `mkisofs` for building an ISO.
 * [`just`](https://github.com/casey/just?tab=readme-ov-file#installation) for running commands
+
+After installing it, you can run `just install-deps` to get the
+remaining dependencies
 
 ### Emulation with QEMU
 

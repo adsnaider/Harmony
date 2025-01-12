@@ -24,6 +24,14 @@ qemu_args := if debugger == "yes" { qemu_user_args + " -s -S" } else { qemu_user
 
 default: iso
 
+install-deps:
+	#!/bin/bash
+	if ! command -v cargo; then
+		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+	fi
+	sudo apt update && sudo apt install qemu-system-x86 ovmf mkisofs xorriso
+
+
 check:
 	cargo check --target {{target}} --tests
 
