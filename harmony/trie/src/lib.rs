@@ -15,8 +15,12 @@ pub struct TrieEntry<const COUNT: usize, S: Slot<COUNT>> {
 pub struct SlotId<const COUNT: usize>(usize);
 
 impl<const COUNT: usize> SlotId<COUNT> {
-    pub fn new(id: usize) -> Result<Self, TrieIndexError> {
-        Self::try_from(id)
+    pub const fn new(id: usize) -> Result<Self, TrieIndexError> {
+        if id < COUNT {
+            Ok(Self(id))
+        } else {
+            Err(TrieIndexError::OutOfBounds)
+        }
     }
 
     pub fn tail() -> Self {
@@ -35,12 +39,8 @@ impl<const COUNT: usize> SlotId<COUNT> {
 impl<const COUNT: usize> TryFrom<usize> for SlotId<COUNT> {
     type Error = TrieIndexError;
 
-    fn try_from(value: usize) -> Result<Self, Self::Error> {
-        if value < COUNT {
-            Ok(Self(value))
-        } else {
-            Err(TrieIndexError::OutOfBounds)
-        }
+    fn try_from(id: usize) -> Result<Self, Self::Error> {
+        Self::new(id)
     }
 }
 
