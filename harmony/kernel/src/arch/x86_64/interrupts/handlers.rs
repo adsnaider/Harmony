@@ -1,4 +1,4 @@
-use core::arch::{asm, naked_asm};
+use core::arch::naked_asm;
 use core::mem::MaybeUninit;
 
 use x86_64_impl::registers::control::Cr2;
@@ -215,6 +215,7 @@ macro_rules! interrupt {
 
 interrupt!(timer_interrupt, || {
     // SAFETY: Notify timer interrupt vector.
+    #[allow(static_mut_refs)]
     unsafe {
         PICS.notify_end_of_interrupt(TIMER_INT);
     }
@@ -222,6 +223,7 @@ interrupt!(timer_interrupt, || {
 
 interrupt!(keyboard_interrupt, || {
     // SAFETY: Notify keyboard interrupt vector.
+    #[allow(static_mut_refs)]
     unsafe {
         PICS.notify_end_of_interrupt(KEYBOARD_INT);
     }

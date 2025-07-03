@@ -26,6 +26,7 @@ static mut SERIAL: AtomicLazyCell<SerialPort> = AtomicLazyCell::new(|| {
 pub fn _print(args: ::core::fmt::Arguments) {
     use core::fmt::Write;
     unsafe {
+        #[allow(static_mut_refs)]
         SERIAL.write_fmt(args).expect("Printing to serial failed");
     }
 }

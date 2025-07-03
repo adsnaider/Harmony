@@ -202,6 +202,7 @@ pub fn init() {
     );
 
     let memory_map = unsafe {
+        #[allow(static_mut_refs)]
         MEMORY_MAP
             .get_response_mut()
             .expect("Missing memory map from Limine")

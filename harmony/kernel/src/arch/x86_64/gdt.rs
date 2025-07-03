@@ -30,6 +30,7 @@ struct Selectors {
 struct OverAlignedU8(MaybeUninit<u8>);
 
 impl OverAlignedU8 {
+    #[allow(unused)]
     pub const fn uninit() -> Self {
         Self(MaybeUninit::uninit())
     }
@@ -54,7 +55,10 @@ static TSS: AtomicLazyCell<TaskStateSegment> = AtomicLazyCell::new(|| {
         static mut STACK: [OverAlignedU8; STACK_SIZE] = OverAlignedU8::uninit_array();
 
         // SAFETY: Although it's a static mut, STACK is only used in this context.
-        let stack_start = VirtAddr::from_ptr(unsafe { STACK.as_slice() });
+        let stack_start = VirtAddr::from_ptr(unsafe {
+            #[allow(static_mut_refs)]
+            STACK.as_slice()
+        });
         stack_start + STACK_SIZE as u64 // stack end.
     };
     tss.interrupt_stack_table[PAGE_FAULT_IST_INDEX as usize] = {
@@ -63,7 +67,10 @@ static TSS: AtomicLazyCell<TaskStateSegment> = AtomicLazyCell::new(|| {
         static mut STACK: [OverAlignedU8; STACK_SIZE] = OverAlignedU8::uninit_array();
 
         // SAFETY: Although it's a static mut, STACK is only used in this context.
-        let stack_start = VirtAddr::from_ptr(unsafe { STACK.as_slice() });
+        let stack_start = VirtAddr::from_ptr(unsafe {
+            #[allow(static_mut_refs)]
+            STACK.as_slice()
+        });
         stack_start + STACK_SIZE as u64 // stack end.
     };
     // Privilege stack table used on interrupts.
@@ -77,6 +84,7 @@ static TSS: AtomicLazyCell<TaskStateSegment> = AtomicLazyCell::new(|| {
 });
 
 pub(super) fn interrupt_stack_end() -> VirtAddr {
+    #[allow(static_mut_refs)]
     let start: VirtAddr = VirtAddr::new(unsafe { INTERRUPT_STACK.as_ptr() as u64 });
     start + INTERRUPT_STACK_SIZE as u64
 }
