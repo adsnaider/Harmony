@@ -5,7 +5,7 @@ use limine::memory_map::EntryType;
 use sync::cell::AtomicOnceCell;
 
 use crate::arch::paging::page_table::AnyPageTable;
-use crate::arch::paging::{RawFrame, FRAME_SIZE, PAGE_SIZE};
+use crate::arch::paging::{RawFrame, VirtAddr, FRAME_SIZE, PAGE_SIZE};
 use crate::retyping::bump_alloc::BumpAllocator;
 use crate::MemoryMap;
 
@@ -15,7 +15,34 @@ pub struct RetypeTable {
     retype_map: &'static mut [RetypeEntry],
 }
 
+pub struct RetypeMetadata<I: IntoIterator<Item = RawFrame>> {
+    pub map: (*const RetypeEntry, usize),
+    pub frames: I,
+}
+
 impl RetypeTable {
+    pub fn memory_map_meta() -> RetypeMetadata<impl IntoIterator<Item = RawFrame>> {
+        let mem = RETYPE_TABLE.get().unwrap().retype_map.as_ptr_range();
+        let start =
+            RawFrame::from_start_address(unsafe { VirtAddr::new(mem.start.addr()).to_physical() });
+        let end = RawFrame::within_frame(unsafe { VirtAddr::new(mem.end.addr()).to_physical() });
+        let iter = core::iter::successors(Some(start), move |prev| {
+            let next = prev.next();
+            if next.addr().as_u64() > end.addr().as_u64() {
+                None
+            } else {
+                Some(next)
+            }
+        });
+        let bytes = mem.end.addr() - mem.start.addr();
+        let count = bytes / core::mem::size_of::<RetypeEntry>();
+        assert!(bytes % core::mem::size_of::<RetypeEntry>() == 0);
+        RetypeMetadata {
+            map: (mem.start, count),
+            frames: iter,
+        }
+    }
+
     pub fn new(memory_map: MemoryMap) -> Option<Self> {
         let physical_top = {
             let last = memory_map.iter().last()?;
@@ -321,7 +348,7 @@ impl Drop for UserFrame {
 
 #[repr(transparent)]
 #[derive(Debug)]
-struct RetypeEntry(AtomicU16);
+pub struct RetypeEntry(AtomicU16);
 
 #[derive(Debug)]
 struct Invalid;

@@ -7,7 +7,6 @@
     reexport_test_harness_main = "test_main"
 )]
 #![cfg_attr(target_arch = "x86_64", feature(abi_x86_interrupt))]
-// #![feature(abi_custom)]
 
 use limine::memory_map::Entry;
 use limine::request::{HhdmRequest, MemoryMapRequest, StackSizeRequest};
@@ -67,7 +66,7 @@ extern "C" fn kmain() -> ! {
     let thread;
 
     {
-        let (mut boot_regs, boot_page_table) = {
+        let (boot_regs, boot_page_table) = {
             #[used]
             static MODULES_REQUEST: ModuleRequest = ModuleRequest::new();
 
@@ -107,7 +106,6 @@ extern "C" fn kmain() -> ! {
         };
         thread = {
             let frame = fallocator.alloc_untyped_frame().unwrap();
-            boot_regs.scratch.rdi = fallocator.next_available().base().as_u64();
             KPtr::new(
                 frame,
                 Thread::new(

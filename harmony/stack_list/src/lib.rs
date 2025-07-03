@@ -1,5 +1,4 @@
 #![cfg_attr(not(test), no_std)]
-#![feature(naked_functions)]
 
 use core::marker::PhantomData;
 use core::ptr::NonNull;

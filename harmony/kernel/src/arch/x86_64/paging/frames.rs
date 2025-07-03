@@ -36,8 +36,14 @@ impl RawFrame {
     }
 
     pub fn within_frame(addr: PhysAddr) -> Self {
-        let base = PhysAddr::new(addr.as_u64() % FRAME_SIZE);
+        let base = PhysAddr::new(addr.as_u64() & !(FRAME_SIZE - 1));
         Self { base }
+    }
+
+    pub fn next(&self) -> Self {
+        Self {
+            base: PhysAddr::new(self.base.as_u64() + FRAME_SIZE),
+        }
     }
 
     pub fn addr(&self) -> PhysAddr {
