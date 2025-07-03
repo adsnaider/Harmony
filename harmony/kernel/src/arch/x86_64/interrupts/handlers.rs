@@ -1,4 +1,4 @@
-use core::arch::asm;
+use core::arch::{asm, naked_asm};
 use core::mem::MaybeUninit;
 
 use x86_64_impl::registers::control::Cr2;
@@ -190,15 +190,16 @@ macro_rules! pop_preserved {
 
 macro_rules! interrupt {
     ($name:ident, $handler:expr) => {
-        #[naked]
-        pub(super) extern "x86-interrupt" fn $name(_frame: InterruptStackFrame) {
+        #[unsafe(naked)]
+        pub(super) extern "x86-interrupt" fn $name(frame: InterruptStackFrame) {
             extern "C" fn inner() {
                 #[allow(clippy::redundant_closure_call)]
                 $handler();
             }
             // SAFETY: Following ABI with iretq and we only wrap a C call with push/pop scratch registers.
+            #[allow(unused_unsafe)]
             unsafe {
-                core::arch::asm!(
+                core::arch::naked_asm!(
                     push_preserved!(),
                     push_scratch!(),
                     "call {inner}",
@@ -206,7 +207,6 @@ macro_rules! interrupt {
                     pop_preserved!(),
                     "iretq",
                     inner = sym inner,
-                    options(noreturn),
                 )
             }
         }
@@ -227,20 +227,21 @@ interrupt!(keyboard_interrupt, || {
     }
 });
 
-#[naked]
+#[unsafe(naked)]
 pub(super) extern "x86-interrupt" fn syscall_interrupt(stack_frame: InterruptStackFrame) {
     // SAFETY: Very thin wrapper over a syscall. We don't need to do callee saved since sysv64 abi will
     // take care of that.
+    #[allow(unused_unsafe)]
     unsafe {
-        asm!(
+        naked_asm!(
             push_preserved!(),
             "sub rsp, 8",
             "call {handle_syscall}",
             "add rsp, 8",
             pop_preserved!(),
             "iretq",
-            handle_syscall = sym crate::syscall::handle,
-            options(noreturn));
+            handle_syscall = sym crate::syscall::handle
+        )
     }
 }
 

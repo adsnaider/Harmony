@@ -1,6 +1,5 @@
 #![no_std]
 #![no_main]
-#![feature(naked_functions)]
 #![cfg_attr(
     test,
     feature(custom_test_frameworks),
@@ -8,6 +7,7 @@
     reexport_test_harness_main = "test_main"
 )]
 #![cfg_attr(target_arch = "x86_64", feature(abi_x86_interrupt))]
+// #![feature(abi_custom)]
 
 use limine::memory_map::Entry;
 use limine::request::{HhdmRequest, MemoryMapRequest, StackSizeRequest};
