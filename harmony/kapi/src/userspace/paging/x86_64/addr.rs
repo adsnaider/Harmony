@@ -270,6 +270,10 @@ impl Frame {
     pub const fn addr(&self) -> PhysAddr {
         self.base
     }
+
+    pub fn index(&self) -> u64 {
+        self.base().as_u64() / FRAME_SIZE
+    }
 }
 
 #[repr(transparent)]

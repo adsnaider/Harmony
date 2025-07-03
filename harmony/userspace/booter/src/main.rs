@@ -1,5 +1,7 @@
-#![no_std]
-#![no_main]
+#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_main)]
+
+pub mod system;
 
 use core::cell::Cell;
 use core::convert::Infallible;
@@ -62,7 +64,7 @@ fn main(memory_map: RetypeTable<'static>, initrd: &'static [u8]) -> ! {
 
     let lowest_frame = memory_map
         .iter()
-        .find(|(state, frame)| state.state == RetypeState::Untyped)
+        .find(|(state, _frame)| state.state == RetypeState::Untyped)
         .map(|(_, frame)| frame)
         .unwrap();
 
