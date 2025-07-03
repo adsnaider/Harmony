@@ -67,12 +67,19 @@ impl core::fmt::Debug for RetypeEntry {
     }
 }
 
-#[repr(transparent)]
 pub struct RetypeTable<'a> {
     table: &'a [RetypeEntry],
 }
 
-impl RetypeTable<'_> {
+impl<'a> RetypeTable<'a> {
+    pub unsafe fn from_entries(table: &'a [RetypeEntry]) -> Self {
+        Self { table }
+    }
+
+    pub fn frame_count(&self) -> usize {
+        self.table.len()
+    }
+
     pub fn get(&self, frame: usize) -> Option<(ReadEntry, Frame)> {
         let state = self.table.get(frame)?.get();
         let frame = Frame::from_index(frame as u64)

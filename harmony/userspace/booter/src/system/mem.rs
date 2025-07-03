@@ -5,6 +5,12 @@ pub struct BitmapAllocator<'a> {
     unused_frames: &'a mut BitSlice,
 }
 
+impl BitmapAllocator<'static> {
+    pub fn bootstrap(memory_map: RetypeTable<'static>) -> Self {
+        let frames = memory_map.frame_count();
+    }
+}
+
 impl<'a> BitmapAllocator<'a> {
     pub fn new(store: &'a mut [usize], memory_map: RetypeTable<'_>) -> Self {
         let unused_frames = BitSlice::from_slice_mut(store);

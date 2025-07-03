@@ -2,12 +2,16 @@
 #![cfg_attr(not(test), no_main)]
 
 pub mod system;
+pub(crate) mod util;
 
 use core::cell::Cell;
 use core::convert::Infallible;
+use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 use core::ops::Range;
 use core::sync::atomic::AtomicU16;
+
+use crate::util::CSlice;
 
 use entry::entry;
 use kapi::ops::cap_table::{CapTableConsArgs, PageTableConsArgs, ThreadConsArgs};
@@ -23,6 +27,7 @@ use kapi::userspace::structures::{HardwareAccess, PageTable, Retype};
 use kapi::userspace::Booter;
 use loader::{Loader, MemFlags, Program};
 use serial::{sdbg, sprintln};
+use system::mem::BitmapAllocator;
 use tar_no_std::TarArchiveRef;
 
 #[cfg(not(test))]
@@ -56,12 +61,15 @@ impl FrameAllocator for &'_ FrameBumper {
 }
 
 #[entry]
-fn main(memory_map: RetypeTable<'static>, initrd: &'static [u8]) -> ! {
+fn main(memory_map: CSlice<'static, RetypeEntry>, initrd: CSlice<'static, u8>) -> ! {
     let resources = Booter::make();
 
     resources.hardware.enable_ports().unwrap();
     serial::init();
 
+    let initrd = initrd.into_slice();
+    let memory_map = unsafe { RetypeTable::from_entries(memory_map.into_slice()) };
+    let allocator = BitmapAllocator::bootstrap(memory_map);
     let lowest_frame = memory_map
         .iter()
         .find(|(state, _frame)| state.state == RetypeState::Untyped)
