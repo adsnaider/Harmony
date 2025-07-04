@@ -2,7 +2,6 @@
 #![cfg_attr(not(test), no_main)]
 
 pub mod system;
-pub(crate) mod util;
 
 use core::cell::Cell;
 use core::convert::Infallible;
@@ -11,14 +10,12 @@ use core::mem::MaybeUninit;
 use core::ops::Range;
 use core::sync::atomic::AtomicU16;
 
-use crate::util::CSlice;
-
 use entry::entry;
 use kapi::ops::cap_table::{CapTableConsArgs, PageTableConsArgs, ThreadConsArgs};
 use kapi::ops::memory::RetypeKind;
 use kapi::ops::paging::PermissionMask;
 use kapi::ops::SlotId;
-use kapi::raw::CapId;
+use kapi::raw::{BootArgs, CapId};
 use kapi::userspace::cap_management::{FrameAllocator, SelfCapabilityManager};
 use kapi::userspace::paging::addr::{Frame, Page, PageTableLevel, PhysAddr, VirtAddr};
 use kapi::userspace::paging::{Addrspace, PageTableAllocator};
@@ -61,20 +58,23 @@ impl FrameAllocator for &'_ FrameBumper {
 }
 
 #[entry]
-fn main(memory_map: CSlice<'static, RetypeEntry>, initrd: CSlice<'static, u8>) -> ! {
+fn main(args: BootArgs) -> ! {
     let resources = Booter::make();
 
     resources.hardware.enable_ports().unwrap();
     serial::init();
+    let BootArgs { initrd, memory_map } = args;
 
     let initrd = initrd.into_slice();
     let memory_map = unsafe { RetypeTable::from_entries(memory_map.into_slice()) };
-    let allocator = BitmapAllocator::bootstrap(memory_map);
+
     let lowest_frame = memory_map
         .iter()
         .find(|(state, _frame)| state.state == RetypeState::Untyped)
         .map(|(_, frame)| frame)
         .unwrap();
+
+    let allocator = BitmapAllocator::bootstrap(memory_map);
 
     log::info!(
         "Jumped to userspace: next_frame: {:?}, initrd: ({:?}, {})",

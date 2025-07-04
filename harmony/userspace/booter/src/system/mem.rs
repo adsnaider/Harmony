@@ -8,6 +8,7 @@ pub struct BitmapAllocator<'a> {
 impl BitmapAllocator<'static> {
     pub fn bootstrap(memory_map: RetypeTable<'static>) -> Self {
         let frames = memory_map.frame_count();
+        todo!();
     }
 }
 

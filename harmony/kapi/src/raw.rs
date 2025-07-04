@@ -5,7 +5,7 @@ use core::num::TryFromIntError;
 use bytemuck::{AnyBitPattern, NoUninit};
 use num_enum::{IntoPrimitive, TryFromPrimitive, TryFromPrimitiveError};
 
-use crate::ops::SlotId;
+use crate::{ops::SlotId, userspace::paging::RetypeEntry, util::CSlice};
 
 /// Performs a raw syscall
 ///
@@ -24,6 +24,12 @@ pub unsafe extern "sysv64" fn raw_syscall(
 ) -> isize {
     // NOTE: We don't need to align the stack on an int instruction.
     naked_asm!("int 0x80", "ret");
+}
+
+#[repr(C)]
+pub struct BootArgs {
+    pub memory_map: CSlice<'static, RetypeEntry>,
+    pub initrd: CSlice<'static, u8>,
 }
 
 /// Performs a syscall
