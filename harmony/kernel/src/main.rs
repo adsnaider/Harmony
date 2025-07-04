@@ -1,6 +1,5 @@
 #![no_std]
 #![no_main]
-#![feature(naked_functions)]
 #![cfg_attr(
     test,
     feature(custom_test_frameworks),
@@ -67,7 +66,7 @@ extern "C" fn kmain() -> ! {
     let thread;
 
     {
-        let (mut boot_regs, boot_page_table) = {
+        let (boot_regs, boot_page_table) = {
             #[used]
             static MODULES_REQUEST: ModuleRequest = ModuleRequest::new();
 
@@ -107,7 +106,6 @@ extern "C" fn kmain() -> ! {
         };
         thread = {
             let frame = fallocator.alloc_untyped_frame().unwrap();
-            boot_regs.scratch.rdi = fallocator.next_available().base().as_u64();
             KPtr::new(
                 frame,
                 Thread::new(
@@ -202,6 +200,7 @@ pub fn init() {
     );
 
     let memory_map = unsafe {
+        #[allow(static_mut_refs)]
         MEMORY_MAP
             .get_response_mut()
             .expect("Missing memory map from Limine")

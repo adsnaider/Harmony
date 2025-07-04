@@ -13,12 +13,14 @@ use crate::arch::paging::page_table::{Addrspace, PageTableFlags};
 use crate::arch::paging::{Page, VirtAddr, PAGE_SIZE};
 use crate::bump_allocator::BumpAllocator;
 use crate::kptr::KPtr;
+use crate::retyping::RetypeTable;
 
 pub struct Process {
     pub entry: u64,
     pub rsp: u64,
     pub l4_table: KPtr<AnyPageTable>,
     pub initrd: (*const u8, usize),
+    pub memory_map: (*const u8, usize),
 }
 
 pub struct BootstrapLoader<'a, 'b> {
@@ -187,8 +189,30 @@ impl Process {
                 .map_page(page, frame, PageTableFlags::PRESENT)
                 .unwrap();
         }
+
+        let retype_table_metadata = RetypeTable::memory_map_meta();
+        let memory_map_start = process.top_of_text().div_ceil(Page::size()) * Page::size();
+        let mut memory_map_count = 0;
+        for frame in retype_table_metadata.frames {
+            let page = Page::from_start_address(VirtAddr::new(
+                memory_map_start + memory_map_count * Page::size(),
+            ));
+            log::info!("Loading memory map at {page:?}");
+            loader
+                .map_page(
+                    page,
+                    frame,
+                    PageTableFlags::NO_EXECUTE
+                        | PageTableFlags::USER_ACCESSIBLE
+                        | PageTableFlags::PRESENT,
+                )
+                .unwrap();
+            memory_map_count += 1;
+        }
+        let memory_map_end = memory_map_start + memory_map_count * Page::size();
+        assert!(memory_map_end % Page::size() == 0);
         // And also pass through the initrd image
-        let initrd_start = process.top_of_text().div_ceil(Page::size()) * Page::size();
+        let initrd_start = memory_map_end;
         let initrd_end = initrd_start + initrd.len();
         loader
             .load_source(initrd_start..initrd_end, initrd, MemFlags::READ)
@@ -200,6 +224,7 @@ impl Process {
             rsp: untyped_memory_offset as u64,
             l4_table,
             initrd: (initrd_start as *const u8, initrd.len()),
+            memory_map: (memory_map_start as *const u8, retype_table_metadata.map.1),
         })
     }
 
@@ -212,9 +237,10 @@ impl Process {
                     rflags: 0x202,
                 },
                 scratch: ScratchRegs {
-                    rdi: 0,
-                    rsi: self.initrd.0 as usize as u64,
-                    rdx: self.initrd.1 as u64,
+                    rdi: self.memory_map.0 as usize as u64,
+                    rsi: self.memory_map.1 as u64,
+                    rdx: self.initrd.0 as usize as u64,
+                    rcx: self.initrd.1 as u64,
                     ..Default::default()
                 },
                 ..Default::default()

@@ -1,5 +1,6 @@
 [toolchain]
-channel = "nightly-2024-06-22"
+# Upgrade when https://github.com/rust-lang/rust/pull/143075 is merged
+channel = "nightly-2025-05-03"
 components = [
   "cargo",
   "clippy",

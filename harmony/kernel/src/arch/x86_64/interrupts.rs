@@ -113,6 +113,7 @@ fn init_idt() {
 pub fn init() {
     init_idt();
     // SAFETY: PIC Initialization. We only initialize interrupts that we are currently handling.
+    #[allow(static_mut_refs)]
     unsafe {
         PICS.initialize();
         PICS.write_masks(0xFC, 0xFF);

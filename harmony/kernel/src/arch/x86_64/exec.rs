@@ -1,6 +1,6 @@
 //! x86-64 execution context.
 
-use core::arch::asm;
+use core::arch::naked_asm;
 
 pub trait SaveState: Sized {
     fn save_state(self, regs: &mut Regs);
@@ -82,12 +82,13 @@ impl ExecCtx {
         &mut self.regs
     }
 
-    #[naked]
+    #[unsafe(naked)]
     pub extern "sysv64" fn dispatch(&self) -> ! {
         // SAFETY: We are only jumping to userspace, guaranteeing address space separation, so it doesn't matter
         // what we are actually jumping to.
+        #[allow(unused_unsafe)]
         unsafe {
-            asm!(
+            naked_asm!(
                 "pop rax",
                 // Setup the segment selectors
                 "mov ax, (4 * 8) | 3",
@@ -119,7 +120,6 @@ impl ExecCtx {
                 "push [rdi + 8*17]",    // Push the new instruction pointer
                 "mov rdi, [rdi + 8*4]", // And the RDI register
                 "iretq",
-                options(noreturn)
             )
         }
     }

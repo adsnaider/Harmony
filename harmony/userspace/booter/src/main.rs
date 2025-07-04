@@ -1,11 +1,17 @@
-#![no_std]
-#![no_main]
-#![feature(naked_functions)]
+#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_main)]
+
+pub mod system;
+pub(crate) mod util;
 
 use core::cell::Cell;
 use core::convert::Infallible;
+use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 use core::ops::Range;
+use core::sync::atomic::AtomicU16;
+
+use crate::util::CSlice;
 
 use entry::entry;
 use kapi::ops::cap_table::{CapTableConsArgs, PageTableConsArgs, ThreadConsArgs};
@@ -16,10 +22,12 @@ use kapi::raw::CapId;
 use kapi::userspace::cap_management::{FrameAllocator, SelfCapabilityManager};
 use kapi::userspace::paging::addr::{Frame, Page, PageTableLevel, PhysAddr, VirtAddr};
 use kapi::userspace::paging::{Addrspace, PageTableAllocator};
+use kapi::userspace::paging::{RetypeEntry, RetypeState, RetypeTable};
 use kapi::userspace::structures::{HardwareAccess, PageTable, Retype};
 use kapi::userspace::Booter;
 use loader::{Loader, MemFlags, Program};
 use serial::{sdbg, sprintln};
+use system::mem::BitmapAllocator;
 use tar_no_std::TarArchiveRef;
 
 #[cfg(not(test))]
@@ -53,24 +61,29 @@ impl FrameAllocator for &'_ FrameBumper {
 }
 
 #[entry]
-fn main(lowest_frame: usize, initrd: *const u8, initrd_size: usize) -> ! {
+fn main(memory_map: CSlice<'static, RetypeEntry>, initrd: CSlice<'static, u8>) -> ! {
     let resources = Booter::make();
 
     resources.hardware.enable_ports().unwrap();
     serial::init();
 
-    // SAFETY: Passed initrd info from the kernel is correct.
-    let initrd = unsafe { core::slice::from_raw_parts(initrd, initrd_size) };
+    let initrd = initrd.into_slice();
+    let memory_map = unsafe { RetypeTable::from_entries(memory_map.into_slice()) };
+    let allocator = BitmapAllocator::bootstrap(memory_map);
+    let lowest_frame = memory_map
+        .iter()
+        .find(|(state, _frame)| state.state == RetypeState::Untyped)
+        .map(|(_, frame)| frame)
+        .unwrap();
+
     log::info!(
-        "Jumped to userspace: next_frame: {}, initrd: ({:?}, {})",
+        "Jumped to userspace: next_frame: {:?}, initrd: ({:?}, {})",
         lowest_frame,
         initrd.as_ptr(),
         initrd.len()
     );
 
-    let frames = FrameBumper::new(Frame::from_start_address(PhysAddr::new(
-        lowest_frame as u64,
-    )));
+    let frames = FrameBumper::new(lowest_frame);
     let mut cap_manager =
         SelfCapabilityManager::new_with_start(resources.self_caps, CapId::new(6), &frames);
 

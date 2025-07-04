@@ -1,4 +1,4 @@
-use core::arch::asm;
+use core::arch::naked_asm;
 use core::marker::PhantomData;
 use core::num::TryFromIntError;
 
@@ -13,7 +13,7 @@ use crate::ops::SlotId;
 ///
 /// Performing a syscall is inherently unsafe, follow the syscall
 /// documentation to guarantee proper usage and soundness.
-#[naked]
+#[unsafe(naked)]
 pub unsafe extern "sysv64" fn raw_syscall(
     _a: usize,
     _b: usize,
@@ -23,7 +23,7 @@ pub unsafe extern "sysv64" fn raw_syscall(
     _f: usize,
 ) -> isize {
     // NOTE: We don't need to align the stack on an int instruction.
-    asm!("int 0x80", "ret", options(noreturn));
+    naked_asm!("int 0x80", "ret");
 }
 
 /// Performs a syscall
