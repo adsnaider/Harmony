@@ -1,13 +1,27 @@
 use bitvec::slice::BitSlice;
-use kapi::userspace::paging::{addr::Frame, RetypeState, RetypeTable};
+use kapi::{
+    ops::memory::RetypeKind,
+    raw::CapError,
+    userspace::{
+        paging::{
+            addr::{Frame, Page},
+            Addrspace, RetypeState, RetypeTable,
+        },
+        structures::Retype,
+    },
+};
 
 pub struct BitmapAllocator<'a> {
     unused_frames: &'a mut BitSlice,
 }
 
 impl BitmapAllocator<'static> {
-    pub fn bootstrap(memory_map: RetypeTable<'static>) -> Self {
-        let frames = memory_map.frame_count();
+    pub fn bootstrap(memory_map: RetypeTable<'static>, heap_start: usize) -> Self {
+        let bits_required = memory_map.frame_count();
+        let bytes_required = bits_required.div_ceil(u8::BITS as _);
+        let frames_required = bytes_required.div_ceil(Page::size());
+
+        let slice_length = bits_required.div_ceil(usize::BITS as _);
         todo!();
     }
 }

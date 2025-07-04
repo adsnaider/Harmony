@@ -1,11 +1,14 @@
-use core::arch::naked_asm;
 use core::marker::PhantomData;
 use core::num::TryFromIntError;
+use core::{arch::naked_asm, sync::atomic::AtomicU16};
 
 use bytemuck::{AnyBitPattern, NoUninit};
 use num_enum::{IntoPrimitive, TryFromPrimitive, TryFromPrimitiveError};
 
-use crate::{ops::SlotId, userspace::paging::RetypeEntry, util::CSlice};
+use crate::{ops::SlotId, util::CSlice};
+
+#[repr(transparent)]
+pub struct RetypeEntry(pub(crate) AtomicU16);
 
 /// Performs a raw syscall
 ///
@@ -27,9 +30,11 @@ pub unsafe extern "sysv64" fn raw_syscall(
 }
 
 #[repr(C)]
+#[derive(Debug, Copy, Clone, NoUninit, AnyBitPattern)]
 pub struct BootArgs {
     pub memory_map: CSlice<'static, RetypeEntry>,
     pub initrd: CSlice<'static, u8>,
+    pub free_space_start: usize,
 }
 
 /// Performs a syscall

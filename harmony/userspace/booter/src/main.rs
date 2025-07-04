@@ -58,12 +58,17 @@ impl FrameAllocator for &'_ FrameBumper {
 }
 
 #[entry]
-fn main(args: BootArgs) -> ! {
+fn main(args: &'static BootArgs) -> ! {
     let resources = Booter::make();
 
     resources.hardware.enable_ports().unwrap();
     serial::init();
-    let BootArgs { initrd, memory_map } = args;
+    sdbg!(args);
+    let BootArgs {
+        initrd,
+        memory_map,
+        free_space_start,
+    } = *args;
 
     let initrd = initrd.into_slice();
     let memory_map = unsafe { RetypeTable::from_entries(memory_map.into_slice()) };
@@ -74,7 +79,7 @@ fn main(args: BootArgs) -> ! {
         .map(|(_, frame)| frame)
         .unwrap();
 
-    let allocator = BitmapAllocator::bootstrap(memory_map);
+    let allocator = BitmapAllocator::bootstrap(memory_map, free_space_start);
 
     log::info!(
         "Jumped to userspace: next_frame: {:?}, initrd: ({:?}, {})",

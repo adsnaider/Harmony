@@ -10,8 +10,7 @@ use core::{
 
 use self::addr::Frame;
 
-#[repr(transparent)]
-pub struct RetypeEntry(AtomicU16);
+pub use crate::raw::RetypeEntry;
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 #[repr(u8)]

@@ -207,6 +207,7 @@ dependencies = [
 name = "kernel"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "elain",
  "heapless",
  "include_bytes_aligned",

@@ -3,6 +3,9 @@
 use core::mem::MaybeUninit;
 use core::ops::Range;
 
+use bytemuck::bytes_of;
+use kapi::raw::{BootArgs, RetypeEntry};
+use kapi::util::CSlice;
 use loader::{Loader, MemFlags, Program};
 
 use super::exec::ScratchRegs;
@@ -15,12 +18,12 @@ use crate::bump_allocator::BumpAllocator;
 use crate::kptr::KPtr;
 use crate::retyping::RetypeTable;
 
+#[derive(Debug)]
 pub struct Process {
     pub entry: u64,
     pub rsp: u64,
     pub l4_table: KPtr<AnyPageTable>,
-    pub initrd: (*const u8, usize),
-    pub memory_map: (*const u8, usize),
+    pub arg: *const BootArgs,
 }
 
 pub struct BootstrapLoader<'a, 'b> {
@@ -59,19 +62,16 @@ impl BootstrapLoader<'_, '_> {
         let frame = self.fallocator.alloc_user_frame().unwrap().into_raw();
         log::trace!("Mapping {page:?} to {frame:?} with {pflags:?}");
         unsafe {
-            let _ = self
-                .address_space
-                .map_to(
-                    page,
-                    frame,
-                    pflags,
-                    // Parent flags are the least restrictive since they will be reused for many pages.
-                    PageTableFlags::PRESENT
-                        | PageTableFlags::WRITABLE
-                        | PageTableFlags::USER_ACCESSIBLE,
-                    self.fallocator,
-                )
-                .unwrap();
+            let _ = self.address_space.map_to(
+                page,
+                frame,
+                pflags,
+                // Parent flags are the least restrictive since they will be reused for many pages.
+                PageTableFlags::PRESENT
+                    | PageTableFlags::WRITABLE
+                    | PageTableFlags::USER_ACCESSIBLE,
+                self.fallocator,
+            );
         }
         Ok(unsafe {
             core::slice::from_raw_parts_mut(frame.base().to_virtual().as_mut_ptr(), Page::size())
@@ -192,12 +192,13 @@ impl Process {
 
         let retype_table_metadata = RetypeTable::memory_map_meta();
         let memory_map_start = process.top_of_text().div_ceil(Page::size()) * Page::size();
+        log::info!("Loading memory map at {:?}", memory_map_start as *const u8);
         let mut memory_map_count = 0;
         for frame in retype_table_metadata.frames {
             let page = Page::from_start_address(VirtAddr::new(
                 memory_map_start + memory_map_count * Page::size(),
             ));
-            log::info!("Loading memory map at {page:?}");
+            log::debug!("Loading memory map at {page:?}");
             loader
                 .map_page(
                     page,
@@ -214,17 +215,39 @@ impl Process {
         // And also pass through the initrd image
         let initrd_start = memory_map_end;
         let initrd_end = initrd_start + initrd.len();
+        log::info!("Loading initrd at {:?}", initrd_start as *const u8);
         loader
             .load_source(initrd_start..initrd_end, initrd, MemFlags::READ)
             .unwrap();
+
+        let bootargs = BootArgs {
+            initrd: unsafe { CSlice::from_raw_parts(initrd_start as *const u8, initrd.len()) },
+            memory_map: unsafe {
+                CSlice::from_raw_parts(
+                    memory_map_start as *const RetypeEntry,
+                    retype_table_metadata.map.1,
+                )
+            },
+            free_space_start: initrd_end,
+        };
+        let bootargs_start = initrd_end.div_ceil(size_of::<BootArgs>()) * size_of::<BootArgs>();
+        let bootargs_end = bootargs_start + size_of::<BootArgs>();
+        log::info!(
+            "Loading boot arguments at {:?}",
+            bootargs_start as *const u8
+        );
+        loader.load_source(
+            bootargs_start..bootargs_end,
+            bytes_of(&bootargs),
+            MemFlags::READ,
+        );
 
         log::info!("Initialized user process");
         Ok(Self {
             entry: process.entry(),
             rsp: untyped_memory_offset as u64,
             l4_table,
-            initrd: (initrd_start as *const u8, initrd.len()),
-            memory_map: (memory_map_start as *const u8, retype_table_metadata.map.1),
+            arg: bootargs_start as *const BootArgs,
         })
     }
 
@@ -237,10 +260,7 @@ impl Process {
                     rflags: 0x202,
                 },
                 scratch: ScratchRegs {
-                    rdi: self.memory_map.0 as usize as u64,
-                    rsi: self.memory_map.1 as u64,
-                    rdx: self.initrd.0 as usize as u64,
-                    rcx: self.initrd.1 as u64,
+                    rdi: self.arg as usize as u64,
                     ..Default::default()
                 },
                 ..Default::default()
