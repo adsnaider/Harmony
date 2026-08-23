@@ -4,6 +4,7 @@ use core::{arch::naked_asm, sync::atomic::AtomicU16};
 
 use bytemuck::{AnyBitPattern, NoUninit};
 use num_enum::{IntoPrimitive, TryFromPrimitive, TryFromPrimitiveError};
+use zerocopy::{Immutable, IntoBytes, KnownLayout, TryFromBytes};
 
 use crate::{ops::SlotId, util::CSlice};
 
@@ -30,7 +31,7 @@ pub unsafe extern "sysv64" fn raw_syscall(
 }
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone, NoUninit, AnyBitPattern)]
+#[derive(Debug, Copy, Clone, TryFromBytes, IntoBytes, KnownLayout, Immutable)]
 pub struct BootArgs {
     pub memory_map: CSlice<'static, RetypeEntry>,
     pub initrd: CSlice<'static, u8>,

@@ -24,6 +24,7 @@ stack_list = { path = "harmony/stack_list" }
 serial = { path = "harmony/userspace/serial" }
 loader = { path = "harmony/loader" }
 entry = { path = "harmony/entry" }
+zerocopy = { version = "0.8.26", features = ["derive"] }
 
 [profile.dev]
 debug = "full"
